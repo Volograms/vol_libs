@@ -142,7 +142,7 @@ See the `thirdparty/ffmpeg/LICENSE.md` file for details.
 
 ### Optional Dependencies
 
-* Examples using OpenGL make use of a the (https://glad.dav1d.de/)[Glad] softare, by David Herberth, which comprises the following licences:
+* Examples using OpenGL make use of a the [Glad](https://glad.dav1d.de/) softare, by David Herberth, which comprises the following licences:
 
 > The glad source code:
 >
@@ -222,7 +222,7 @@ See the `thirdparty/ffmpeg/LICENSE.md` file for details.
 > 
 > This notice may not be removed or altered from any source distribution.
 
-* And (https://github.com/capnramses/apg)[apg libraries] "apg_maths", and "gfx" from Anton Gerdelan, used under the Public Domain licence option:
+* And [apg libraries](https://github.com/capnramses/apg) "apg_maths", and "gfx" from Anton Gerdelan, used under the Public Domain licence option:
 
 > SECOND LICENCE OPTION
 
