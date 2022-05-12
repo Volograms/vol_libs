@@ -92,10 +92,13 @@ vol_geom.png                 -- Example vol_geom screenshot that appears in this
 
 * Please feel free to open an Issue on this project page.
 * If you are sufficiently motivated, you may also open a Pull Request from your local fork.
-  * The PR Description should include this template:
-    * Point of the PR:
-    * Summary of Testing done:
-    * Risk introduced by PR:
+ 
+PR Descriptions should include this template:
+
+>    Point of the PR:
+>    Summary of Testing done:
+>    Risk introduced by PR:
+ 
 
 ## Maintainers/Contact ##
 
