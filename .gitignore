@@ -1,52 +1,70 @@
-# Prerequisites
-*.d
+# These are some examples of commonly ignored file patterns.
+# You should customize this list as applicable to your project.
+# Learn more about .gitignore:
+#     https://www.atlassian.com/git/tutorials/saving-changes/gitignore
 
-# Object files
-*.o
-*.ko
-*.obj
-*.elf
+# IDEs
+.idea/
+.vscode/
 
-# Linker output
-*.ilk
-*.map
-*.exp
+# Doxygen-generated
+doc/
 
-# Precompiled Headers
-*.gch
-*.pch
+# test reports and log files
+*.log
+*.xml
 
-# Libraries
-*.lib
-*.a
-*.la
-*.lo
+# OS
+.DS_Store
+Thumbs.db
 
-# Shared objects (inc. Windows DLLs)
-*.dll
-*.so
-*.so.*
-*.dylib
-
-# Executables
-*.exe
-*.out
+# binaries and compiled files
 *.app
-*.i*86
-*.x86_64
-*.hex
+*.exe
+*.bin
+*.out
+*.o
+examples/*.dll
+tests/*.dll
+*.plist
 
-# Debug files
-*.dSYM/
-*.su
-*.idb
-*.pdb
+# Large media files
+*.avi
+*.flv
+*.jpg
+*.mov
+*.pgm
+*.ppm
+*.png
+*.tiff
+*.wmv
+*.mtl
 
-# Kernel Module Compile Results
-*.mod*
-*.cmd
-.tmp_versions/
-modules.order
-Module.symvers
-Mkfile.old
-dkms.conf
+# temporary outputs from obj2vol tool
+tools/header.vol
+tools/sequence.vol
+
+# per-fuzz folders created and copied into by fuzzer
+fuzzing/geom_inputs/
+fuzzing/av_inputs/
+fuzzing/geom_outputs/
+fuzzing/av_outputs/
+
+# any temporary / manual testing files lying around
+fuzzing/*.vol
+tests/header.vol
+tests/sequence.vol
+examples/Virtual*
+examples/Sam*
+examples/op_*
+output_frame_*.obj
+tools/*.dll
+tools/1625575284206_ld/
+build/
+src/header.vol
+src/sequence.vol
+examples/*.vols
+examples/*.bvh
+examples/*.mp4
+examples/*.webm
+examples/*_ld*/
