@@ -95,9 +95,9 @@ vol_geom.png                 -- Example vol_geom screenshot that appears in this
  
 PR Descriptions should include this template:
 
->    Point of the PR:
->    Summary of Testing done:
->    Risk introduced by PR:
+ *   Point of the PR:
+*    Summary of Testing done:
+*    Risk introduced by PR:
  
 
 ## Maintainers/Contact ##
