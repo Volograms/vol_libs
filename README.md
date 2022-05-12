@@ -3,7 +3,29 @@
 Stand-alone C libraries for extracting data from captured vologram files.
 Designed to be used in native plugins for Unity and Unreal, and any custom vologram player or converter software.
 
-### Contents ###
+## How do I get set up? ##
+
+* Clone this repository.
+* Set up FFmpeg development libraries:
+    * For Windows these can be found under the `thirdparty/ffmpeg_lgpl_free/` sub-directory, and you do not need to do anything.
+    * On Ubuntu `sudo apt-get install build-essential clang libavcodec-dev libavdevice-dev libavformat-dev libavutil-dev libswscale-dev`.
+    * On MacOS `brew install ffmpeg`.
+* (Optionally) install GLFW3 library if you wish to build OpenGL example programs:
+    * For Windows this can be found under `thirdparty/glfw/` and you won't need to do anything.
+    * On Ubuntu `sudo apt-get install libglfw3-dev`.
+    * On MacOS `brew install glfw`.
+* To generate API documentation install Doxygen, and invoke `doxygen` from the main directory of the repository. 
+* To build example programs with Clang, and run the simplest example:
+```
+make example_programs
+cd examples/
+./get_images.bin ../samples/counter.mp4
+```
+* Volograms libraries are designed to be dropped directly into a C/C++ project, or may be compiled as a static or shared library.
+* For vol_av you will also need to link against the FFmpeg dynamic libraries.
+* See included `examples/` folder for code examples, and `Makefile` for how they are linked against FFmpeg libraries.
+
+## Contents ##
 
 See individual libraries headers for version history and current features.
 
@@ -17,28 +39,6 @@ See individual libraries headers for version history and current features.
 | Tool    | Version | Libraries Used | Description                                                 |
 |---------|---------|----------------|-------------------------------------------------------------|
 | obj2vol | 0.1     | n/a            | Converts a Wavefront .obj model to a single-frame vologram. |
-
-### How do I get set up? ###
-
-* Clone this repository.
-* Install FFmpeg development libraries:
-    * For Windows these can be found under the `thirdparty/ffmpeg_lgpl_free/` sub-directory.
-    * On Ubuntu `sudo apt-get install build-essential clang libavcodec-dev libavdevice-dev libavformat-dev libavutil-dev libswscale-dev`
-    * On MacOS `brew install ffmpeg`
-* (Optionally) install GLFW3 library if you wish to build OpenGL example programs:
-    * For Windows this can be found under `thirdparty/glfw/` and you won't need to do anything.
-    * On Ubuntu `sudo apt-get install libglfw3-dev`
-    * On MacOS `brew install glfw`
-* To generate API documentation install Doxygen and `doxygen` from the main directory of the repository. 
-* To build example programs with Clang, and run the simplest example:
-```
-make example_programs
-cd examples/
-./get_images.bin ../samples/counter.mp4
-```
-* Volograms libraries are designed to be dropped directly into a C/C++ project, or may be compiled as a static or shared library.
-* For vol_av you will also need to link against the FFmpeg dynamic libraries.
-* See included `examples/` folder for code examples, and `Makefile` for how they are linked against FFmpeg libraries.
 
 ### Repository Contents
 
@@ -73,7 +73,7 @@ run_tests.sh                 -- Bash script for CI/CD automation to run unit tes
 vol_geom.png                 -- Example vol_geom screenshot that appears in this document.
 ```
 
-### Tests and Fuzzing
+## Tests and Fuzzing
 
 * Typical unit test programs for each library are found under `tests/`.
 * These are built using `make`, or `make test_programs`.
@@ -88,7 +88,7 @@ vol_geom.png                 -- Example vol_geom screenshot that appears in this
 * These should be run in the regular test program, and a debugger may be used to find and fix the crash.
 * Then do another iteration of fuzzing after deleting the fuzzing output directory until no more crashes are found.
 
-### Contribution Guidelines ###
+## Contribution Guidelines ##
 
 * Please feel free to open an Issue on this project page.
 * If you are sufficiently motivated, you may also open a Pull Request from your local fork.
@@ -97,11 +97,11 @@ vol_geom.png                 -- Example vol_geom screenshot that appears in this
     * Summary of Testing done:
     * Risk introduced by PR:
 
-### Maintainers/Contact ###
+## Maintainers/Contact ##
 
 * Anton Gerdelan <anton@volograms.com>
 
-### Licences and Dependencies ###
+## Licences and Dependencies ##
 
 Copyright 2021, Volograms. The MIT License. See the LICENSE file for details.
 
