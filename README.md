@@ -110,7 +110,7 @@ Copyright 2021, Volograms. The MIT License. See the LICENSE file for details.
 
 ### Dependencies
 
-* This software uses unaltered code of <a href=http://ffmpeg.org>FFmpeg</a> licensed under the <a href=http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html>LGPLv2.1</a> and its source code can be found at [github.com/FFmpeg/FFmpeg](https://github.com/FFmpeg/FFmpeg).
+* This software uses unaltered code of <a href=http://ffmpeg.org>FFmpeg</a> licensed under the <a href=http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html>LGPLv2.1</a> and its source code can be found at [FFmpeg](https://github.com/FFmpeg/FFmpeg).
 
 See the `thirdparty/ffmpeg/LICENSE.md` file for details.
 
@@ -142,7 +142,7 @@ See the `thirdparty/ffmpeg/LICENSE.md` file for details.
 
 ### Optional Dependencies
 
-* Examples using OpenGL make use of a the [https://glad.dav1d.de/](Glad) softare, by David Herberth, which comprises the following licences:
+* Examples using OpenGL make use of a the (https://glad.dav1d.de/)[Glad] softare, by David Herberth, which comprises the following licences:
 
 > The glad source code:
 >
@@ -222,7 +222,7 @@ See the `thirdparty/ffmpeg/LICENSE.md` file for details.
 > 
 > This notice may not be removed or altered from any source distribution.
 
-* And [https://github.com/capnramses/apg](apg libraries) "apg_maths", and "gfx" from Anton Gerdelan, used under the Public Domain licence option:
+* And (https://github.com/capnramses/apg)[apg libraries] "apg_maths", and "gfx" from Anton Gerdelan, used under the Public Domain licence option:
 
 > SECOND LICENCE OPTION
 
