@@ -90,7 +90,7 @@ vol_geom.png                 -- Example vol_geom screenshot that appears in this
 
 ## Contribution Guidelines ##
 
-* Please feel free to open an [https://github.com/Volograms/vol_libs/issues](Issue) on this project page.
+* Please feel free to open an [Issue](https://github.com/Volograms/vol_libs/issues) on this project page.
 * If you are sufficiently motivated, you may also open a Pull Request from your local fork.
  
 PR Descriptions should include this template:
