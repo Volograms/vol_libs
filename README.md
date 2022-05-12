@@ -206,7 +206,7 @@ See the `thirdparty/ffmpeg/LICENSE.md` file for details.
 >    TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 >    MATERIALS OR THE USE OR OTHER DEALINGS IN THE MATERIALS.
 
-* And the GLFW library, by Marcus Geelnard and Camilla Löwy:
+* And the [GLFW](https://github.com/glfw/glfw) library, by Marcus Geelnard and Camilla Löwy:
 
 > Copyright (c) 2002-2006 Marcus Geelnard
 >
