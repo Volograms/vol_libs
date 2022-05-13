@@ -196,7 +196,7 @@ int main( int argc, char** argv ) {
   printf( "fps=%f\n", fps );
   printf( "curr_frame_idx=%i\n", curr_frame_idx );
 
-  int n_vid_frames  = vol_av_frame_count( &av_info );
+  int n_vid_frames  = (int)vol_av_frame_count( &av_info );
   int n_geom_frames = geom_info.hdr.frame_count;
   // use the shorter of the 2 durations for any playback cut-off
   int n_frames = n_vid_frames < n_geom_frames ? n_vid_frames : n_geom_frames;
