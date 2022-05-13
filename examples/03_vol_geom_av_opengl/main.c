@@ -193,6 +193,7 @@ int main( int argc, char** argv ) {
   bool playing        = false;
   double fps          = vol_av_frame_rate( &av_info );
   double prev_time_s  = gfx_get_time_s();
+  printf( "fps=%f\n", fps );
   printf( "curr_frame_idx=%i\n", curr_frame_idx );
 
   int n_vid_frames  = vol_av_frame_count( &av_info );

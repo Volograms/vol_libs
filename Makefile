@@ -67,7 +67,6 @@ test_programs:
 
 tool_programs:
 	$(CC) $(FLAGS) $(DEBUG) $(SANS) -o tools/obj2vol$(BIN_EXT) tools/obj2vol/main.c
-	$(CC) $(FLAGS) $(DEBUG) $(SANS) -o tools/vol2obj$(BIN_EXT) tools/vol2obj/main.c $(INC_DIR) $(SRC_GEOM) $(SRC_AV) $(LIB_DIR) $(DYN_LIB_AV)
 
 .PHONY : clean
 clean:
