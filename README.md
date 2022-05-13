@@ -3,7 +3,29 @@
 Stand-alone C libraries for extracting data from captured vologram files.
 Designed to be used in native plugins for Unity and Unreal, and any custom vologram player or converter software.
 
-### Contents ###
+## How do I get set up? ##
+
+* Clone this repository.
+* Set up FFmpeg development libraries:
+    * For Windows these can be found under the `thirdparty/ffmpeg_lgpl_free/` sub-directory, and you do not need to do anything.
+    * On Ubuntu `sudo apt-get install build-essential clang libavcodec-dev libavdevice-dev libavformat-dev libavutil-dev libswscale-dev`.
+    * On MacOS `brew install ffmpeg`.
+* (Optionally) install GLFW3 library if you wish to build OpenGL example programs:
+    * For Windows this can be found under `thirdparty/glfw/` and you won't need to do anything.
+    * On Ubuntu `sudo apt-get install libglfw3-dev`.
+    * On MacOS `brew install glfw`.
+* To generate API documentation install Doxygen, and invoke `doxygen` from the main directory of the repository. 
+* To build example programs with Clang, and run the simplest example:
+```
+make example_programs
+cd examples/
+./get_images.bin ../samples/counter.mp4
+```
+* Volograms libraries are designed to be dropped directly into a C/C++ project, or may be compiled as a static or shared library.
+* For vol_av you will also need to link against the FFmpeg dynamic libraries.
+* See included `examples/` folder for code examples, and `Makefile` for how they are linked against FFmpeg libraries.
+
+## Contents ##
 
 See individual libraries headers for version history and current features.
 
@@ -17,28 +39,6 @@ See individual libraries headers for version history and current features.
 | Tool    | Version | Libraries Used | Description                                                 |
 |---------|---------|----------------|-------------------------------------------------------------|
 | obj2vol | 0.1     | n/a            | Converts a Wavefront .obj model to a single-frame vologram. |
-
-### How do I get set up? ###
-
-* Clone this repository.
-* Install FFmpeg development libraries:
-    * For Windows these can be found under the `thirdparty/ffmpeg_lgpl_free/` sub-directory.
-    * On Ubuntu `sudo apt-get install build-essential clang libavcodec-dev libavdevice-dev libavformat-dev libavutil-dev libswscale-dev`
-    * On MacOS `brew install ffmpeg`
-* (Optionally) install GLFW3 library if you wish to build OpenGL example programs:
-    * For Windows this can be found under `thirdparty/glfw/` and you won't need to do anything.
-    * On Ubuntu `sudo apt-get install libglfw3-dev`
-    * On MacOS `brew install glfw`
-* To generate API documentation install Doxygen and `doxygen` from the main directory of the repository. 
-* To build example programs with Clang, and run the simplest example:
-```
-make example_programs
-cd examples/
-./get_images.bin ../samples/counter.mp4
-```
-* Volograms libraries are designed to be dropped directly into a C/C++ project, or may be compiled as a static or shared library.
-* For vol_av you will also need to link against the FFmpeg dynamic libraries.
-* See included `examples/` folder for code examples, and `Makefile` for how they are linked against FFmpeg libraries.
 
 ### Repository Contents
 
@@ -73,7 +73,7 @@ run_tests.sh                 -- Bash script for CI/CD automation to run unit tes
 vol_geom.png                 -- Example vol_geom screenshot that appears in this document.
 ```
 
-### Tests and Fuzzing
+## Tests and Fuzzing
 
 * Typical unit test programs for each library are found under `tests/`.
 * These are built using `make`, or `make test_programs`.
@@ -88,26 +88,30 @@ vol_geom.png                 -- Example vol_geom screenshot that appears in this
 * These should be run in the regular test program, and a debugger may be used to find and fix the crash.
 * Then do another iteration of fuzzing after deleting the fuzzing output directory until no more crashes are found.
 
-### Contribution Guidelines ###
+## Contribution Guidelines ##
 
-* Please feel free to open an Issue on this project page.
+* Please feel free to open an [Issue](https://github.com/Volograms/vol_libs/issues) on this project page.
 * If you are sufficiently motivated, you may also open a Pull Request from your local fork.
-  * The PR Description should include this template:
-    * Point of the PR:
-    * Summary of Testing done:
-    * Risk introduced by PR:
+ 
+PR Descriptions should include this template:
 
-### Maintainers/Contact ###
+*   Point of the PR:
+*    Summary of Testing done:
+*    Risk introduced by PR:
+ 
+
+## Maintainers/Contact ##
 
 * Anton Gerdelan <anton@volograms.com>
+* Feel free to jump onto [Volograms Discord](https://discord.gg/dz5G4bHb) channel and chat about any of these projects, or get some troubleshooting help. 
 
-### Licences and Dependencies ###
+## Licences and Dependencies ##
 
 Copyright 2021, Volograms. The MIT License. See the LICENSE file for details.
 
 ### Dependencies
 
-* This software uses unaltered code of <a href=http://ffmpeg.org>FFmpeg</a> licensed under the <a href=http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html>LGPLv2.1</a> and its source code can be found at [github.com/FFmpeg/FFmpeg](https://github.com/FFmpeg/FFmpeg).
+* This software uses unaltered code of <a href=http://ffmpeg.org>FFmpeg</a> licensed under the <a href=http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html>LGPLv2.1</a> and its source code can be found at [FFmpeg](https://github.com/FFmpeg/FFmpeg).
 
 See the `thirdparty/ffmpeg/LICENSE.md` file for details.
 
@@ -139,7 +143,7 @@ See the `thirdparty/ffmpeg/LICENSE.md` file for details.
 
 ### Optional Dependencies
 
-* Examples using OpenGL make use of a the [https://glad.dav1d.de/](Glad) softare, by David Herberth, which comprises the following licences:
+* Examples using OpenGL make use of a the [Glad](https://glad.dav1d.de/) softare, by David Herberth, which comprises the following licences:
 
 > The glad source code:
 >
@@ -203,7 +207,7 @@ See the `thirdparty/ffmpeg/LICENSE.md` file for details.
 >    TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 >    MATERIALS OR THE USE OR OTHER DEALINGS IN THE MATERIALS.
 
-* And the GLFW library, by Marcus Geelnard and Camilla Löwy:
+* And the [GLFW](https://github.com/glfw/glfw) library, by Marcus Geelnard and Camilla Löwy:
 
 > Copyright (c) 2002-2006 Marcus Geelnard
 >
@@ -219,7 +223,7 @@ See the `thirdparty/ffmpeg/LICENSE.md` file for details.
 > 
 > This notice may not be removed or altered from any source distribution.
 
-* And [https://github.com/capnramses/apg](apg libraries) "apg_maths", and "gfx" from Anton Gerdelan, used under the Public Domain licence option:
+* And [apg libraries](https://github.com/capnramses/apg) "apg_maths", and "gfx" from Anton Gerdelan, used under the Public Domain licence option:
 
 > SECOND LICENCE OPTION
 
