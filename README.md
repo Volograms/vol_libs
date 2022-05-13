@@ -103,6 +103,7 @@ PR Descriptions should include this template:
 ## Maintainers/Contact ##
 
 * Anton Gerdelan <anton@volograms.com>
+* Feel free to jump onto [Volograms Discord](https://discord.gg/dz5G4bHb) channel and chat about any of these projects, or get some troubleshooting help. 
 
 ## Licences and Dependencies ##
 
