@@ -3,6 +3,19 @@
 Stand-alone C libraries for extracting data from captured vologram files.
 Designed to be used in native plugins for Unity and Unreal, and any custom vologram player or converter software.
 
+See individual libraries headers for version history and current features.
+
+| Library  | Version | Files | Description                                         | Fuzzed With                          |
+|----------|---------|-------|-----------------------------------------------------|--------------------------------------|
+| vol_av   | 0.7.1   | 2     | Extracts images and audio from videos using FFmpeg. | [AFL](https://github.com/google/AFL) |
+| vol_geom | 0.7.1   | 2     | Extracts mesh data from header and sequence files.  | [AFL](https://github.com/google/AFL) |
+
+![vol_geom used to load a simple Vologram and render it in OpenGL](vol_geom.png)
+
+| Tool    | Version | Libraries Used | Description                                                 |
+|---------|---------|----------------|-------------------------------------------------------------|
+| obj2vol | 0.1     | n/a            | Converts a Wavefront .obj model to a single-frame vologram. |
+
 ## How do I get set up? ##
 
 * Clone this repository.
@@ -25,22 +38,7 @@ cd examples/
 * For vol_av you will also need to link against the FFmpeg dynamic libraries.
 * See included `examples/` folder for code examples, and `Makefile` for how they are linked against FFmpeg libraries.
 
-## Contents ##
-
-See individual libraries headers for version history and current features.
-
-| Library  | Version | Files | Description                                         |
-|----------|---------|-------|-----------------------------------------------------|
-| vol_av   | 0.7.1   | 2     | Extracts images and audio from videos using FFmpeg. |
-| vol_geom | 0.7.1   | 2     | Extracts mesh data from header and sequence files.  |
-
-![vol_geom used to load a simple Vologram and render it in OpenGL](vol_geom.png)
-
-| Tool    | Version | Libraries Used | Description                                                 |
-|---------|---------|----------------|-------------------------------------------------------------|
-| obj2vol | 0.1     | n/a            | Converts a Wavefront .obj model to a single-frame vologram. |
-
-### Repository Contents
+## Repository Contents
 
 ```
 doc/                         -- API documentation will be generated here after running `doxygen` from the main directory.
