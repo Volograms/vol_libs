@@ -2,7 +2,7 @@
 
 Stand-alone C libraries for extracting data from captured vologram files.
 
-The libraries here are designed to be used in native plugins for Unity and Unreal, and can also be used to drive any custom vologram player or converter software. This will give you frame-by-frame triangulated mesh data with images for the texture that can be used with any API.
+The libraries here are designed to be used in native plugins for Unity and Unreal, and can also be used to drive any custom vologram player or converter software. This will give you frame-by-frame triangulated mesh data, with images for the texture, that can be used with any API.
 
 See individual libraries headers for version history and current features.
 
