@@ -10,10 +10,13 @@
  */
 
 #include "vol_geom.h"
+#include <inttypes.h> // 64-bit printfs
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h> // open()
+#include <fcntl.h>    // open()
 
 static vol_geom_info_t geom_info;
 static vol_geom_frame_data_t geom_frame_data;
@@ -42,25 +45,42 @@ static void _short_str_to_c_str( char* c_str_ptr, const vol_geom_short_str_t* sh
 
 typedef struct file_record_t {
   uint8_t* byte_ptr;
-  size_t sz;
+  int64_t sz;
 } file_record_t;
 
-static bool _read_entire_file( const char* filename, file_record_t* fr_ptr ) {
-  if ( !filename || !fr_ptr ) { return false; }
-  FILE* f_ptr = fopen( filename, "rb" );
-  if ( !f_ptr ) { return false; }
-  fseek( f_ptr, 0L, SEEK_END );
-  fr_ptr->sz       = (size_t)ftell( f_ptr );
-  fr_ptr->byte_ptr = malloc( fr_ptr->sz );
-  if ( !fr_ptr->byte_ptr ) {
-    fclose( f_ptr );
-    return false;
-  }
-  rewind( f_ptr );
-  size_t nr = fread( fr_ptr->byte_ptr, fr_ptr->sz, 1, f_ptr );
-  fclose( f_ptr );
-  if ( 1 != nr ) { return false; }
+static bool _get_file_sz( const char* filename, vol_geom_size_t* sz_ptr ) {
+  struct stat64 stbuf; // Note that fstat() is _not_ always 64-bit and can overflow on some systems, hence fstat64 and stat64.
+
+  int fd = open( filename, O_RDONLY );
+  if ( -1 == fd ) { return false; }
+  if ( ( 0 != fstat64( fd, &stbuf ) ) || ( !S_ISREG( stbuf.st_mode ) ) ) { return false; }
+  printf( "[geom_test] file size is %" PRId64 " bytes\n", (int64_t)stbuf.st_size );
+  *sz_ptr = stbuf.st_size;
+
   return true;
+}
+
+static bool _read_entire_file( const char* filename, file_record_t* fr_ptr ) {
+  FILE* f_ptr = NULL;
+
+  if ( !filename || !fr_ptr ) { goto _read_entire_file_failed; }
+
+  if ( !_get_file_sz( filename, &fr_ptr->sz ) ) { goto _read_entire_file_failed; }
+
+  printf( "Allocating %" PRId64 " bytes for reading file\n", fr_ptr->sz );
+  fr_ptr->byte_ptr = malloc( (size_t)fr_ptr->sz );
+  if ( !fr_ptr->byte_ptr ) { goto _read_entire_file_failed; }
+
+  f_ptr = fopen( filename, "rb" );
+  if ( !f_ptr ) { goto _read_entire_file_failed; }
+  vol_geom_size_t nr = fread( fr_ptr->byte_ptr, fr_ptr->sz, 1, f_ptr );
+  if ( 1 != nr ) { goto _read_entire_file_failed; }
+
+  fclose( f_ptr );
+  return true;
+_read_entire_file_failed:
+  if ( f_ptr ) { fclose( f_ptr ); }
+  return false;
 }
 
 int main( int argc, char** argv ) {

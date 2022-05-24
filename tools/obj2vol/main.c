@@ -54,7 +54,7 @@ static bool _load_obj( const char* filename ) {
   if ( !v_buff || !vn_buff || !vt_buff || !f_buff ) { return false; }
 
   // pass 2: parse values into buffers
-  fseek( f_ptr, 0, SEEK_SET );
+  if ( 0 != fseeko( f_ptr, 0LL, SEEK_SET ) ) { return false; }
 
   int f_idx = 0, v_idx = 0, vn_idx = 0, vt_idx = 0;
   while ( fgets( line_str, 2048, f_ptr ) ) {

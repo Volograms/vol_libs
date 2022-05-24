@@ -52,7 +52,7 @@ extern "C" {
 #include <stdint.h>
 
 /** Using a specified-size type instead of size_t for better platform consistency. */
-typedef uint64_t vol_geom_size_t;
+typedef int64_t vol_geom_size_t; // Note that signed int64 should be compatible with off_t.
 
 /** Helper struct to store Unity-style strings from VOL file. */
 VOL_GEOM_EXPORT typedef struct vol_geom_short_str_t {
