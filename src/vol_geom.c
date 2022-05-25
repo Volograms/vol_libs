@@ -20,6 +20,8 @@
 #include <string.h>
 #include <sys/stat.h> // Used for reading file sizes.
 #include <sys/types.h>
+
+// NOTE: ftello() and fseeko() are replace ftell(), fseek(), and their Windows equivalents, to support 64-bit indices to >2GB files.
 #ifdef _WIN32
 #define vol_geom_stat64 _stat64
 #define vol_geom_stat64_t __stat64
@@ -31,20 +33,6 @@
 #define vol_geom_fseeko fseeko
 #define vol_geom_ftello ftello
 #endif
-
-/* To support files > 2GB:
-
-int fseeko(FILE *stream, off_t offset, int whence);
-off_t ftello(FILE *stream);
-
-On many architectures both off_t and long are 32-bit types, but compilation with
-
-#define _FILE_OFFSET_BITS 64
-will turn off_t into a 64-bit type.
-
-Return Value
-On successful completion, fseeko() returns 0, while ftello() returns the current offset. Otherwise, -1 is returned and errno is set to indicate the error.
-*/
 
 #define VOL_GEOM_LOG_STR_MAX_LEN 512 // Careful - this is stored on the stack to be thread and memory-safe so don't make it too large.
 /// File header section size in bytes. Used in sanity checks to test for corrupted files that are below minimum sizes expected.
