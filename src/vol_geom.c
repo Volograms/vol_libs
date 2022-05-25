@@ -3,7 +3,7 @@
  *
  * vol_geom  | .vol Geometry Decoding API
  * --------- | ---------------------
- * Version   | 0.9
+ * Version   | 0.10
  * Authors   | Anton Gerdelan <anton@volograms.com>
  * Copyright | 2021, Volograms (http://volograms.com/)
  * Language  | C99
@@ -13,13 +13,23 @@
 
 #include "vol_geom.h"
 #include <assert.h>
-#include <inttypes.h> // 64-bit printfs (PRId64 for integer, PRId64 for unsigned int, PRIx64 for hex)
+#include <inttypes.h> // 64-bit printfs (PRId64 for integer, PRIu64 for unsigned int, PRIx64 for hex)
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/stat.h> // open()
-#include <fcntl.h>    // open()
+#include <sys/stat.h> // Used for reading file sizes.
+#ifdef _WIN32
+#define vol_geom_stat64 _stat64
+#define vol_geom_stat64_t __stat64
+#define vol_geom_fseeko _fseeki64
+#define vol_geom_ftello _ftelli64
+#else
+#define vol_geom_stat64 stat64
+#define vol_geom_stat64_t stat64
+#define vol_geom_fseeko fseeko
+#define vol_geom_ftello ftello
+#endif
 
 /* To support files > 2GB:
 
@@ -77,14 +87,9 @@ typedef struct vol_geom_file_record_t {
  * @return         False on any error, including bad parameters or file not found. Otherwise true on success, where sz_ptr is set.
  */
 static bool _get_file_sz( const char* filename, vol_geom_size_t* sz_ptr ) {
-  struct stat64 stbuf; // Note that fstat() is _not_ always 64-bit and can overflow on some systems, hence fstat64 and stat64.
-
-  int fd = open( filename, O_RDONLY );
-  if ( -1 == fd ) { return false; }
-  if ( ( 0 != fstat64( fd, &stbuf ) ) || ( !S_ISREG( stbuf.st_mode ) ) ) { return false; }
-  printf( "file size is %" PRId64 " bytes\n", (int64_t)stbuf.st_size );
+  struct vol_geom_stat64_t stbuf;
+  if ( 0 != vol_geom_stat64( filename, &stbuf ) ) { return false; }
   *sz_ptr = stbuf.st_size;
-
   return true;
 }
 
@@ -322,7 +327,7 @@ bool vol_geom_read_frame( const char* seq_filename, const vol_geom_info_t* info_
       _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR could not open file `%s` for frame data.\n", seq_filename );
       return false;
     }
-    if ( 0 != fseeko( f_ptr, (off_t)offset_sz, SEEK_SET ) ) {
+    if ( 0 != vol_geom_fseeko( f_ptr, offset_sz, SEEK_SET ) ) {
       _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR seeking frame %i from sequence file - file too small for data\n", frame_idx );
       fclose( f_ptr );
       return false;
@@ -400,7 +405,7 @@ bool vol_geom_create_file_info( const char* hdr_filename, const char* seq_filena
     for ( int32_t i = 0; i < info_ptr->hdr.frame_count; i++ ) {
       vol_geom_frame_hdr_t frame_hdr = ( vol_geom_frame_hdr_t ){ .mesh_data_sz = 0 };
 
-      off_t frame_start_offset = ftello( f_ptr );
+      vol_geom_size_t frame_start_offset = vol_geom_ftello( f_ptr );
       if ( -1LL == frame_start_offset ) { goto failed_to_read_info; }
 
       if ( !fread( &frame_hdr.frame_number, sizeof( int32_t ), 1, f_ptr ) ) {
@@ -425,7 +430,7 @@ bool vol_geom_create_file_info( const char* hdr_filename, const char* seq_filena
         goto failed_to_read_info;
       }
 
-      off_t frame_current_offset = ftello( f_ptr );
+      vol_geom_size_t frame_current_offset = vol_geom_ftello( f_ptr );
       if ( -1LL == frame_current_offset ) { goto failed_to_read_info; }
       info_ptr->frames_directory_ptr[i].hdr_sz = (vol_geom_size_t)frame_current_offset - (vol_geom_size_t)frame_start_offset;
 
@@ -451,11 +456,11 @@ bool vol_geom_create_file_info( const char* hdr_filename, const char* seq_filena
       }
 
       // seek past mesh data and past the final integer "frame data size". see if file is big enough
-      if ( 0 != fseeko( f_ptr, (off_t)info_ptr->frames_directory_ptr[i].corrected_payload_sz + 4, SEEK_CUR ) ) {
+      if ( 0 != vol_geom_fseeko( f_ptr, info_ptr->frames_directory_ptr[i].corrected_payload_sz + 4, SEEK_CUR ) ) {
         _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: not enough memory in sequence file for frame %i contents\n", i );
         goto failed_to_read_info;
       }
-      frame_current_offset = ftello( f_ptr );
+      frame_current_offset = vol_geom_ftello( f_ptr );
       if ( -1LL == frame_current_offset ) { goto failed_to_read_info; }
 
       // update frame directory and store frame header
