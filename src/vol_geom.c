@@ -4,7 +4,7 @@
  * vol_geom  | .vol Geometry Decoding API
  * --------- | ---------------------
  * Version   | 0.10
- * Authors   | Anton Gerdelan <anton@volograms.com>
+ * Authors   | See matching header file.
  * Copyright | 2021, Volograms (http://volograms.com/)
  * Language  | C99
  * Files     | 2
