@@ -17,10 +17,11 @@
 #include <time.h>
 #ifdef _WIN32
 #include <windows.h> /* for time */
-#elif __APPLE__
+#else
+#include <unistd.h>
+#ifdef __APPLE__
 #include <mach/mach_time.h>
 #endif
-#include <unistd.h>
 
 static vol_geom_info_t geom_info;
 static vol_geom_frame_data_t geom_frame_data;

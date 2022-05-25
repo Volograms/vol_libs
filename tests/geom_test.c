@@ -15,8 +15,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h> // open()
-#include <fcntl.h>    // open()
+#include <sys/stat.h> // Used for reading file sizes.
+#include <sys/types.h>
+#ifdef _WIN32
+#define vol_geom_stat64 _stat64
+#define vol_geom_stat64_t __stat64
+#define vol_geom_fseeko _fseeki64
+#define vol_geom_ftello _ftelli64
+#else
+#define vol_geom_stat64 stat
+#define vol_geom_stat64_t stat
+#define vol_geom_fseeko fseeko
+#define vol_geom_ftello ftello
+#endif
 
 static vol_geom_info_t geom_info;
 static vol_geom_frame_data_t geom_frame_data;
@@ -43,42 +54,47 @@ static void _short_str_to_c_str( char* c_str_ptr, const vol_geom_short_str_t* sh
   c_str_ptr[short_ptr->sz] = '\0';
 }
 
-typedef struct file_record_t {
+typedef struct vol_geom_file_record_t {
   uint8_t* byte_ptr;
   int64_t sz;
-} file_record_t;
+} vol_geom_file_record_t;
 
+/** Helper function to check the actual size of a file on disk.
+ * @param filename Pointer to nul-terminated file path string. Must not be NULL.
+ * @param sz_ptr   Size of the file, in bytes, is written to address pointed to by sz_ptr. Must not be NULL. Not written when returning false.
+ * @return         False on any error, including bad parameters or file not found. Otherwise true on success, where sz_ptr is set.
+ */
 static bool _get_file_sz( const char* filename, vol_geom_size_t* sz_ptr ) {
-  struct stat64 stbuf; // Note that fstat() is _not_ always 64-bit and can overflow on some systems, hence fstat64 and stat64.
-
-  int fd = open( filename, O_RDONLY );
-  if ( -1 == fd ) { return false; }
-  if ( ( 0 != fstat64( fd, &stbuf ) ) || ( !S_ISREG( stbuf.st_mode ) ) ) { return false; }
-  printf( "[geom_test] file size is %" PRId64 " bytes\n", (int64_t)stbuf.st_size );
+  struct vol_geom_stat64_t stbuf;
+  if ( 0 != vol_geom_stat64( filename, &stbuf ) ) { return false; }
   *sz_ptr = stbuf.st_size;
-
   return true;
 }
 
-static bool _read_entire_file( const char* filename, file_record_t* fr_ptr ) {
+/** Helper function to read an entire file into an array of bytes within struct pointed to by `fr_ptr`.
+ * @warning        This function allocates memory that the caller must manually free after use.
+ * @param filename Pointer to nul-terminated file path string. Must not be NULL.
+ * @param fr_ptr   File contents and size are written to a structure pointed to by `fr_ptr`. Must not be NULL.
+ * @return         False on any error.
+ */
+static bool _read_entire_file( const char* filename, vol_geom_file_record_t* fr_ptr ) {
   FILE* f_ptr = NULL;
 
-  if ( !filename || !fr_ptr ) { goto _read_entire_file_failed; }
+  if ( !filename || !fr_ptr ) { goto vol_geom_read_entire_file_failed; }
 
-  if ( !_get_file_sz( filename, &fr_ptr->sz ) ) { goto _read_entire_file_failed; }
+  if ( !_get_file_sz( filename, &fr_ptr->sz ) ) { goto vol_geom_read_entire_file_failed; }
 
-  printf( "Allocating %" PRId64 " bytes for reading file\n", fr_ptr->sz );
   fr_ptr->byte_ptr = malloc( (size_t)fr_ptr->sz );
-  if ( !fr_ptr->byte_ptr ) { goto _read_entire_file_failed; }
+  if ( !fr_ptr->byte_ptr ) { goto vol_geom_read_entire_file_failed; }
 
   f_ptr = fopen( filename, "rb" );
-  if ( !f_ptr ) { goto _read_entire_file_failed; }
+  if ( !f_ptr ) { goto vol_geom_read_entire_file_failed; }
   vol_geom_size_t nr = fread( fr_ptr->byte_ptr, fr_ptr->sz, 1, f_ptr );
-  if ( 1 != nr ) { goto _read_entire_file_failed; }
+  if ( 1 != nr ) { goto vol_geom_read_entire_file_failed; }
 
   fclose( f_ptr );
   return true;
-_read_entire_file_failed:
+vol_geom_read_entire_file_failed:
   if ( f_ptr ) { fclose( f_ptr ); }
   return false;
 }
@@ -102,7 +118,7 @@ int main( int argc, char** argv ) {
     hdr_filename = "header.vol";
     seq_filename = "sequence.vol";
 
-    file_record_t file_record = ( file_record_t ){ .sz = 0 };
+    vol_geom_file_record_t file_record = ( vol_geom_file_record_t ){ .sz = 0 };
     if ( !_read_entire_file( argv[1], &file_record ) ) {
       fprintf( stderr, "File record could not be read.\n" );
       VOL_ASSERT( false );
