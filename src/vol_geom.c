@@ -20,7 +20,6 @@
 #include <string.h>
 #include <sys/stat.h> // Used for reading file sizes.
 #include <sys/types.h>
-#include <unistd.h>
 #ifdef _WIN32
 #define vol_geom_stat64 _stat64
 #define vol_geom_stat64_t __stat64
