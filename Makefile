@@ -7,7 +7,8 @@
 CC          = clang
 # -Werror is useful when upgrading the API as it upgrades deprecation warnings to errors.
 # NB -std=gnu99 includes time spec struct used for timing in test code.
-FLAGS       = -std=gnu99 -m64 -Wfatal-errors -pedantic -Wextra -Wall
+# -D_FILE_OFFSET_BITS=64 forces stat() to use 64-bit file sizes, even on 32-bit systems.
+FLAGS       = -std=gnu99 -m64 -Wfatal-errors -pedantic -Wextra -Wall -D_FILE_OFFSET_BITS=64
 DEBUG       = -g -DVOL_AV_DEBUG
 #SANS        = -fsanitize=address -fsanitize=undefined 
 INC_DIR     = -I src/ -I thirdparty/ -I thirdparty/apg/ -I thirdparty/glad/include/
