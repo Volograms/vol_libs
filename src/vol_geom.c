@@ -218,6 +218,7 @@ static bool _read_vol_frame( const vol_geom_info_t* info_ptr, int frame_idx, vol
       }
 
       memcpy( &frame_data_ptr->vertices_sz, &frame_data_ptr->block_data_ptr[curr_offset], sizeof( int32_t ) );
+      if ( frame_data_ptr->vertices_sz < 0 ) { return false; }
       curr_offset += (vol_geom_size_t)sizeof( int32_t );
       frame_data_ptr->vertices_offset = curr_offset;
       curr_offset += (vol_geom_size_t)frame_data_ptr->vertices_sz;
@@ -230,6 +231,7 @@ static bool _read_vol_frame( const vol_geom_info_t* info_ptr, int frame_idx, vol
       }
 
       memcpy( &frame_data_ptr->normals_sz, &frame_data_ptr->block_data_ptr[curr_offset], sizeof( int32_t ) );
+      if ( frame_data_ptr->normals_sz < 0 ) { return false; }
       curr_offset += (vol_geom_size_t)sizeof( int32_t );
       frame_data_ptr->normals_offset = curr_offset;
       curr_offset += (vol_geom_size_t)frame_data_ptr->normals_sz;
@@ -243,6 +245,7 @@ static bool _read_vol_frame( const vol_geom_info_t* info_ptr, int frame_idx, vol
         }
 
         memcpy( &frame_data_ptr->indices_sz, &frame_data_ptr->block_data_ptr[curr_offset], sizeof( int32_t ) );
+        if ( frame_data_ptr->indices_sz < 0 ) { return false; }
         curr_offset += (vol_geom_size_t)sizeof( int32_t );
         frame_data_ptr->indices_offset = curr_offset;
         curr_offset += (vol_geom_size_t)frame_data_ptr->indices_sz;
@@ -252,6 +255,7 @@ static bool _read_vol_frame( const vol_geom_info_t* info_ptr, int frame_idx, vol
         if ( frame_data_ptr->block_data_sz < ( curr_offset + (vol_geom_size_t)sizeof( int32_t ) + (vol_geom_size_t)frame_data_ptr->uvs_sz ) ) { return false; }
 
         memcpy( &frame_data_ptr->uvs_sz, &frame_data_ptr->block_data_ptr[curr_offset], sizeof( int32_t ) );
+        if ( frame_data_ptr->uvs_sz < 0 ) { return false; }
         curr_offset += (vol_geom_size_t)sizeof( int32_t );
         frame_data_ptr->uvs_offset = curr_offset;
         curr_offset += (vol_geom_size_t)frame_data_ptr->uvs_sz;
@@ -266,6 +270,7 @@ static bool _read_vol_frame( const vol_geom_info_t* info_ptr, int frame_idx, vol
       }
 
       memcpy( &frame_data_ptr->texture_sz, &frame_data_ptr->block_data_ptr[curr_offset], sizeof( int32_t ) );
+      if ( frame_data_ptr->texture_sz < 0 ) { return false; }
       curr_offset += (vol_geom_size_t)sizeof( int32_t );
       frame_data_ptr->texture_offset = curr_offset;
       curr_offset += (vol_geom_size_t)frame_data_ptr->texture_sz;
