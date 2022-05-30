@@ -7,17 +7,19 @@ The libraries here are designed to be used in native plugins for Unity and Unrea
 See individual libraries headers for version history and current features.
 
 | Library  | Version | Files | Description                                         | Fuzzed With                          |
-|----------|---------|-------|-----------------------------------------------------|--------------------------------------|
+| -------- | ------- | ----- | --------------------------------------------------- | ------------------------------------ |
 | vol_av   | 0.9     | 2     | Extracts images and audio from videos using FFmpeg. | [AFL](https://github.com/google/AFL) |
 | vol_geom | 0.10    | 2     | Extracts mesh data from header and sequence files.  | [AFL](https://github.com/google/AFL) |
 
-![vol_geom used to load a simple Vologram and render it in OpenGL](vol_geom.png)
-
 | Tool    | Version | Libraries Used | Description                                                 |
-|---------|---------|----------------|-------------------------------------------------------------|
+| ------- | ------- | -------------- | ----------------------------------------------------------- |
 | obj2vol | 0.1     | n/a            | Converts a Wavefront .obj model to a single-frame vologram. |
 
-## How do I get set up? ##
+
+| ![vol_geom used to load a simple Vologram and render it in OpenGL](vol_geom.png) |
+| *vol_geom used to load a simple Vologram and render it in OpenGL.* |
+
+## Set Up
 
 * Clone this repository.
 * Set up FFmpeg development libraries:
@@ -28,16 +30,52 @@ See individual libraries headers for version history and current features.
     * For Windows this can be found under `thirdparty/glfw/` and you won't need to do anything.
     * On Ubuntu `sudo apt-get install libglfw3-dev`.
     * On MacOS `brew install glfw`.
-* To generate API documentation install Doxygen, and invoke `doxygen` from the main directory of the repository. 
-* To build example programs with Clang, and run the simplest example:
+* Compile and run the test programs to check you have everything set up. These just produce text output.
+```
+make test_programs
+cd tests/
+./geom_test.bin
+./av_test.bin
+```
+
+### Using Libraries in your Projects
+
+* Volograms libraries are designed to be dropped directly into a C/C++ project, or may be compiled as a static or shared library.
+* For vol_av you will also need to link against the FFmpeg dynamic libraries.
+* `#include vol_av.h` or `#include vol_geom.h` and call interface functions from those headers.
+* Library functions are documented in the header files.
+* You can also generate API documentation using Doxygen. To do so install Doxygen, and invoke `doxygen` from the main directory of the repository.
+
+### Example Programs
+
+* To build optional example programs (requires GLFW3) with Clang, and run the simplest example:
 ```
 make example_programs
 cd examples/
 ./get_images.bin ../samples/counter.mp4
 ```
-* Volograms libraries are designed to be dropped directly into a C/C++ project, or may be compiled as a static or shared library.
-* For vol_av you will also need to link against the FFmpeg dynamic libraries.
 * See included `examples/` folder for code examples, and `Makefile` for how they are linked against FFmpeg libraries.
+
+| Example            | Description                                                                                                                                                                           | Parameters                                                                                                                                                                                                                                                                            |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| get_images         | Example code showing how to use vol_av to fetch textures from the video.                                                                                                              | `./get_images.bin ../samples/counter.webm`                                                                                                                                                                                                                                            |
+| dump_images        | As `get_images` but dumps images to files.                                                                                                                                            | `./get_images.bin ../samples/counter.webm`                                                                                                                                                                                                                                            |
+| vol_geom_opengl    | Example using vol_geom to load mesh frames from a vologram and render in OpenGL without a texture. Loads a cube by default,  or supply a path to a vologram header and sequence file. | `./vol_geom_opengl.bin ../samples/cone_hdr.vol ../samples/cone_seq.vol`                                                                                                                                                                                                               |
+| vol_geom_av_opengl | vol_geom_av_opengl                                                                                                                                                                    | Combines both vol_geom and vol_av and renders a textured vologram sequence in OpenGL. Displays the first frame of a video on a quad by default, but supply paths to a header, sequence, and video file to display a vologram. Advance one frame with `spacebar`, play/pause with `p`. | `./vol_geom_av_opengl.bin ../../1625472326152_ld/header.vols ../../1625472326152_ld/sequence_0.vols ../../1625472326152_ld/texture_2048_h264.mp4` |
+
+| ![vol_geom_av_opengl used to load a Vologram captured with Volu and animate it in OpenGL](example_jan.png) |
+| *vol_geom_av_opengl used to load a Vologram captured with Volu and animate it in OpenGL.* |
+
+### Troubleshooting
+
+Homebrew on M1 Macs may require environment variables to be set: 
+
+```
+export CPATH=/opt/homebrew/include
+export LIBRARY_PATH=/opt/homebrew/lib
+```
+
+There is a more detailed answer at https://apple.stackexchange.com/questions/414622/installing-a-c-c-library-with-homebrew-on-m1-macs
 
 ## Repository Contents
 
