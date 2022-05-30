@@ -16,8 +16,9 @@ See individual libraries headers for version history and current features.
 | obj2vol | 0.1     | n/a            | Converts a Wavefront .obj model to a single-frame vologram. |
 
 
-| ![vol_geom used to load a simple Vologram and render it in OpenGL](vol_geom.png) |
-| *vol_geom used to load a simple Vologram and render it in OpenGL.* |
+![vol_geom used to load a simple Vologram and render it in OpenGL](vol_geom.png)
+
+*vol_geom used to load a simple Vologram and render it in OpenGL.*
 
 ## Set Up
 
@@ -63,8 +64,9 @@ cd examples/
 | vol_geom_opengl    | Example using vol_geom to load mesh frames from a vologram and render in OpenGL without a texture. Loads a cube by default,  or supply a path to a vologram header and sequence file. | `./vol_geom_opengl.bin ../samples/cone_hdr.vol ../samples/cone_seq.vol`                                                                                                                                                                                                               |
 | vol_geom_av_opengl | vol_geom_av_opengl                                                                                                                                                                    | Combines both vol_geom and vol_av and renders a textured vologram sequence in OpenGL. Displays the first frame of a video on a quad by default, but supply paths to a header, sequence, and video file to display a vologram. Advance one frame with `spacebar`, play/pause with `p`. | `./vol_geom_av_opengl.bin ../../1625472326152_ld/header.vols ../../1625472326152_ld/sequence_0.vols ../../1625472326152_ld/texture_2048_h264.mp4` |
 
-| ![vol_geom_av_opengl used to load a Vologram captured with Volu and animate it in OpenGL](example_jan.png) |
-| *vol_geom_av_opengl used to load a Vologram captured with Volu and animate it in OpenGL.* |
+![vol_geom_av_opengl used to load a Vologram captured with Volu and animate it in OpenGL](example_jan.png)
+
+*vol_geom_av_opengl used to load a Vologram captured with Volu and animate it in OpenGL.*
 
 ### Troubleshooting
 
