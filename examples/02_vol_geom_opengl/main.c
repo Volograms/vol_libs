@@ -31,7 +31,9 @@ int main( int argc, char** argv ) {
   vol_geom_frame_data_t geom_frame_data = ( vol_geom_frame_data_t ){ .block_data_ptr = NULL };
 
   // Builds a little database of what is in the files (but doesn't keep files open).
-  if ( !vol_geom_create_file_info( vol_hdr_file, vol_seq_file, &geom_info, false ) ) {
+  bool streaming_mode = false; // Note - usually we want this to be _true_, but it can be more efficient to set this
+                               // to _false_ for small volograms, which loads the entire sequence into memory.
+  if ( !vol_geom_create_file_info( vol_hdr_file, vol_seq_file, &geom_info, streaming_mode ) ) {
     fprintf( stderr, "ERROR: opening vol files `%s`, `%s`\n", vol_hdr_file, vol_seq_file );
     return 1;
   }

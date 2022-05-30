@@ -31,6 +31,6 @@ set SRC=..\examples\03_vol_geom_av_opengl\main.c ^
 ..\src\vol_geom.c
 
 cl %COMPILER_FLAGS% %SRC% %I% /link %LINKER_FLAGS% %LIBS%
-copy vol_vs_gl.exe ..\
+copy vol_vs_gl.exe ..\examples\
 
 pause
