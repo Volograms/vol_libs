@@ -49,13 +49,17 @@ cd tests/
 
 ### Example Programs
 
-* To build optional example programs (requires GLFW3) with Clang, and run the simplest example:
+* Examples are *code example* for how you might invoke the libraries in your projects to render volograms.
+* See the table below for what each example is and how to use it.
+* For a visual output example try *vol_geom_av_opengl* to load a Vologram you have captured with Volu and exported to the desktop.
+
+To build optional example programs (requires GLFW3) with Clang:
+
 ```
 make example_programs
 cd examples/
-./get_images.bin ../samples/counter.mp4
+`./vol_geom_av_opengl.bin PATH_TO_MY/header.vols PATH_TO_MY/sequence_0.vols PATH_TO_MY/texture_2048_h264.mp4`
 ```
-* See included `examples/` folder for code examples, and `Makefile` for how they are linked against FFmpeg libraries.
 
 | Example            | Description                                                                                                                                                                           | Parameters                                                                                                                                                                                                                                                                            |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -86,30 +90,14 @@ doc/                         -- API documentation will be generated here after r
 examples/                    -- Demo programs for both vol_av and vol_geom. Compile with: `make example`, and run each from the `examples/` directory.
 fuzzing/                     -- Folder structure used for automated testing with the AFL fuzzer.
 samples/                     -- Sample data files used by examples and tests.
-samples/counter.*            -- Simple video where each frame shows the number of the frame. Handy for testing sync issues between texture and geometry.
-samples/cube_hdr.vol         -- Vologram header for a simple unit-size cube mesh. It has normals and texture coordinates.
-samples/cube_seq.vol         -- Vologram sequence for the cube mesh with just 1 frame.
-samples/cube.mtl             -- A material file for cube.obj. Not used at the moment but included for completeness.
-samples/cube.obj             -- A Wavefront .obj that the cube vologram was converted from. The `obj2vol` tool was used to convert it.
-samples/out.*                -- Very short videos at 25fps with frames at different sizes. For testing edge-case handling.
 src/                         -- Code for the libraries. Drop these directly into your code source to use vol_av, vol_geom, or both.
 tests/                       -- Unit tests for vol_av and vol_geom. Compile with `make test`. These are run by the CI on PRs and configured with `bitbucket-pipelines.yml`.
 thirdparty/                  -- Files to compile and run dependencies of vol_av and various examples.
-thirdparty/apg/              -- Source code helpers used by various demos. Not required for using libraries in your own project. Mostly Public Domain helper bits from https://github.com/capnramses/apg
-thirdparty/ffmpeg_lgpl_free/ -- A Windows LGPL-licence build of ffmpeg is included here for convenience. You'll need to include ffmpeg in work that uses vol_av.
-thirdparty/glad/             -- GLAD is a helper utility only used for OpenGL examples. Libraries are not dependent on this. MIT licence.
-thirdparty/GLFW/             -- GLFW is a helper framework only used for OpenGL examples. Libraries are not dependent on this. zlib/libpng licence.
 tools/                       -- Utility programs for testing and debugging, and for exporting volograms to other formats.
-tools/obj2vol/               -- A very basic Wavefront obj to Volograms converter is included here for making sample/test volograms. This was used to make the cube sample.
-.clang-format                -- A clang-format file.
-.gitignore                   -- Generated and binary files to exclude from the repository.
 build_msvc.bat               -- MS batch file for a command-line build of the largest example. Run periodically to check for compiler warnings across libraries. 
-Doxyfile                     -- Doxygen setup for CI builds. i.e. which libraries to install to run tests.
 LICENSE                      -- Licence information for this project. See also: separate licences for third-party dependencies.
 Makefile                     -- A GNU Makefile for building demos, tests, and samples. Used by CI builds. You can use this to build the examples in a local install if you wish.
-README.md                    -- This file.
 run_tests.sh                 -- Bash script for CI/CD automation to run unit tests after building on PRs. 
-vol_geom.png                 -- Example vol_geom screenshot that appears in this document.
 ```
 
 ## Tests and Fuzzing
