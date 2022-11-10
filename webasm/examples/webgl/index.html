@@ -2,10 +2,116 @@
 <html>
 <meta charset="UTF-8">
 <meta name="author" content="Volograms Ltd.">
-<!-- Setting the viewport to make your website look good on all devices: -->
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+
 <head>
 </head>
+
 <body>
+	<canvas id="canvas"></canvas>
 </body>
+<script id="vologram.vert" type="text/glsl">
+	attribute vec3 a_pos;
+	attribute vec2 a_st;
+	attribute vec3 a_n;
+	
+	uniform mat4 u_PV, u_M;
+	
+	varying vec2 v_st;
+	varying vec3 v_n;
+	
+	void main () {
+		v_st = a_st;
+		v_n = vec3 (u_PV * u_M * vec4(a_n, 0.0));
+		gl_Position = u_PV * u_M * vec4(a_pos, 1.0);
+	}
+	</script>
+<script id="vologram.frag" type="text/glsl">
+		precision mediump float;
+		
+		varying vec2 v_st;
+		varying vec3 v_n;
+		uniform sampler2D u_texture;
+		
+		void main () {
+			vec4 texel_rgba = texture2D(u_texture, v_st);
+			vec3 nn = normalize(v_n);
+			vec3 fwd = normalize(vec3(0.0, 0.0, -1.0));
+			gl_FragColor = texel_rgba;
+			gl_FragColor.rgb = gl_FragColor.rgb * dot(nn, fwd) * 0.7 + 0.3 * gl_FragColor.rgb;
+		}
+		</script>
+<script>
+	var canvas;
+	var gl;
+	var vologram = new Object();
+	var init_done = false;
+
+	function init() {
+		canvas = document.getElementById("canvas");
+		gl = canvas.getContext("webgl2"); // Get a WebGL 2.0 rendering context.
+
+		vologram.vao = gl.createVertexArray();
+		vologram.texture = gl.createTexture();
+		vologram.shader_program = gl.createProgram();
+		vologram.vertex_count = 0;
+
+		var vert_shader = gl.createShader(gl.VERTEX_SHADER);
+		var frag_shader = gl.createShader(gl.FRAGMENT_SHADER);
+		var vs_str = document.getElementById("vologram.vert").innerHTML;
+		var fs_str = document.getElementById("vologram.frag").innerHTML;
+		gl.shaderSource(vert_shader, vs_str);
+		gl.shaderSource(frag_shader, fs_str);
+		gl.compileShader(vert_shader);
+		if (!gl.getShaderParameter(vert_shader, gl.COMPILE_STATUS)) {
+			console.error("ERROR compiling vert shader. log: " + gl.getShaderInfoLog(vert_shader));
+		}
+		gl.compileShader(frag_shader);
+		if (!gl.getShaderParameter(frag_shader, gl.COMPILE_STATUS)) {
+			console.error("ERROR compiling frag shader. log: " + gl.getShaderInfoLog(frag_shader));
+		}
+		gl.attachShader(vologram.shader_program, vert_shader);
+		gl.attachShader(vologram.shader_program, frag_shader);
+		gl.bindAttribLocation(vologram.shader_program, 0, "a_p");
+		gl.bindAttribLocation(vologram.shader_program, 1, "a_st");
+		gl.bindAttribLocation(vologram.shader_program, 2, "a_n");
+		gl.linkProgram(vologram.shader_program);
+		if (!gl.getProgramParameter(vologram.shader_program, gl.LINK_STATUS)) {
+			console.error("ERROR linking program. log: " + gl.getProgramInfoLog(vologram.shader_program));
+		}
+		gl.validateProgram(vologram.shader_program);
+		if (!gl.getProgramParameter(vologram.shader_program, gl.VALIDATE_STATUS)) {
+			console.error("ERROR validating program. log: " + gl.getProgramInfoLog(vologram.shader_program));
+		}
+		vologram.u_PV_loc = gl.getUniformLocation(vologram.shader_program, "u_PV");
+		vologram.u_M_loc = gl.getUniformLocation(vologram.shader_program, "u_M");
+		gl.deleteShader(vert_shader);
+		gl.deleteShader(frag_shader);
+
+		console.log("init done");
+		init_done = true;
+	}
+
+	function render() {
+		canvas.width = window.innerWidth - 50;
+		canvas.height = window.innerHeight - 50;
+		gl.viewport(0, 0, canvas.width, canvas.height);
+		gl.clearColor(147.0 / 255.0, 149.0 / 255.0, 237.0 / 255.0, 1.0);
+		gl.cullFace(gl.BACK);
+		gl.frontFace(gl.CCW);
+		gl.enable(gl.CULL_FACE);
+		gl.enable(gl.DEPTH_TEST);
+		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+		gl.useProgram(vologram.shader_program);
+		gl.bindVertexArray(vologram.vao);
+		gl.drawArrays(gl.TRIANGLES, 0, vologram.vertex_count);
+
+		requestAnimationFrame(render);
+	}
+
+	init();
+	requestAnimationFrame(render);
+</script>
+
 </html>
