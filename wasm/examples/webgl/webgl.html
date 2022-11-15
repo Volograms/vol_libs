@@ -41,11 +41,26 @@
 			gl_FragColor.rgb = gl_FragColor.rgb * dot(nn, fwd) * 0.7 + 0.3 * gl_FragColor.rgb;
 		}
 		</script>
-<script>
+<script src="./vol_geom.js"></script>
+<script type="module">
+	import './vol_geom.js';
+
 	var canvas;
 	var gl;
 	var vologram = new Object();
 	var init_done = false;
+
+	Module.onRuntimeInitialized = _ => {
+		console.log('WASM for VOL_GEOM started...');
+
+		// emscripten_wget() is called inside create_file_info(), which fetches the files from these URLs without needing to cache them in at emcc compile-time.
+		// Note: , {async: true} option is added to ccall to allow async call (required for emscripten_wget()) https://emscripten.org/docs/porting/asyncify.html
+		// Also note that `emcc` builds with -sASYNCIFY to allow this.
+
+		//var ret = Module.ccall('create_file_info', 'boolean', ['string', 'string'], ['calif/shreyans_from_valeria_pipeline/1644409845761_ld/header.vols', 'calif/shreyans_from_valeria_pipeline/1644409845761_ld/sequence_0.vols']);
+		var ret = Module.ccall('create_file_info', 'boolean', ['string', 'string'], ['calif/header.vols', 'calif/sequence_0.vols'], { async: true });
+		console.log('create_file_info=' + ret);
+	}
 
 	function init() {
 		canvas = document.getElementById("canvas");
