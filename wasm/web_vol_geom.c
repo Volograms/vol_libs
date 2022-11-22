@@ -19,7 +19,7 @@ bool create_file_info( const char* hdr_filename, const char* seq_filename ) {
   _seq_filename[0] = '\0';
   strncat( _seq_filename, seq_filename, 255 );
 
-	printf("create_file_info( %s , %s )", hdr_filename, seq_filename);
+  printf( "create_file_info( %s , %s )", hdr_filename, seq_filename );
 
   // These calls are blocking. For async version:
   // void emscripten_async_wget(const char* url, const char* file, em_str_callback_func onload, em_str_callback_func onerror)
@@ -58,6 +58,9 @@ EMSCRIPTEN_KEEPALIVE
 int32_t frame_uvs_sz() { return _frame_data.uvs_sz; }
 
 EMSCRIPTEN_KEEPALIVE
+int32_t frame_normals_sz() { return _frame_data.normals_sz; }
+
+EMSCRIPTEN_KEEPALIVE
 uint8_t* frame_i() { // 'frame_indices' name REFUSED to export
   return &_frame_data.block_data_ptr[_frame_data.indices_offset];
 }
@@ -76,6 +79,9 @@ static size_t prev_vp_ptr_sz;
 
 static float* vt_ptr;
 static size_t prev_vt_ptr_sz;
+
+static float* vn_ptr;
+static size_t prev_vn_ptr_sz;
 
 static uint16_t* indices_ptr;
 static size_t prev_indices_ptr_sz;
@@ -102,6 +108,18 @@ float* frame_uvs_copied( void ) {
   float* f32_ptr = (float*)&_frame_data.block_data_ptr[_frame_data.uvs_offset];
   memcpy( vt_ptr, f32_ptr, _frame_data.uvs_sz );
   return vt_ptr;
+}
+
+EMSCRIPTEN_KEEPALIVE
+float* frame_normals_copied( void ) {
+  if ( _frame_data.normals_sz > prev_vn_ptr_sz ) {
+    vn_ptr         = realloc( vn_ptr, _frame_data.normals_sz );
+    prev_vn_ptr_sz = _frame_data.normals_sz;
+  }
+  if ( !vn_ptr ) { return vn_ptr; }
+  float* f32_ptr = (float*)&_frame_data.block_data_ptr[_frame_data.normals_offset];
+  memcpy( vn_ptr, f32_ptr, _frame_data.normals_sz );
+  return vn_ptr;
 }
 
 EMSCRIPTEN_KEEPALIVE

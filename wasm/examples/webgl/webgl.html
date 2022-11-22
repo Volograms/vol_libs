@@ -10,22 +10,41 @@
 <body>
 	<input type="button" id="load_vols_files_button" value="load vologram" hidden></input>
 	<canvas id="canvas"></canvas>
+	<video controls id="texture_video_el" loop>
+		<source src="./calif/output_720.mp4" type="video/mp4;">
+	</video>
 </body>
 <script id="vologram.vert" type="text/glsl">
 	attribute vec3 a_pos;
+	attribute vec2 a_st;
+	attribute vec3 a_n;
 	
 	uniform mat4 u_PV, u_M;
+
+	varying vec2 v_st;
+	varying vec3 v_n_loc;
 	
 	void main () {
-		vec3 p_loc = vec3( a_pos.x * -1.0, a_pos.y, a_pos.z );
+		vec3 p_loc = a_pos;
+		p_loc.x *= -1.0;
 		gl_Position = u_PV * u_M * vec4( p_loc, 1.0 );
+	
+		v_st = a_st;
+
+		v_n_loc = a_n;
 	}
 	</script>
 <script id="vologram.frag" type="text/glsl">
 		precision mediump float;
+
+		uniform sampler2D u_texture;
 		
+		varying vec2 v_st;
+		varying vec3 v_n_loc;
+
 		void main () {
-			gl_FragColor.rgba = vec4( 1.0, 0.0, 0.0, 1.0 );
+			vec3 texel_rgb = texture2D( u_texture, v_st ).rgb;
+			gl_FragColor.rgba = vec4( texel_rgb, 1.0 );
 		}
 		</script>
 <script src="./vol_geom.js"></script>
@@ -48,26 +67,18 @@
 
 		var is_key = Module.ccall('is_keyframe', 'boolean', ['number'], [frame_idx]);
 
+		//	{ // Copy mesh data into WebGL 2.0 buffers, and set the shader's attribute pointers into the data.
+		gl.useProgram(vologram.shader_program);
+		gl.bindVertexArray(vologram.vao);
+
 		var vp_copied = Module.ccall('frame_vp_copied', 'number');
 		var vp_sz = Module.ccall('frame_vertices_sz', 'number');
 		var vp_f32 = new Float32Array(Module.HEAP8.buffer, vp_copied, vp_sz / 4);
 
-		// TODO(Anton) normals. also add to web_vol_geom.c interface wrapper.
-
-		//	if (is_key) {
-		var uvs_copied = Module.ccall('frame_uvs_copied', 'number');
-		var uvs_sz = Module.ccall('frame_uvs_sz', 'number');
-		var uvs_f32 = new Float32Array(Module.HEAP8.buffer, uvs_copied, uvs_sz / 4);
-
-		var indices_copied = Module.ccall('frame_indices_copied', 'number');
-		var indices_sz = Module.ccall('frame_i_sz', 'number');
-		vologram.n_indices = indices_sz / 2; // ushort
-		var indices_u16 = new Uint16Array(Module.HEAP8.buffer, indices_copied, vologram.n_indices);
-		//	}
-
-		//	{ // Copy mesh data into WebGL 2.0 buffers, and set the shader's attribute pointers into the data.
-		gl.useProgram(vologram.shader_program);
-		gl.bindVertexArray(vologram.vao);
+		//  normals. also add to web_vol_geom.c interface wrapper.
+		var normals_copied = Module.ccall('frame_normals_copied', 'number');
+		var normals_sz = Module.ccall('frame_normals_sz', 'number');
+		var vn_f32 = new Float32Array(Module.HEAP8.buffer, normals_copied, normals_sz / 4);
 
 		// Positions
 		gl.bindBuffer(gl.ARRAY_BUFFER, vologram.vbo_vp);
@@ -76,28 +87,49 @@
 		gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
 		gl.enableVertexAttribArray(0);
 
-		// Texture Coordinates.
-		gl.bindBuffer(gl.ARRAY_BUFFER, vologram.vbo_vt);
-		gl.bufferData(gl.ARRAY_BUFFER, uvs_f32, gl.STATIC_DRAW);
-		//gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([1.0, 0.0, 0.0, 1.0, 1.0, 1.0]), gl.STATIC_DRAW); // HACK
-		gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
-		gl.enableVertexAttribArray(1);
-
-		/* TODO Normals
+		// Normals
 		gl.bindBuffer(gl.ARRAY_BUFFER, vologram.vbo_vn);
 		gl.bufferData(gl.ARRAY_BUFFER, vn_f32, gl.DYNAMIC_DRAW);
-		gl.vertexAttribPointer(2, 3, gl.UNSIGNED_BYTE, false, 0, 0);
+		gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
 		gl.enableVertexAttribArray(2);
-		*/
 
-		// Indices
-		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, vologram.ibo);
-		gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices_u16, gl.DYNAMIC_DRAW);
-		//gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array([0, 1, 2]), gl.DYNAMIC_DRAW); // HACK
-		//	}
+		if (is_key) {
+			var uvs_copied = Module.ccall('frame_uvs_copied', 'number');
+			var uvs_sz = Module.ccall('frame_uvs_sz', 'number');
+			var uvs_f32 = new Float32Array(Module.HEAP8.buffer, uvs_copied, uvs_sz / 4);
+
+			// Texture Coordinates.
+			gl.bindBuffer(gl.ARRAY_BUFFER, vologram.vbo_vt);
+			gl.bufferData(gl.ARRAY_BUFFER, uvs_f32, gl.STATIC_DRAW);
+			//gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([1.0, 0.0, 0.0, 1.0, 1.0, 1.0]), gl.STATIC_DRAW); // HACK
+			gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
+			gl.enableVertexAttribArray(1);
+
+			var indices_copied = Module.ccall('frame_indices_copied', 'number');
+			var indices_sz = Module.ccall('frame_i_sz', 'number');
+			vologram.n_indices = indices_sz / 2; // ushort
+			var indices_u16 = new Uint16Array(Module.HEAP8.buffer, indices_copied, vologram.n_indices);
+
+			// Indices
+			gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, vologram.ibo);
+			gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices_u16, gl.DYNAMIC_DRAW);
+			//gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array([0, 1, 2]), gl.DYNAMIC_DRAW); // HACK
+			//	}
+		}
 
 		console.log("Mesh loaded");
 		return true;
+	}
+
+	//https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/Tutorial/Animating_textures_in_WebGL
+	function update_video_texture(el, w, h) {
+		gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+		gl.bindTexture(gl.TEXTURE_2D, vologram.texture);
+		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, el);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 	}
 
 	function init_vol_shader() {
@@ -165,29 +197,31 @@
 	}
 
 	function render() {
-		// TODO Async downloading for mesh etc - render background until vologram ready.
-
-
 		canvas.width = window.innerWidth - 50;
 		canvas.height = window.innerHeight - 50;
 		gl.viewport(0, 0, canvas.width, canvas.height);
 		gl.clearColor(147.0 / 255.0, 149.0 / 255.0, 237.0 / 255.0, 1.0);
 		gl.cullFace(gl.BACK);
-		gl.frontFace(gl.CCW);
+		//gl.frontFace(gl.CCW);
+		gl.frontFace(gl.CW);
 		gl.enable(gl.CULL_FACE);
 		gl.enable(gl.DEPTH_TEST);
 		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
 		var aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
 		var P = perspective(66.6, aspect, 0.1, 100.0);
-		var V = look_at([0.0, 1.0, 4.0], [0.0, 1.0, 0.0], [0.0, 1.0, 0.0]); // cam_pos, targ_pos, up
+		var V = look_at([0.0, 1.0, -2.0], [0.0, 1.0, 0.0], [0.0, 1.0, 0.0]); // cam_pos, targ_pos, up
 		var PV = mult_mat4_mat4(P, V);
-		var M = identity_mat4();
+		var M = rotate_y_deg(identity_mat4(), 180.0)
 
 		if (vologram.n_indices > 0) {
 			gl.useProgram(vologram.shader_program);
 			gl.uniformMatrix4fv(vologram.shader_program.u_PV_loc, false, PV);
 			gl.uniformMatrix4fv(vologram.shader_program.u_M_loc, false, M);
+
+			gl.activeTexture(gl.TEXTURE0);
+			gl.bindTexture(gl.TEXTURE_2D, vologram.texture);
+
 			gl.bindVertexArray(vologram.vao);
 			gl.drawElements(gl.TRIANGLES, vologram.n_indices, gl.UNSIGNED_SHORT, 0); // UNSIGNED_SHORT == uint16_t indices.
 			//gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -199,10 +233,6 @@
 	// Load WASM module and kick-off rendering.
 	Module.onRuntimeInitialized = _ => {
 		console.log('WASM for VOL_GEOM started...');
-
-		// emscripten_wget() is called inside create_file_info(), which fetches the files from these URLs without needing to cache them in at emcc compile-time.
-		// Note: , {async: true} option is added to ccall to allow async call (required for emscripten_wget()) https://emscripten.org/docs/porting/asyncify.html
-		// Also note that `emcc` builds with -sASYNCIFY to allow this.
 
 		init();
 		if (!init) { return false; }
@@ -229,6 +259,34 @@
 		}
 		mesh_from_frame(0);
 		console.log("mesh initialised");
+
+		init_video();
+		console.log("video initialised");
+	}
+
+
+	const doSomethingWithTheFrame = (now, metadata) => {
+		var texture_video_el = document.getElementById("texture_video_el");
+		texture_video_el.pause(); // pause to let texture fully copy.
+
+		// Do something with the frame.
+		//	console.log(now, metadata);
+		// Re-register the callback to be notified about the next frame.
+
+		var spf = 1.0 / 30.0;
+		var frame = Math.floor(metadata.mediaTime / spf);
+	//	console.log(frame);
+		update_video_texture(texture_video_el, metadata.width, metadata.height);
+		mesh_from_frame( frame );
+
+		texture_video_el.play(); // unpause because texture has been copied.
+		texture_video_el.requestVideoFrameCallback(doSomethingWithTheFrame);
+	}
+
+	function init_video() {
+		var texture_video_el = document.getElementById("texture_video_el");
+		texture_video_el.requestVideoFrameCallback(doSomethingWithTheFrame);
+		texture_video_el.play();
 	}
 
 	function load_clicked() {
@@ -279,6 +337,7 @@
 				seq.send(null);
 			}
 
+			document.getElementById("load_vols_files_button").hidden = true; // prevent buffer mem leak
 		}
 	}
 </script>
