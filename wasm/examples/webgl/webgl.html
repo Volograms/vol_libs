@@ -8,68 +8,100 @@
 </head>
 
 <body>
+	<input type="button" id="load_vols_files_button" value="load vologram" hidden></input>
 	<canvas id="canvas"></canvas>
 </body>
 <script id="vologram.vert" type="text/glsl">
 	attribute vec3 a_pos;
-	attribute vec2 a_st;
-	attribute vec3 a_n;
 	
 	uniform mat4 u_PV, u_M;
 	
-	varying vec2 v_st;
-	varying vec3 v_n;
-	
 	void main () {
-		v_st = a_st;
-		v_n = vec3 (u_PV * u_M * vec4(a_n, 0.0));
-		gl_Position = u_PV * u_M * vec4(a_pos, 1.0);
+		vec3 p_loc = vec3( a_pos.x * -1.0, a_pos.y, a_pos.z );
+		gl_Position = u_PV * u_M * vec4( p_loc, 1.0 );
 	}
 	</script>
 <script id="vologram.frag" type="text/glsl">
 		precision mediump float;
 		
-		varying vec2 v_st;
-		varying vec3 v_n;
-		uniform sampler2D u_texture;
-		
 		void main () {
-			vec4 texel_rgba = texture2D(u_texture, v_st);
-			vec3 nn = normalize(v_n);
-			vec3 fwd = normalize(vec3(0.0, 0.0, -1.0));
-			gl_FragColor = texel_rgba;
-			gl_FragColor.rgb = gl_FragColor.rgb * dot(nn, fwd) * 0.7 + 0.3 * gl_FragColor.rgb;
+			gl_FragColor.rgba = vec4( 1.0, 0.0, 0.0, 1.0 );
 		}
 		</script>
 <script src="./vol_geom.js"></script>
+<script src="./apg_maths.js"></script>
 <script type="module">
 	import './vol_geom.js';
+	import './apg_maths.js';
 
 	var canvas;
 	var gl;
 	var vologram = new Object();
 	var init_done = false;
 
-	Module.onRuntimeInitialized = _ => {
-		console.log('WASM for VOL_GEOM started...');
+	// Copy vol_geom frame `frame_idx` into vologram webgl mesh.
+	// Returns true on success, and false on error loading frame.
+	function mesh_from_frame(frame_idx) {
+		// Ask the vol_geom WASM to read the frame data from the vologram file into `_frame_data`.
+		var ret = Module.ccall('read_frame', 'boolean', ['number'], [frame_idx]);
+		if (!ret) { return false; }
 
-		// emscripten_wget() is called inside create_file_info(), which fetches the files from these URLs without needing to cache them in at emcc compile-time.
-		// Note: , {async: true} option is added to ccall to allow async call (required for emscripten_wget()) https://emscripten.org/docs/porting/asyncify.html
-		// Also note that `emcc` builds with -sASYNCIFY to allow this.
+		var is_key = Module.ccall('is_keyframe', 'boolean', ['number'], [frame_idx]);
 
-		//var ret = Module.ccall('create_file_info', 'boolean', ['string', 'string'], ['calif/shreyans_from_valeria_pipeline/1644409845761_ld/header.vols', 'calif/shreyans_from_valeria_pipeline/1644409845761_ld/sequence_0.vols']);
-		var ret = Module.ccall('create_file_info', 'boolean', ['string', 'string'], ['calif/header.vols', 'calif/sequence_0.vols'], { async: true });
-		console.log('create_file_info=' + ret);
+		var vp_copied = Module.ccall('frame_vp_copied', 'number');
+		var vp_sz = Module.ccall('frame_vertices_sz', 'number');
+		var vp_f32 = new Float32Array(Module.HEAP8.buffer, vp_copied, vp_sz / 4);
+
+		// TODO(Anton) normals. also add to web_vol_geom.c interface wrapper.
+
+		//	if (is_key) {
+		var uvs_copied = Module.ccall('frame_uvs_copied', 'number');
+		var uvs_sz = Module.ccall('frame_uvs_sz', 'number');
+		var uvs_f32 = new Float32Array(Module.HEAP8.buffer, uvs_copied, uvs_sz / 4);
+
+		var indices_copied = Module.ccall('frame_indices_copied', 'number');
+		var indices_sz = Module.ccall('frame_i_sz', 'number');
+		vologram.n_indices = indices_sz / 2; // ushort
+		var indices_u16 = new Uint16Array(Module.HEAP8.buffer, indices_copied, vologram.n_indices);
+		//	}
+
+		//	{ // Copy mesh data into WebGL 2.0 buffers, and set the shader's attribute pointers into the data.
+		gl.useProgram(vologram.shader_program);
+		gl.bindVertexArray(vologram.vao);
+
+		// Positions
+		gl.bindBuffer(gl.ARRAY_BUFFER, vologram.vbo_vp);
+		gl.bufferData(gl.ARRAY_BUFFER, vp_f32, gl.STATIC_DRAW);
+		//gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1.0, 0, 0, 0, -1.0, 0, 1.0, 0, 0]), gl.STATIC_DRAW); // HACK
+		gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+		gl.enableVertexAttribArray(0);
+
+		// Texture Coordinates.
+		gl.bindBuffer(gl.ARRAY_BUFFER, vologram.vbo_vt);
+		gl.bufferData(gl.ARRAY_BUFFER, uvs_f32, gl.STATIC_DRAW);
+		//gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([1.0, 0.0, 0.0, 1.0, 1.0, 1.0]), gl.STATIC_DRAW); // HACK
+		gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
+		gl.enableVertexAttribArray(1);
+
+		/* TODO Normals
+		gl.bindBuffer(gl.ARRAY_BUFFER, vologram.vbo_vn);
+		gl.bufferData(gl.ARRAY_BUFFER, vn_f32, gl.DYNAMIC_DRAW);
+		gl.vertexAttribPointer(2, 3, gl.UNSIGNED_BYTE, false, 0, 0);
+		gl.enableVertexAttribArray(2);
+		*/
+
+		// Indices
+		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, vologram.ibo);
+		gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices_u16, gl.DYNAMIC_DRAW);
+		//gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array([0, 1, 2]), gl.DYNAMIC_DRAW); // HACK
+		//	}
+
+		console.log("Mesh loaded");
+		return true;
 	}
 
-	function init() {
-		canvas = document.getElementById("canvas");
-		gl = canvas.getContext("webgl2"); // Get a WebGL 2.0 rendering context.
-
-		vologram.vao = gl.createVertexArray();
-		vologram.texture = gl.createTexture();
-		vologram.shader_program = gl.createProgram();
-		vologram.vertex_count = 0;
+	function init_vol_shader() {
+		var success = true;
 
 		var vert_shader = gl.createShader(gl.VERTEX_SHADER);
 		var frag_shader = gl.createShader(gl.FRAGMENT_SHADER);
@@ -80,10 +112,12 @@
 		gl.compileShader(vert_shader);
 		if (!gl.getShaderParameter(vert_shader, gl.COMPILE_STATUS)) {
 			console.error("ERROR compiling vert shader. log: " + gl.getShaderInfoLog(vert_shader));
+			success = false;
 		}
 		gl.compileShader(frag_shader);
 		if (!gl.getShaderParameter(frag_shader, gl.COMPILE_STATUS)) {
 			console.error("ERROR compiling frag shader. log: " + gl.getShaderInfoLog(frag_shader));
+			success = false;
 		}
 		gl.attachShader(vologram.shader_program, vert_shader);
 		gl.attachShader(vologram.shader_program, frag_shader);
@@ -93,21 +127,47 @@
 		gl.linkProgram(vologram.shader_program);
 		if (!gl.getProgramParameter(vologram.shader_program, gl.LINK_STATUS)) {
 			console.error("ERROR linking program. log: " + gl.getProgramInfoLog(vologram.shader_program));
+			success = false;
 		}
 		gl.validateProgram(vologram.shader_program);
 		if (!gl.getProgramParameter(vologram.shader_program, gl.VALIDATE_STATUS)) {
 			console.error("ERROR validating program. log: " + gl.getProgramInfoLog(vologram.shader_program));
+			success = false;
 		}
-		vologram.u_PV_loc = gl.getUniformLocation(vologram.shader_program, "u_PV");
-		vologram.u_M_loc = gl.getUniformLocation(vologram.shader_program, "u_M");
+		vologram.shader_program.u_PV_loc = gl.getUniformLocation(vologram.shader_program, "u_PV");
+		vologram.shader_program.u_M_loc = gl.getUniformLocation(vologram.shader_program, "u_M");
 		gl.deleteShader(vert_shader);
 		gl.deleteShader(frag_shader);
 
+		return success;
+	}
+
+	function init() {
+		canvas = document.getElementById("canvas");
+		gl = canvas.getContext("webgl2"); // Get a WebGL 2.0 rendering context.
+
+		vologram.vao = gl.createVertexArray();
+		vologram.vbo_vp = gl.createBuffer();
+		vologram.vbo_vt = gl.createBuffer();
+		vologram.vbo_vn = gl.createBuffer();
+		vologram.vbo_vp = gl.createBuffer();
+		vologram.ibo = gl.createBuffer();
+		vologram.texture = gl.createTexture();
+		vologram.shader_program = gl.createProgram();
+		vologram.n_indices = 0;
+
+		if (!init_vol_shader()) { return false; }
+
 		console.log("init done");
 		init_done = true;
+
+		return true;
 	}
 
 	function render() {
+		// TODO Async downloading for mesh etc - render background until vologram ready.
+
+
 		canvas.width = window.innerWidth - 50;
 		canvas.height = window.innerHeight - 50;
 		gl.viewport(0, 0, canvas.width, canvas.height);
@@ -118,15 +178,109 @@
 		gl.enable(gl.DEPTH_TEST);
 		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-		gl.useProgram(vologram.shader_program);
-		gl.bindVertexArray(vologram.vao);
-		gl.drawArrays(gl.TRIANGLES, 0, vologram.vertex_count);
+		var aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
+		var P = perspective(66.6, aspect, 0.1, 100.0);
+		var V = look_at([0.0, 1.0, 4.0], [0.0, 1.0, 0.0], [0.0, 1.0, 0.0]); // cam_pos, targ_pos, up
+		var PV = mult_mat4_mat4(P, V);
+		var M = identity_mat4();
+
+		if (vologram.n_indices > 0) {
+			gl.useProgram(vologram.shader_program);
+			gl.uniformMatrix4fv(vologram.shader_program.u_PV_loc, false, PV);
+			gl.uniformMatrix4fv(vologram.shader_program.u_M_loc, false, M);
+			gl.bindVertexArray(vologram.vao);
+			gl.drawElements(gl.TRIANGLES, vologram.n_indices, gl.UNSIGNED_SHORT, 0); // UNSIGNED_SHORT == uint16_t indices.
+			//gl.drawArrays(gl.TRIANGLES, 0, 3);
+		}
 
 		requestAnimationFrame(render);
 	}
 
-	init();
-	requestAnimationFrame(render);
+	// Load WASM module and kick-off rendering.
+	Module.onRuntimeInitialized = _ => {
+		console.log('WASM for VOL_GEOM started...');
+
+		// emscripten_wget() is called inside create_file_info(), which fetches the files from these URLs without needing to cache them in at emcc compile-time.
+		// Note: , {async: true} option is added to ccall to allow async call (required for emscripten_wget()) https://emscripten.org/docs/porting/asyncify.html
+		// Also note that `emcc` builds with -sASYNCIFY to allow this.
+
+		init();
+		if (!init) { return false; }
+
+		document.getElementById("load_vols_files_button").hidden = false;
+		document.getElementById("load_vols_files_button").addEventListener("click", load_clicked, false);
+
+		console.log("render starting...");
+		requestAnimationFrame(render);
+	}
+
+	var header_ready = false;
+	var sequence_ready = false;
+
+	function init_mesh() {
+		if (!header_ready || !sequence_ready) { return; }
+		//var ret = Module.ccall('create_file_info', 'boolean', ['string', 'string'], ['calif/shreyans_from_valeria_pipeline/1644409845761_ld/header.vols', 'calif/shreyans_from_valeria_pipeline/1644409845761_ld/sequence_0.vols']);
+		var ret = Module.ccall('create_file_info', 'boolean', ['string', 'string'], ['header.vols', 'sequence_0.vols']);
+		console.log('create_file_info=' + ret);
+
+		if (!ret) {
+			console.error("failed to load vologram");
+			return;
+		}
+		mesh_from_frame(0);
+		console.log("mesh initialised");
+	}
+
+	function load_clicked() {
+		if (init_done) {
+
+			{
+				var filename = "./calif/header.vols";
+				console.log("filename=" + filename);
+				var xmlhttp = new XMLHttpRequest();
+				xmlhttp.open("GET", filename, true);
+				xmlhttp.responseType = "arraybuffer"; // binary file type. NOTE! Can be a "blob" or "arraybuffer"
+				xmlhttp.onload = (event) => {
+					const array_buffer = xmlhttp.response; // Note: not xmlhttp.responseText
+					if (array_buffer) {
+						const byte_array = new Uint8Array(array_buffer);
+						console.log("file fetched = " + xmlhttp.responseURL + " bytes = " + byte_array.length);
+						// NOTE! if filename has a path in it this function will fail if we don't mkdir first
+						var stream = FS.open("header.vols", 'w');
+						FS.write(stream, byte_array, 0, byte_array.length, 0);
+						FS.close(stream);
+						console.log("file stored in vfs as = " + "header.vols");
+						header_ready = true;
+						init_mesh();
+					}
+				};
+				xmlhttp.send(null);
+			}
+			{
+				var filename = "./calif/sequence_0.vols";
+				console.log("filename=" + filename);
+				var seq = new XMLHttpRequest();
+				seq.open("GET", filename, true);
+				seq.responseType = "arraybuffer"; // binary file type. NOTE! Can be a "blob" or "arraybuffer"
+				seq.onload = (event) => {
+					const array_buffer = seq.response; // Note: not xmlhttp.responseText
+					if (array_buffer) {
+						const byte_array = new Uint8Array(array_buffer);
+						console.log("file fetched = " + seq.responseURL + " bytes = " + byte_array.length);
+						// NOTE! if filename has a path in it this function will fail if we don't mkdir first
+						var stream = FS.open("sequence_0.vols", 'w');
+						FS.write(stream, byte_array, 0, byte_array.length, 0);
+						FS.close(stream);
+						console.log("file stored in vfs as = " + "sequence_0.vols");
+						sequence_ready = true;
+						init_mesh();
+					}
+				};
+				seq.send(null);
+			}
+
+		}
+	}
 </script>
 
 </html>
