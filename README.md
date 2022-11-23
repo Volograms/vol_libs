@@ -26,11 +26,11 @@ See individual libraries headers for version history and current features.
 * Set up FFmpeg development libraries:
     * For Windows these can be found under the `thirdparty/ffmpeg_lgpl_free/` sub-directory, and you do not need to do anything.
     * On Ubuntu `sudo apt-get install build-essential clang libavcodec-dev libavdevice-dev libavformat-dev libavutil-dev libswscale-dev`.
-    * On MacOS `brew install ffmpeg`.
+    * On macOS `brew install ffmpeg`.
 * (Optionally) install GLFW3 library if you wish to build OpenGL example programs:
     * For Windows this can be found under `thirdparty/glfw/` and you won't need to do anything.
     * On Ubuntu `sudo apt-get install libglfw3-dev`.
-    * On MacOS `brew install glfw`.
+    * On macOS `brew install glfw`.
 * Compile and run the test programs to check you have everything set up. These just produce text output.
 ```
 make test_programs
