@@ -1,0 +1,2 @@
+* no-normals support
+* infinite ground plane/grid
