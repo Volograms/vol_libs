@@ -16,9 +16,7 @@ static vol_geom_frame_data_t _frame_data;
 static char _seq_filename[256];
 
 EMSCRIPTEN_KEEPALIVE
-unsigned int do_usleep(unsigned int us) {
-	return usleep( us );
-}
+unsigned int do_usleep( unsigned int us ) { return usleep( us ); }
 
 EMSCRIPTEN_KEEPALIVE
 bool create_file_info( const char* hdr_filename, const char* seq_filename ) {
