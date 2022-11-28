@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -13,6 +14,11 @@ extern "C" {
 static vol_geom_info_t _info;
 static vol_geom_frame_data_t _frame_data;
 static char _seq_filename[256];
+
+EMSCRIPTEN_KEEPALIVE
+unsigned int do_usleep(unsigned int us) {
+	return usleep( us );
+}
 
 EMSCRIPTEN_KEEPALIVE
 bool create_file_info( const char* hdr_filename, const char* seq_filename ) {
