@@ -36,14 +36,6 @@ EMSCRIPTEN_KEEPALIVE
 bool create_file_info( const char* hdr_filename, const char* seq_filename ) {
   _seq_filename[0] = '\0';
   strncat( _seq_filename, seq_filename, 255 );
-
-  printf( "create_file_info( %s , %s )", hdr_filename, seq_filename );
-
-  // These calls are blocking. For async version:
-  // void emscripten_async_wget(const char* url, const char* file, em_str_callback_func onload, em_str_callback_func onerror)
-  // emscripten_wget( hdr_filename, hdr_filename );
-  // emscripten_wget( seq_filename, seq_filename );
-
   return vol_geom_create_file_info( hdr_filename, seq_filename, &_info, true );
 }
 
@@ -52,14 +44,12 @@ bool free_file_info( void ) { return vol_geom_free_file_info( &_info ); }
 
 EMSCRIPTEN_KEEPALIVE
 bool read_frame( int frame_idx ) {
-  // printf("reading frame %i\n", frame_idx );
   return vol_geom_read_frame( _seq_filename, &_info, frame_idx, &_frame_data );
 }
 
 EMSCRIPTEN_KEEPALIVE
 bool is_keyframe( int frame_idx ) {
   bool is_key = vol_geom_is_keyframe( &_info, frame_idx );
-  // printf("checking for key %i = %i\n", frame_idx, is_key);
   return is_key;
 }
 
