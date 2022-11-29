@@ -19,6 +19,9 @@ EMSCRIPTEN_KEEPALIVE
 unsigned int do_usleep( unsigned int us ) { return usleep( us ); }
 
 EMSCRIPTEN_KEEPALIVE
+bool has_normals( void ) { return usleep( us ); }
+
+EMSCRIPTEN_KEEPALIVE
 bool create_file_info( const char* hdr_filename, const char* seq_filename ) {
   _seq_filename[0] = '\0';
   strncat( _seq_filename, seq_filename, 255 );
@@ -34,7 +37,7 @@ bool create_file_info( const char* hdr_filename, const char* seq_filename ) {
 }
 
 EMSCRIPTEN_KEEPALIVE
-bool free_file_info() { return vol_geom_free_file_info( &_info ); }
+bool free_file_info( void ) { return vol_geom_free_file_info( &_info ); }
 
 EMSCRIPTEN_KEEPALIVE
 bool read_frame( int frame_idx ) {
@@ -53,30 +56,30 @@ EMSCRIPTEN_KEEPALIVE
 int find_previous_keyframe( int frame_idx ) { return vol_geom_find_previous_keyframe( &_info, frame_idx ); }
 
 EMSCRIPTEN_KEEPALIVE
-uint8_t* frame_vertices() { return &_frame_data.block_data_ptr[_frame_data.vertices_offset]; }
+uint8_t* frame_vertices( void ) { return &_frame_data.block_data_ptr[_frame_data.vertices_offset]; }
 
 EMSCRIPTEN_KEEPALIVE
-int32_t frame_vertices_sz() { return _frame_data.vertices_sz; }
+int32_t frame_vertices_sz( void ) { return _frame_data.vertices_sz; }
 
 EMSCRIPTEN_KEEPALIVE
-int32_t frame_uvs_sz() { return _frame_data.uvs_sz; }
+int32_t frame_uvs_sz( void ) { return _frame_data.uvs_sz; }
 
 EMSCRIPTEN_KEEPALIVE
-int32_t frame_normals_sz() { return _frame_data.normals_sz; }
+int32_t frame_normals_sz( void ) { return _frame_data.normals_sz; }
 
 EMSCRIPTEN_KEEPALIVE
-uint8_t* frame_i() { // 'frame_indices' name REFUSED to export
+uint8_t* frame_i( void ) { // 'frame_indices' name REFUSED to export
   return &_frame_data.block_data_ptr[_frame_data.indices_offset];
 }
 
 EMSCRIPTEN_KEEPALIVE
-int32_t frame_i_sz() { return _frame_data.indices_sz; }
+int32_t frame_i_sz( void ) { return _frame_data.indices_sz; }
 
 EMSCRIPTEN_KEEPALIVE
-uint8_t* frame_data_ptr() { return _frame_data.block_data_ptr; }
+uint8_t* frame_data_ptr( void ) { return _frame_data.block_data_ptr; }
 
 EMSCRIPTEN_KEEPALIVE
-uint32_t frame_vp_offset() { return _frame_data.vertices_offset; }
+uint32_t frame_vp_offset( void ) { return _frame_data.vertices_offset; }
 
 static float* vp_ptr;
 static size_t prev_vp_ptr_sz;
