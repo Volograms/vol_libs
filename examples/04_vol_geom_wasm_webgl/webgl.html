@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html>
+
+<!--
+Example vologram web player using WebGL, and the vol_geom library compiled to WASM.
+
+First version - 2022 Nov 28 - Anton Gerdelan <anton@volograms.com>
+
+HTML5 video is used for video texture and audio playback.
+The requestVideoFrameCallback() extension is used for synchronous video frame fetch.
+This callback is not supported on all browsers yet. https://caniuse.com/mdn-api_htmlvideoelement_requestvideoframecallback
+
+To Run:
+
+* Copy the vologram you want to play as a subfolder into this folder.
+* Set the video source and header and sequence file to point to your vologram.
+* Launch a local HTTP server from this folder.
+* Open the HTML page.
+* Hit "load vologram" to load and play the vologram.
+-->
+
+<meta charset="UTF-8">
+<meta name="author" content="Volograms Ltd.">
+<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+
+<head>
+</head>
+
+<body>
+	<input type="button" id="load_vols_files_button" value="load vologram" hidden></input>
+	<canvas id="canvas"></canvas>
+	<video controls id="texture_video_el" type="video/mp4;" width="256" height="256" loop></video>
+</body>
+<script id="vologram.vert" type="text/glsl">
+	precision mediump float;
+
+	attribute vec3 a_pos;
+	attribute vec2 a_st;
+	attribute vec3 a_n;
+	
+	uniform mat4 u_P, u_V, u_M; // Projection/View/Model.
+
+	varying vec2 v_st;
+	varying vec3 v_n_eye;
+	
+	void main () {
+		vec3 p_loc = a_pos;
+		p_loc.x *= -1.0;
+		gl_Position = u_P * u_V * u_M * vec4( p_loc, 1.0 );
+	
+		v_st = a_st;
+
+		v_n_eye = ( u_V * u_M * vec4( a_n, 0.0 ) ).xyz;
+	}
+	</script>
+<script id="vologram.frag" type="text/glsl">
+		precision mediump float;
+
+		uniform sampler2D u_texture;
+		uniform mat4 u_P, u_V, u_M; // Projection/View/Model.
+		
+		varying vec2 v_st;
+		varying vec3 v_n_eye;
+
+		void main () {
+			vec3 texel_rgb = texture2D( u_texture, v_st ).rgb;
+
+			if ( texel_rgb.r > 0.9 && texel_rgb.g < 0.17 && texel_rgb.b > 0.9 ) { discard; } // discard any magenta fragments.
+
+			// Some trivial highlight based on normals.
+			vec3 nn_eye  = normalize( v_n_eye );
+			vec4 fwd_eye = u_V * u_M * vec4( 0.0, 1.0, 1.0, 0.0 );
+			float dp     = dot( nn_eye, normalize( fwd_eye.xyz ) );
+			vec3 lit_rgb = texel_rgb * 0.5 + texel_rgb * 0.5 * dp;
+
+			gl_FragColor.rgba = vec4( texel_rgb, 1.0 );
+		}
+		</script>
+<script src="./vol_geom.js"></script>
+<script src="./apg_maths.js"></script>
+<script type="module">
+	import './vol_geom.js';  // Generated JavaScript interface to the WASM compile of vol_geom.c.
+	import './apg_maths.js'; // Convenience matrix mathematics functions.
+
+	var canvas;
+	var gl;
+	var vologram = new Object();   // Stores state about the current vologram.
+	vologram.header_url = "./calif/header.vols";
+	vologram.sequence_url = "./calif/sequence_0.vols";
+	vologram.video_url = "./calif/output_720.mp4";
+	vologram.fps = 30.0;           // Change this value if not using 30 frames-per-second video.
+	var init_done = false;         // If the basic shaders/objects are set up. A vologram can be downloaded & prepared after this is true.
+
+	function init_vol_shader() {
+		var success = true;
+
+		var vert_shader = gl.createShader(gl.VERTEX_SHADER);
+		var frag_shader = gl.createShader(gl.FRAGMENT_SHADER);
+		var vs_str = document.getElementById("vologram.vert").innerHTML;
+		var fs_str = document.getElementById("vologram.frag").innerHTML;
+		gl.shaderSource(vert_shader, vs_str);
+		gl.shaderSource(frag_shader, fs_str);
+		gl.compileShader(vert_shader);
+		if (!gl.getShaderParameter(vert_shader, gl.COMPILE_STATUS)) {
+			console.error("ERROR compiling vert shader. log: " + gl.getShaderInfoLog(vert_shader));
+			success = false;
+		}
+		gl.compileShader(frag_shader);
+		if (!gl.getShaderParameter(frag_shader, gl.COMPILE_STATUS)) {
+			console.error("ERROR compiling frag shader. log: " + gl.getShaderInfoLog(frag_shader));
+			success = false;
+		}
+		gl.attachShader(vologram.shader_program, vert_shader);
+		gl.attachShader(vologram.shader_program, frag_shader);
+		gl.bindAttribLocation(vologram.shader_program, 0, "a_p");  // Vertex position
+		gl.bindAttribLocation(vologram.shader_program, 1, "a_st"); // Texture coordinate
+		gl.bindAttribLocation(vologram.shader_program, 2, "a_n");  // Normal
+		gl.linkProgram(vologram.shader_program);
+		if (!gl.getProgramParameter(vologram.shader_program, gl.LINK_STATUS)) {
+			console.error("ERROR linking program. log: " + gl.getProgramInfoLog(vologram.shader_program));
+			success = false;
+		}
+		gl.validateProgram(vologram.shader_program);
+		if (!gl.getProgramParameter(vologram.shader_program, gl.VALIDATE_STATUS)) {
+			console.error("ERROR validating program. log: " + gl.getProgramInfoLog(vologram.shader_program));
+			success = false;
+		}
+		vologram.shader_program.u_P_loc = gl.getUniformLocation(vologram.shader_program, "u_P"); // Projection matrix uniform.
+		vologram.shader_program.u_V_loc = gl.getUniformLocation(vologram.shader_program, "u_V"); // View matrix uniform.
+		vologram.shader_program.u_M_loc = gl.getUniformLocation(vologram.shader_program, "u_M"); // Model matrix uniform.
+		gl.deleteShader(vert_shader); // Flag shader for deletion whenever shader program is deleted.
+		gl.deleteShader(frag_shader);
+
+		return success;
+	}
+
+	function init() {
+		canvas = document.getElementById("canvas");
+		gl = canvas.getContext("webgl2"); // Get a WebGL 2.0 rendering context.
+		{
+			vologram.vao = gl.createVertexArray();
+			vologram.vbo_vp = gl.createBuffer(); // Vertex positions buffer object.
+			vologram.vbo_vt = gl.createBuffer(); // Texture coordinates buffer object.
+			vologram.vbo_vn = gl.createBuffer(); // Normals buffer object. TODO(Anton) check if normals are in vologram
+			vologram.ibo = gl.createBuffer();    // Index buffer object.
+			vologram.texture = gl.createTexture();
+			vologram.shader_program = gl.createProgram();
+			vologram.n_indices = 0;
+			vologram.has_normals = false;
+			vologram.last_frame_loaded = -1;    // To avoid reloading the same frame.
+			vologram.last_keyframe_loaded = -1; // Records if a preceding keyframe was already loaded.
+			vologram.header_ready = false;      // If file is downloaded.
+			vologram.sequence_ready = false;    // If file is downloaded.
+			vologram.ready = false;             // If data is downloaded and vologram is ready to play.
+		}
+		if (!init_vol_shader()) { return false; }
+
+		console.log("init done");
+		init_done = true;
+
+		return true;
+	}
+
+	function render() {
+		canvas.width = window.innerWidth - 50;
+		canvas.height = window.innerHeight - 50;
+		gl.viewport(0, 0, canvas.width, canvas.height);
+		gl.clearColor(147.0 / 255.0, 149.0 / 255.0, 237.0 / 255.0, 1.0);
+		gl.cullFace(gl.BACK);
+		//gl.frontFace(gl.CCW);
+		gl.frontFace(gl.CW);
+		gl.enable(gl.CULL_FACE);
+		gl.enable(gl.DEPTH_TEST);
+		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+		var aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
+		var P = perspective(66.6, aspect, 0.1, 100.0);
+		var V = look_at([0.0, 1.2, -2.0], [0.0, 1.2, 0.0], [0.0, 1.0, 0.0]); // cam_pos, targ_pos, up
+		var M = rotate_y_deg(identity_mat4(), 180.0)
+
+		if (vologram.n_indices > 0) {
+			gl.useProgram(vologram.shader_program);
+			gl.uniformMatrix4fv(vologram.shader_program.u_P_loc, false, P);
+			gl.uniformMatrix4fv(vologram.shader_program.u_V_loc, false, V);
+			gl.uniformMatrix4fv(vologram.shader_program.u_M_loc, false, M);
+			gl.activeTexture(gl.TEXTURE0);
+			gl.bindTexture(gl.TEXTURE_2D, vologram.texture);
+			gl.bindVertexArray(vologram.vao);
+			gl.drawElements(gl.TRIANGLES, vologram.n_indices, gl.UNSIGNED_SHORT, 0); // UNSIGNED_SHORT == uint16_t indices.
+		}
+		requestAnimationFrame(render);
+	}
+
+	// Load WASM module and kick-off rendering.
+	Module.onRuntimeInitialized = _ => {
+		console.log('WASM for VOL_GEOM started...');
+
+		init();
+		if (!init) { return false; }
+
+		document.getElementById("load_vols_files_button").hidden = false;
+		document.getElementById("load_vols_files_button").addEventListener("click", load_clicked, false);
+
+		console.log("render starting...");
+		requestAnimationFrame(render);
+	}
+
+	// Copy vol_geom frame `frame_idx` into vologram webgl mesh.
+	// Returns true on success, and false on error loading frame.
+	// This function assumes that any preceding, required, keyframe has been resolved and loaded already.
+	function mesh_from_frame(frame_idx) {
+		if (vologram.last_frame_loaded == frame_idx) { return; } // Safety catch to avoid reloading the same frame twice.
+
+		// Ask the vol_geom WASM to read the frame data from the vologram file into `_frame_data`.
+		var ret = Module.ccall('read_frame', 'boolean', ['number'], [frame_idx]);
+		if (!ret) { return false; }
+
+		var is_key = Module.ccall('is_keyframe', 'boolean', ['number'], [frame_idx]);
+
+		// Copy frame's mesh data into WebGL buffers, and set the shader's attribute pointers into the data.
+		gl.useProgram(vologram.shader_program);
+		gl.bindVertexArray(vologram.vao);
+
+		// Positions - fetch and upload.
+		var vp_copied = Module.ccall('frame_vp_copied', 'number');
+		var vp_sz = Module.ccall('frame_vertices_sz', 'number');
+		var vp_f32 = new Float32Array(Module.HEAP8.buffer, vp_copied, vp_sz / 4);
+		gl.bindBuffer(gl.ARRAY_BUFFER, vologram.vbo_vp);
+		gl.bufferData(gl.ARRAY_BUFFER, vp_f32, gl.STATIC_DRAW);
+		gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+		gl.enableVertexAttribArray(0);
+
+		if (vologram.has_normals) { // Not all volograms include normals.
+			// Normals - fetch and upload.
+			var normals_copied = Module.ccall('frame_normals_copied', 'number');
+			var normals_sz = Module.ccall('frame_normals_sz', 'number');
+			var vn_f32 = new Float32Array(Module.HEAP8.buffer, normals_copied, normals_sz / 4);
+			gl.bindBuffer(gl.ARRAY_BUFFER, vologram.vbo_vn);
+			gl.bufferData(gl.ARRAY_BUFFER, vn_f32, gl.DYNAMIC_DRAW);
+			gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
+			gl.enableVertexAttribArray(2);
+		}
+		// Key-Frames also contain texture coordinate and index data.
+		if (is_key) {
+			vologram.last_keyframe_loaded = frame_idx;
+			// Texture Coordinates - fetch and upload.
+			var uvs_copied = Module.ccall('frame_uvs_copied', 'number');
+			var uvs_sz = Module.ccall('frame_uvs_sz', 'number');
+			var uvs_f32 = new Float32Array(Module.HEAP8.buffer, uvs_copied, uvs_sz / 4);
+			gl.bindBuffer(gl.ARRAY_BUFFER, vologram.vbo_vt);
+			gl.bufferData(gl.ARRAY_BUFFER, uvs_f32, gl.STATIC_DRAW);
+			gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
+			gl.enableVertexAttribArray(1);
+
+			// Indices - fetch and upload.
+			var indices_copied = Module.ccall('frame_indices_copied', 'number');
+			var indices_sz = Module.ccall('frame_i_sz', 'number');
+			vologram.n_indices = indices_sz / 2; // ushort
+			var indices_u16 = new Uint16Array(Module.HEAP8.buffer, indices_copied, vologram.n_indices);
+			gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, vologram.ibo);
+			gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices_u16, gl.DYNAMIC_DRAW);
+		}
+
+		return true;
+	}
+
+	// https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/Tutorial/Animating_textures_in_WebGL
+	function update_video_texture(el, w, h) {
+		gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+		gl.bindTexture(gl.TEXTURE_2D, vologram.texture);
+		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, el);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+	}
+
+	function start_video() {
+		var texture_video_el = document.getElementById("texture_video_el");
+		texture_video_el.src = vologram.video_url;
+		texture_video_el.requestVideoFrameCallback(doSomethingWithTheFrame);
+		texture_video_el.play();
+		console.log("video started");
+	}
+
+	function init_vologram() {
+		if (!vologram.header_ready || !vologram.sequence_ready || vologram.ready) { return; } // Wait until both files are downloaded.
+		var ret = Module.ccall('create_file_info', 'boolean', ['string', 'string'], ['header.vols', 'sequence_0.vols']);
+		console.log('create_file_info=' + ret);
+		if (!ret) {
+			console.error("failed to load vologram");
+			return;
+		}
+		vologram.has_normals = Module.ccall('has_normals', 'boolean');
+		console.log("vologram.has_normals = " + vologram.has_normals);
+		mesh_from_frame(0); // Load in frame 0 so something displays even if we don't play yet.
+		console.log("mesh initialised");
+		start_video();
+		vologram.ready = true;
+	}
+
+	// This can be called to add an artificial slow-down in the code. Parameter value is in micro-seconds.
+	function test_usleep(us) {
+		Module.ccall('do_usleep', 'number', ['number'], [us]);
+	}
+
+	// Calls mesh_from_frame() but first loads a keyframe, if required.
+	function update_mesh_frame_allowing_skip(desired_frame_index) {
+		// int find_previous_keyframe( int frame_idx );
+		var keyframe_required = Module.ccall('find_previous_keyframe', 'number', ['number'], [desired_frame_index]);
+
+		// If running slowly we may skip over a keyframe. Grab that now to avoid stale keyframe desync.
+		if (vologram.last_keyframe_loaded != keyframe_required) { mesh_from_frame(keyframe_required); }
+		// Load actual current frame.
+		mesh_from_frame(desired_frame_index);
+	}
+
+	const doSomethingWithTheFrame = (now, metadata) => {
+		var texture_video_el = document.getElementById("texture_video_el");
+		var spf = 1.0 / vologram.fps;
+		var frame_index = Math.floor(metadata.mediaTime / spf);
+		update_video_texture(texture_video_el, metadata.width, metadata.height);
+		update_mesh_frame_allowing_skip(frame_index);
+		texture_video_el.requestVideoFrameCallback(doSomethingWithTheFrame); // Re-register the callback to be notified about the next frame.
+	}
+
+	// Function to download files and start playback. Video playback needs to start with a click.
+	function load_clicked() {
+		if (init_done) {
+			{ // Header file
+				console.log("filename=" + vologram.header_url);
+				var xmlhttp = new XMLHttpRequest();
+				xmlhttp.open("GET", vologram.header_url, true);
+				xmlhttp.responseType = "arraybuffer"; // Binary file type. Note: Can be a "blob" or "arraybuffer".
+				xmlhttp.onload = (event) => {
+					const array_buffer = xmlhttp.response; // Note: not xmlhttp.responseText
+					if (array_buffer) {
+						const byte_array = new Uint8Array(array_buffer);
+						console.log("file fetched = " + xmlhttp.responseURL + " bytes = " + byte_array.length);
+						// NOTE! if filename has a path in it this function will fail if we don't mkdir first
+						var stream = FS.open("header.vols", 'w');
+						FS.write(stream, byte_array, 0, byte_array.length, 0);
+						FS.close(stream);
+						console.log("file stored in vfs as = " + "header.vols");
+						vologram.header_ready = true;
+						init_vologram(); // Attempt init. Since files are downloaded asynchronously we don't know if sequence was downloaded first.
+					}
+				};
+				xmlhttp.send(null);
+			} // endblock header file.
+			{ // Sequence file
+				console.log("filename=" + vologram.sequence_url);
+				var seq = new XMLHttpRequest();
+				seq.open("GET", vologram.sequence_url, true);
+				seq.responseType = "arraybuffer"; // binary file type. NOTE! Can be a "blob" or "arraybuffer"
+				seq.onload = (event) => {
+					const array_buffer = seq.response; // Note: not xmlhttp.responseText
+					if (array_buffer) {
+						const byte_array = new Uint8Array(array_buffer);
+						console.log("file fetched = " + seq.responseURL + " bytes = " + byte_array.length);
+						var stream = FS.open("sequence_0.vols", 'w');
+						FS.write(stream, byte_array, 0, byte_array.length, 0);
+						FS.close(stream);
+						console.log("file stored in vfs as = " + "sequence_0.vols");
+						vologram.sequence_ready = true;
+						init_vologram(); // Attempt init. Since files are downloaded asynchronously we don't know if header was downloaded first.
+					}
+				};
+				seq.send(null);
+			} // endblock sequence file.
+			document.getElementById("load_vols_files_button").hidden = true; // Prevent buffer mem leak.
+		} // endif init_done
+	} // endfunction load_clicked()
+</script>
+
+</html>

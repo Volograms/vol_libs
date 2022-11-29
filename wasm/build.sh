@@ -22,7 +22,7 @@ echo "emcc..."
 emcc \
 -s "EXPORTED_RUNTIME_METHODS=['ccall','cwrap']" \
 -g \
-web_vol_geom.c ../src/vol_geom.c \
+wasm_vol_geom.c ../src/vol_geom.c \
 -I ../src/ \
 -o vol_geom.js
 echo "emcc done"
