@@ -139,7 +139,6 @@ uint16_t* frame_indices_copied( void ) {
   if ( !indices_ptr ) { return indices_ptr; }
   uint16_t* u16_ptr = (uint16_t*)&_frame_data.block_data_ptr[_frame_data.indices_offset];
   memcpy( indices_ptr, u16_ptr, _frame_data.indices_sz );
-  // printf("first 3 indices: %u, %u, %u\n", (uint32_t)u16_ptr[0], (uint32_t)u16_ptr[1], (uint32_t)u16_ptr[2] );
   return indices_ptr;
 }
 
