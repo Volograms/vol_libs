@@ -78,10 +78,7 @@ To Run:
 		</script>
 <script src="./vol_geom.js"></script>
 <script src="./apg_maths.js"></script>
-<script type="module">
-	import './vol_geom.js';  // Generated JavaScript interface to the WASM compile of vol_geom.c.
-	import './apg_maths.js'; // Convenience matrix mathematics functions.
-
+<script>
 	var canvas;
 	var gl;
 	var vologram = new Object();   // Stores state about the current vologram.
@@ -191,8 +188,7 @@ To Run:
 		requestAnimationFrame(render);
 	}
 
-	// Load WASM module and kick-off rendering.
-	Module.onRuntimeInitialized = _ => {
+	Module['onRuntimeInitialized'] = function() {
 		console.log('WASM for VOL_GEOM started...');
 
 		init();
