@@ -29,7 +29,8 @@ To Run:
 <body>
 	<input type="button" id="load_vols_files_button" value="load vologram" hidden></input>
 	<canvas id="canvas"></canvas>
-	<video controls id="texture_video_el" type="video/mp4;" width="256" height="256" loop></video>
+	<!-- playsinline stops mobile browsers fullscreen-ing the video (iOS 10+)-->
+	<video controls id="texture_video_el" type="video/mp4;" width="256" height="256" loop playsinline></video>
 </body>
 <script id="vologram.vert" type="text/glsl">
 	precision mediump float;
