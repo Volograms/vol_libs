@@ -174,7 +174,7 @@ To Run:
 		var aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
 		var P = perspective(66.6, aspect, 0.1, 100.0);
 		var V = look_at([0.0, 1.2, -2.0], [0.0, 1.2, 0.0], [0.0, 1.0, 0.0]); // cam_pos, targ_pos, up
-		var M = rotate_y_deg(identity_mat4(), 180.0)
+		var M = rotate_mat4_y_deg(180.0)
 
 		if (vologram.n_indices > 0) {
 			gl.useProgram(vologram.shader_program);
