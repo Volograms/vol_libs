@@ -48,6 +48,11 @@ bool read_frame( int frame_idx ) {
 }
 
 EMSCRIPTEN_KEEPALIVE
+int32_t max_blob_sz( void ) {
+  return _info.biggest_frame_blob_sz;
+}
+
+EMSCRIPTEN_KEEPALIVE
 bool is_keyframe( int frame_idx ) {
   bool is_key = vol_geom_is_keyframe( &_info, frame_idx );
   return is_key;
