@@ -53,24 +53,24 @@ To Run:
 		vologram.geometry.setAttribute(
 			"position", 
 			new THREE.Float32BufferAttribute(
-				new Float32Array(vologram.max_blob_size), 3
+				new Float32Array(vologram.max_blob_size), 3, false
 			)
 		);
 		vologram.geometry.setAttribute(
 			"normal", 
 			new THREE.Float32BufferAttribute(
-				new Float32Array(vologram.max_blob_size), 3
+				new Float32Array(vologram.max_blob_size), 3, false
 			)
 		);
 		vologram.geometry.setAttribute(
 			"uv",
 			new THREE.Float32BufferAttribute(
-				new Float32Array(vologram.max_blob_size), 2
+				new Float32Array(vologram.max_blob_size), 2, false
 			)
 		);
 		vologram.geometry.setIndex(
 			new THREE.Uint16BufferAttribute(
-				new Uint16Array(vologram.max_blob_size), 1
+				new Uint16Array(vologram.max_blob_size), 1, false
 			)
 		);
 	}
@@ -87,7 +87,11 @@ To Run:
 		});
 
 		vologram.mesh = new THREE.Mesh(vologram.geometry, vologram.material);
-		vologram.mesh.position.set(0, 0, 0)
+		vologram.mesh.position.set( 0, 0, 0 )
+		// The vologram is mirrored
+		vologram.mesh.scale.set( -1, 1, 1 )
+		// Look at the camera 
+		vologram.mesh.rotation.set( 0, Math.PI, 0 )
 	}
 
 	function create_vologram() {
@@ -174,24 +178,19 @@ To Run:
 		if (!ret) { return false; }
 
 		var is_key = Module.ccall('is_keyframe', 'boolean', ['number'], [frame_idx]);
-		var prev_key = Module.ccall('find_previous_keyframe', 'number', ['number'], [frame_idx]);
 
 		// Positions - fetch and upload.
 		var vp_copied = Module.ccall('frame_vp_copied', 'number');
 		var vp_sz = Module.ccall('frame_vertices_sz', 'number');
 		var vp_f32 = new Float32Array(Module.HEAP8.buffer, vp_copied, vp_sz / 4);
-		vologram.geometry.attributes.position.array = vp_f32;
-		vologram.geometry.attributes.position.updateRange = { offset: 0, count: vp_f32.length }
-		vologram.geometry.attributes.position.needsUpdate = true;
+		vologram.geometry.setAttribute( 'position', new THREE.Float32BufferAttribute(vp_f32, 3 ));
 
 		if (vologram.has_normals) { // Not all volograms include normals.
 			// Normals - fetch and upload.
 			var normals_copied = Module.ccall('frame_normals_copied', 'number');
 			var normals_sz = Module.ccall('frame_normals_sz', 'number');
 			var vn_f32 = new Float32Array(Module.HEAP8.buffer, normals_copied, normals_sz / 4);
-			vologram.geometry.attributes.normal.array = vn_f32;
-			vologram.geometry.attributes.normal.updateRange = { offset: 0, count: vn_f32.length }
-			vologram.geometry.attributes.normal.needsUpdate = true;
+			vologram.geometry.setAttribute( 'normal', new THREE.Float32BufferAttribute(vn_f32, 3 ));
 		}
 
 		// Key-Frames also contain texture coordinate and index data.
@@ -202,20 +201,14 @@ To Run:
 			var uvs_copied = Module.ccall('frame_uvs_copied', 'number');
 			var uvs_sz = Module.ccall('frame_uvs_sz', 'number');
 			var uvs_f32 = new Float32Array(Module.HEAP8.buffer, uvs_copied, uvs_sz / 4);
-			vologram.geometry.attributes.uv.array = uvs_f32;
-			vologram.geometry.attributes.uv.updateRange = { offset: 0, count: uvs_f32.length };
-			vologram.geometry.attributes.uv.needsUpdate = true;
+			vologram.geometry.setAttribute( 'uv', new THREE.Float32BufferAttribute( uvs_f32, 2 ));
 
 			// Indices - fetch and upload.
 			var indices_copied = Module.ccall('frame_indices_copied', 'number');
 			var indices_sz = Module.ccall('frame_i_sz', 'number');
 			vologram.n_indices = indices_sz / 2; // ushort
 			var indices_u16 = new Uint16Array(Module.HEAP8.buffer, indices_copied, vologram.n_indices);
-			vologram.geometry.index.array = indices_u16;
-			vologram.geometry.index.updateRange = { offset: 0, count: indices_u16.length };
-			vologram.geometry.index.needsUpdate = true;
-
-			vologram.geometry.setDrawRange(0, indices_u16.length)
+			vologram.geometry.setIndex( new THREE.Uint16BufferAttribute( indices_u16, 1 ))
 		}
 
 		// It seems that calculating bounding sphere does not work and always returns NaN value for the radius
