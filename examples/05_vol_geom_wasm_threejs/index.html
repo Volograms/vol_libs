@@ -39,6 +39,7 @@ To Run:
 
 <script>
 	var canvas;
+	var gl;
 	var renderer;
 	var camera;
 	var vologram = new Object();   // Stores state about the current vologram.
@@ -48,31 +49,15 @@ To Run:
 	vologram.fps = 30.0;           // Change this value if not using 30 frames-per-second video.
 	var init_done = false;         // If the basic shaders/objects are set up. A vologram can be downloaded & prepared after this is true.
 
+	function init_canvas() 
+	{
+		canvas = document.getElementById("canvas");
+		canvas.width = window.innerWidth - 50;
+		canvas.height = window.innerHeight - 50;
+	}
+
 	function create_vologram_geometry() {
 		vologram.geometry = new THREE.BufferGeometry();
-		vologram.geometry.setAttribute(
-			"position", 
-			new THREE.Float32BufferAttribute(
-				new Float32Array(vologram.max_blob_size), 3, false
-			)
-		);
-		vologram.geometry.setAttribute(
-			"normal", 
-			new THREE.Float32BufferAttribute(
-				new Float32Array(vologram.max_blob_size), 3, false
-			)
-		);
-		vologram.geometry.setAttribute(
-			"uv",
-			new THREE.Float32BufferAttribute(
-				new Float32Array(vologram.max_blob_size), 2, false
-			)
-		);
-		vologram.geometry.setIndex(
-			new THREE.Uint16BufferAttribute(
-				new Uint16Array(vologram.max_blob_size), 1, false
-			)
-		);
 	}
 
 	function create_vologram_texture() {
@@ -89,9 +74,9 @@ To Run:
 		vologram.mesh = new THREE.Mesh(vologram.geometry, vologram.material);
 		vologram.mesh.position.set( 0, 0, 0 )
 		// The vologram is mirrored
-		vologram.mesh.scale.set( -1, 1, 1 )
+		vologram.mesh.scale.set( 1, 1, -1 )
 		// Look at the camera 
-		vologram.mesh.rotation.set( 0, Math.PI, 0 )
+		//vologram.mesh.rotation.set( 0, Math.PI, 0 )
 	}
 
 	function create_vologram() {
@@ -117,15 +102,17 @@ To Run:
 		renderer = new THREE.WebGLRenderer({
         	canvas: canvas,
     	});
+		gl = renderer.getContext();
+		gl.cullFace(gl.BACK);
+		gl.frontFace(gl.CW);
+		gl.enable(gl.CULL_FACE);
+		gl.enable(gl.DEPTH_TEST);
     	renderer.setSize(canvas.clientWidth, canvas.clientHeight);
 		renderer.setClearColor( new THREE.Color(147.0 / 255.0, 149.0 / 255.0, 237.0 / 255.0), 1.0);
     	return renderer;
 	}
 
 	function create_threejs_scene() {
-		canvas = document.getElementById("canvas");
-		canvas.width = window.innerWidth - 50;
-		canvas.height = window.innerHeight - 50;
 		scene = new THREE.Scene();
 		const scene_camera = create_threejs_camera()
 		scene.add( scene_camera );
@@ -133,6 +120,7 @@ To Run:
 	}
 
 	function init() {
+		init_canvas();
 		create_threejs_scene();
 		{
 			vologram.n_indices = 0;
@@ -147,10 +135,23 @@ To Run:
 		console.log("init done");
 		init_done = true;
 
+		console.debug( gl.getContextAttributes() )
+
 		return true;
 	}
 
+	var angle = 0;
 	function render() {
+		/*//DEBUG PURPOSES: Rotate camera
+		{
+			var x = 5 * Math.cos(angle);
+			var z = 5 * Math.sin(angle);
+			camera.position.x = x;
+			camera.position.z = z;
+			camera.lookAt(0.0, 1.2, 0.0)
+			angle += 0.05;
+		}*/
+
 		renderer.render(scene, camera);
 	}
 
@@ -229,6 +230,7 @@ To Run:
 	function start_video() {
 		var texture_video_el = document.getElementById("texture_video_el");
 		texture_video_el.src = vologram.video_url;
+		console.debug(texture_video_el)
 		texture_video_el.requestVideoFrameCallback(doSomethingWithTheFrame);
 		texture_video_el.play();
 		console.log("video started");
