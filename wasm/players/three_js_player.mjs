@@ -1,4 +1,4 @@
-import initModule from "./vol_web.mjs";
+import initModule from "WebVolLib";
 import * as THREE from "three";
 
 var Module = {};
