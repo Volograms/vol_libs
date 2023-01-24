@@ -1,4 +1,3 @@
-import initModule from "WebVolLib";
 import * as THREE from "three";
 
 var Module = {};
@@ -283,7 +282,7 @@ export function start() {
     } // endif init_done
 } // endfunction load_clicked()
 
-export function create(scene_3js, renderer_3js, header_url, sequence_url, video_url) {
+export function create(scene_3js, renderer_3js, header_url, sequence_url, video_url, initModule) {
     scene = scene_3js;
     renderer = renderer_3js;
     vologram.header_url = header_url;

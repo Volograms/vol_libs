@@ -39,7 +39,7 @@ To Run:
 <script type="importmap">
 {
     "imports": {
-        "VolWebLib": 
+        "WebVolLib": 
             "https://cdn.jsdelivr.net/gh/Volograms/vol_libs@distribution-set-up/wasm/vol_geom.mjs",
         "Vol3js": 
             "https://cdn.jsdelivr.net/gh/Volograms/vol_libs@distribution-set-up/wasm/players/three_js_player.mjs",
@@ -48,8 +48,9 @@ To Run:
     }
 }
 </script>
-
 <script type="module">
+    import initModule from "WebVolLib";
+    console.debug(initModule);
     import * as Vol3js from 'Vol3js';
     import * as THREE from 'three';
 
