@@ -32,20 +32,26 @@ To Run:
 	<!-- playsinline stops mobile browsers fullscreen-ing the video (iOS 10+)-->
 	<video controls id="texture_video_el" type="video/mp4;" width="256" height="256" loop playsinline></video>
 </body>
-<script src="./vol_geom.js"></script>
+<script type="module" src="./vol_geom.mjs"></script>
 <!-- Import three.js either locally or through cdn -->
-<script src="./three.js"></script>
+<script type="module" src="./three.mjs"></script>
+<!--script src="./three.js"></script-->
 <!--script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script-->
 
-<script>
+<script type="module">
+	import initModule from "./vol_geom.mjs";
+	import * as THREE from "./three.mjs";
+
+	var Module = {};
 	var canvas;
 	var gl;
 	var renderer;
 	var camera;
+	var scene;
 	var vologram = new Object();   // Stores state about the current vologram.
-	vologram.header_url = "./calif/header.vols";
-	vologram.sequence_url = "./calif/sequence_0.vols";
-	vologram.video_url = "./calif/output_720.mp4";
+	vologram.header_url = "./numbers_ld/header.vols";
+	vologram.sequence_url = "./numbers_ld/sequence_0.vols";
+	vologram.video_url = "./numbers_ld/output.mp4";
 	vologram.fps = 30.0;           // Change this value if not using 30 frames-per-second video.
 	var init_done = false;         // If the basic shaders/objects are set up. A vologram can be downloaded & prepared after this is true.
 
@@ -72,9 +78,9 @@ To Run:
 		});
 
 		vologram.mesh = new THREE.Mesh(vologram.geometry, vologram.material);
-		vologram.mesh.position.set( 0, 0, 0 )
+		vologram.mesh.position.set( 0, 0, 0 );
 		// The vologram is mirrored
-		vologram.mesh.scale.set( 1, 1, -1 )
+		vologram.mesh.scale.set( 1, 1, -1 );
 		// Look at the camera 
 		//vologram.mesh.rotation.set( 0, Math.PI, 0 )
 	}
@@ -224,6 +230,7 @@ To Run:
 		}
 
 		vologram.last_frame_loaded = frame_idx;
+		console.log("Loaded frame", frame_idx);
 		return true;
 	}
 
@@ -274,14 +281,14 @@ To Run:
 	const doSomethingWithTheFrame = (now, metadata) => {
 		var texture_video_el = document.getElementById("texture_video_el");
 		var spf = 1.0 / vologram.fps;
-		var frame_index = Math.floor(metadata.mediaTime / spf);
-		//update_video_texture(texture_video_el, metadata.width, metadata.height);
+		var frame_index = Math.floor(metadata.mediaTime * vologram.fps);
 		update_mesh_frame_allowing_skip(frame_index);
 		texture_video_el.requestVideoFrameCallback(doSomethingWithTheFrame); // Re-register the callback to be notified about the next frame.
 	}
 
 	// Function to download files and start playback. Video playback needs to start with a click.
 	function load_clicked() {
+		var FS = Module.FS;
 		if (init_done) {
 			{ // Header file
 				console.log("filename=" + vologram.header_url);
@@ -327,6 +334,8 @@ To Run:
 			document.getElementById("load_vols_files_button").hidden = true; // Prevent buffer mem leak.
 		} // endif init_done
 	} // endfunction load_clicked()
+
+	initModule(Module)
 </script>
 
 </html>

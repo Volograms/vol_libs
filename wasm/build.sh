@@ -19,12 +19,14 @@ trap 'abort' 0
 set -e
 
 echo "emcc..."
-emcc \
--s "EXPORTED_RUNTIME_METHODS=['ccall','cwrap']" \
+emcc -O3 \
+-s "EXPORTED_RUNTIME_METHODS=['ccall','cwrap','FS']" \
 -g \
 wasm_vol_geom.c ../src/vol_geom.c \
+-sUSE_ES6_IMPORT_META=0 -sENVIRONMENT='web' -sSINGLE_FILE \
+-sEXPORT_ES6 -sFORCE_FILESYSTEM -sASYNCIFY -sALLOW_MEMORY_GROWTH \
 -I ../src/ \
--o vol_geom.js
+-o vol_web.mjs
 echo "emcc done"
 
 trap : 0
