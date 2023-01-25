@@ -3,6 +3,7 @@ import * as THREE from "three";
 var Module = {};
 var scene;
 var renderer;
+var video;
 const video_tag = "texture_video_el";
 export var vologram = new Object();   // Stores state about the current vologram.
 
@@ -17,8 +18,8 @@ function create_vologram_geometry() {
 }
 
 function create_vologram_texture() {
-    var texture_video_el = document.getElementById(video_tag);
-    vologram.texture = new THREE.VideoTexture( texture_video_el );
+    console.debug( "Creating a texture with video: ", video );
+    vologram.texture = new THREE.VideoTexture( video );
     console.debug(vologram.texture);
 }
 
@@ -35,7 +36,7 @@ function create_vologram_mesh() {
     `vologram.mesh.material = new THREE.MeshBasicMaterial(...)`
     */
     vologram.material = new THREE.MeshBasicMaterial({
-        color: 0xffff00,
+        color: 0xffffff,
         map: vologram.texture
     });
     vologram.mesh = new THREE.Mesh(vologram.geometry, vologram.material);
@@ -55,14 +56,18 @@ function create_vologram() {
 }
 
 function init_video() {
-    var video = document.createElement('video');
-    video.setAttribute("controls", "");
-    video.setAttribute("id", video_tag);
-    video.setAttribute("type", "video/mp4;");
-    video.setAttribute("width", "0");
-    video.setAttribute("height", "0");
-    video.setAttribute("loop", "");
-    video.setAttribute("playsinline", "");
+    if (!video) {
+        video = document.createElement('video');
+        video.setAttribute("controls", "");
+        video.setAttribute("id", video_tag);
+        video.setAttribute("type", "video/mp4;");
+        video.setAttribute("width", "0");
+        video.setAttribute("height", "0");
+        video.setAttribute("loop", "");
+        video.setAttribute("playsinline", "");
+        document.body.prepend( video );
+    }
+    
     video.addEventListener( "loadedmetadata", function (e) {
         console.log( e );
         console.log( e.target.videoWidth, e.target.videoHeight );
@@ -70,15 +75,16 @@ function init_video() {
         console.log(vologram.texture.format);
         texture_width = e.target.videoWidth;
         texture_height = e.target.videoHeight;
-        spare_texure = new THREE.DataTexture([], texture_width, texture_height, vologram.texture.format);
-        spare_texure.flipY = true;
+        const data = new Uint8Array(texture_width * texture_height * 3);
+        spare_texure = new THREE.DataTexture(data, texture_width, texture_height, vologram.texture.format);
+        //spare_texure.flipY = true;
         vologram.mesh.material = new THREE.MeshBasicMaterial({
             color: 0xffffff,
             map: spare_texure,
         });
 
     }, false );
-    document.body.prepend( video );
+    
 }
 
 function init() {
@@ -170,25 +176,14 @@ function mesh_from_frame(frame_idx) {
         vologram.geometry.boundingBox.getBoundingSphere(vologram.geometry.boundingSphere);
     }
 
-    
-
     vologram.last_frame_loaded = frame_idx;
     return true;
 }
 
 function start_video() {
-    var texture_video_el = document.getElementById(video_tag);
-    // // Init buffer
-    // for (var i = 0; i < TEX_BUFFER_SIZE; i++) {
-    //     texture_buffer[i] =  new THREE.FramebufferTexture(
-    //         texture_width,
-    //         texture_height,
-    //         THREE.RGBFormat);
-    // }
-    console.debug(texture_buffer, texture_width, texture_height);
-    texture_video_el.src = vologram.video_url;
-    texture_video_el.requestVideoFrameCallback(doSomethingWithTheFrame);
-    texture_video_el.play();
+    video.src = vologram.video_url;
+    video.requestVideoFrameCallback(doSomethingWithTheFrame);
+    video.play();
 }
 
 function init_vologram() {
@@ -227,11 +222,10 @@ function update_mesh_frame_allowing_skip(desired_frame_index) {
 }
 
 const doSomethingWithTheFrame = (now, metadata) => {
-    var texture_video_el = document.getElementById(video_tag);
     var frame_index = Math.floor(metadata.mediaTime * vologram.fps);
     update_mesh_frame_allowing_skip(frame_index);
     if (init_done)
-        texture_video_el.requestVideoFrameCallback(doSomethingWithTheFrame); // Re-register the callback to be notified about the next frame.
+        video.requestVideoFrameCallback(doSomethingWithTheFrame); // Re-register the callback to be notified about the next frame.
 }
 
 // Function to download files and start playback. Video playback needs to start with a click.
@@ -282,23 +276,22 @@ export function start() {
     } // endif init_done
 } // endfunction load_clicked()
 
-export function create(scene_3js, renderer_3js, header_url, sequence_url, video_url, initModule) {
+export function create(scene_3js, renderer_3js, header_url, sequence_url, video_url, initModule, video_element = null) {
     scene = scene_3js;
     renderer = renderer_3js;
     vologram.header_url = header_url;
     vologram.sequence_url = sequence_url;
     vologram.video_url = video_url;
-    console.debug(vologram);
+    video = video_element;
     init_video();
     create_vologram();
     initModule(Module);
 }
 
 export function close() {
-    const vid_el = document.getElementById(video_tag);
-    if (vid_el) {
-        vid_el.pause();
-        vid_el.remove();
+    if (video) {
+        video.pause();
+        video.remove();
     }
     if (vologram) {
         vologram.mesh = null;

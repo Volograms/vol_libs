@@ -36,21 +36,21 @@ To Run:
 <!--script src="./three.js"></script-->
 <!--script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script-->
 <!--script type="module" src="https://cdn.jsdelivr.net/gh/Volograms/vol_libs@distribution-set-up/wasm/players/three_js_player.mjs"></script-->
+<script async src="https://unpkg.com/es-module-shims@1.3.6/dist/es-module-shims.js"></script>
 <script type="importmap">
 {
     "imports": {
         "WebVolLib": 
             "https://cdn.jsdelivr.net/gh/Volograms/vol_libs@distribution-set-up/wasm/vol_geom.mjs",
         "Vol3js": 
-            "https://cdn.jsdelivr.net/gh/Volograms/vol_libs@distribution-set-up/wasm/players/three_js_player.mjs",
+            "../../wasm/players/three_js_player.mjs",
         "three":
-            "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"
+            "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js"
     }
 }
 </script>
 <script type="module">
     import initModule from "WebVolLib";
-    console.debug(initModule);
     import * as Vol3js from 'Vol3js';
     import * as THREE from 'three';
 
@@ -78,13 +78,21 @@ To Run:
 	camera.lookAt(0.0, 1.2, 0.0);
     scene.add( camera );
 
-    Vol3js.create( scene, renderer, header_url, sequence_url, video_url );
-    Vol3js.start();
+    var video_element = document.getElementById("texture_video_el");
+
+    Vol3js.create( scene, renderer, header_url, sequence_url, video_url, initModule, video_element );
 
     function render() {
 		renderer.render(scene, camera);
 	}
-    renderer.setAnimationLoop(render);
+
+    var load_button = document.getElementById("load_vols_files_button");
+    load_button.hidden = false;
+    load_button.onclick = () => {
+        renderer.setAnimationLoop(render);
+        Vol3js.start();
+    }
+    
 </script>
 
 </html>
