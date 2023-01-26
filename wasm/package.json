@@ -8,7 +8,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com:Volograms/vol_libs.git"
+    "url": "git+ssh://git@github.com/Volograms/vol_libs.git"
   },
   "keywords": [
     "volograms",
@@ -20,5 +20,5 @@
   "bugs": {
     "url": "https://github.com/Volograms/vol_libs/issues"
   },
-  "homepage": "https://github.com/Volograms/vol_libs/tree/main#readme"
+  "homepage": "https://github.com/Volograms/vol_libs#readme"
 }
