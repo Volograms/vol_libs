@@ -1,0 +1,24 @@
+{
+  "name": "@volograms/web_vol_lib",
+  "version": "1.0.5",
+  "description": "This is an experimental repo to try using WebASM to convert one of our native libraries to web assembly, and read volograms with it",
+  "main": "vol_player.mjs",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com:Volograms/vol_libs.git"
+  },
+  "keywords": [
+    "volograms",
+    "javascript",
+    "webasm"
+  ],
+  "author": "Patrick Geoghegan and Anton Gerdelan",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Volograms/vol_libs/issues"
+  },
+  "homepage": "https://github.com/Volograms/vol_libs/tree/main#readme"
+}
