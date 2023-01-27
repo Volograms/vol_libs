@@ -6,7 +6,6 @@ var renderer;
 var video;
 const video_tag = "texture_video_el";
 export var vologram = new Object();   // Stores state about the current vologram.
-
 vologram.fps = 30.0;           // Change this value if not using 30 frames-per-second video.
 var init_done = false;         // If the basic shaders/objects are set up. A vologram can be downloaded & prepared after this is true.
 
@@ -44,7 +43,7 @@ function create_vologram_mesh() {
     // The vologram is mirrored
     vologram.mesh.scale.set( -1, 1, 1 )
     // Look at the camera 
-    //vologram.mesh.rotation.set( 0, Math.PI, 0 )
+    // vologram.mesh.rotation.set( 0, Math.PI, 0 )
 }
 
 function create_vologram() {
@@ -75,13 +74,23 @@ function init_video() {
         console.log(vologram.texture.format);
         texture_width = e.target.videoWidth;
         texture_height = e.target.videoHeight;
-        const data = new Uint8Array(texture_width * texture_height * 3);
+        var data = new Uint8Array(texture_width * texture_height * 3);
         spare_texure = new THREE.DataTexture(data, texture_width, texture_height, vologram.texture.format);
         //spare_texure.flipY = true;
-        vologram.mesh.material = new THREE.MeshBasicMaterial({
-            color: 0xffffff,
-            map: spare_texure,
+        //vologram.mesh.material = new THREE.MeshBasicMaterial({
+        //    color: 0xffffff,
+        //    map: spare_texure,
+        //});
+        spare_texure.needsUpdate = true;
+        console.debug( THREE.RGBFormat, spare_texure );
+        const test_geometry = new THREE.PlaneGeometry(2, 2, 1, 1);
+        const test_material = new THREE.MeshBasicMaterial({
+            color: 0xffffff, side: THREE.DoubleSide, map: spare_texure
         });
+        const test_plane = new THREE.Mesh( test_geometry, test_material );
+        test_plane.position.set(1, 0, 0);
+        //test_plane.rotation.set(0, Math.PI, 0);
+        scene.add( test_plane );
 
     }, false );
     
@@ -118,6 +127,7 @@ function mesh_from_frame(frame_idx) {
     if (vologram.last_frame_loaded == frame_idx) { return; } // Safety catch to avoid reloading the same frame twice.
 
     if (spare_texure && renderer && vologram.texture) {
+        //console.log(spare_texure, vologram.texture);
         renderer.copyTextureToTexture(
             new THREE.Vector2(0, 0),
             vologram.texture,
