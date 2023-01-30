@@ -5,9 +5,13 @@ name: Publish Package to npmjs
 on:
   release:
     types: [created]
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./wasm
     steps:
       - uses: actions/checkout@v3
       # Setup .npmrc file to publish to npm
