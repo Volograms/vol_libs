@@ -1,10 +1,11 @@
 name: Publish Package to npmjs
 
-# Standard setup from https://docs.github.com/en/actions/publishing-packages/publishing-nodejs-packages
-
 on:
-  release:
-    types: [created]
+  push:
+    branches:
+      - main
+    paths:
+      - 'wasm/**'
 
 jobs:
   build:
