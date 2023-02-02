@@ -14,7 +14,9 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: download avcodec
-      run: sudo apt-get install build-essential clang libavcodec-dev libavdevice-dev libavformat-dev libavutil-dev libswscale-dev
+      run: |
+        sudo apt-get update
+        sudo apt-get install build-essential clang libavcodec-dev libavdevice-dev libavformat-dev libavutil-dev libswscale-dev
     - name: download optional dependencies
       run: sudo apt-get install libglfw3-dev
     - name: make

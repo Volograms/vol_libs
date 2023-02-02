@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+
+<!--
+Example vologram web player using three.js, and the vol_geom library compiled to WASM.
+
+First version - 2022 Dec 07 - Anton Gerdelan <anton@volograms.com> / Patrick Geoghegan <patrick@volograms.com>
+
+HTML5 video is used for video texture and audio playback.
+The requestVideoFrameCallback() extension is used for synchronous video frame fetch.
+This callback is not supported on all browsers yet. https://caniuse.com/mdn-api_htmlvideoelement_requestvideoframecallback
+
+To Run:
+
+* Copy the vologram you want to play as a subfolder into this folder.
+* Set the video source and header and sequence file to point to your vologram.
+* Launch a local HTTP server from this folder.
+* Open the HTML page.
+* Hit "load vologram" to load and play the vologram.
+-->
+
+<meta charset="UTF-8">
+<meta name="author" content="Volograms Ltd.">
+<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+
+<head>
+</head>
+
+<body>
+	<input type="button" id="load_vols_files_button" value="load vologram" hidden></input>
+	<canvas id="canvas"></canvas>
+	<!-- playsinline stops mobile browsers fullscreen-ing the video (iOS 10+)-->
+	<video controls id="texture_video_el" type="video/mp4;" width="256" height="256" loop playsinline></video>
+</body>
+<!--script type="module" src="./three.mjs"></script-->
+<!--script src="./three.js"></script-->
+<!--script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script-->
+<!--script type="module" src="https://cdn.jsdelivr.net/gh/Volograms/vol_libs@distribution-set-up/wasm/players/three_js_player.mjs"></script-->
+<script async src="https://unpkg.com/es-module-shims@1.3.6/dist/es-module-shims.js"></script>
+<script type="importmap">
+{
+    "imports": {
+        "WebVolLib": 
+            "https://cdn.jsdelivr.net/gh/Volograms/vol_libs@distribution-set-up/wasm/vol_geom.mjs",
+        "Vol3js": 
+            "../../wasm/players/three_js_player.mjs",
+        "three":
+            "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js"
+    }
+}
+</script>
+<script type="module">
+    import initModule from "WebVolLib";
+    import * as Vol3js from 'Vol3js';
+    import * as THREE from 'three';
+
+    const canvas = document.getElementById('canvas');
+    canvas.width = window.innerWidth - 50;
+	canvas.height = window.innerHeight - 50;
+
+    const header_url = "./numbers_ld/header.vols";
+	const sequence_url = "./numbers_ld/sequence_0.vols";
+	const video_url = "./numbers_ld/output.mp4";
+
+    const scene = new THREE.Scene();
+    const renderer = new THREE.WebGLRenderer({
+        canvas: canvas,
+    });
+    renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+	renderer.setClearColor( new THREE.Color(147.0 / 255.0, 149.0 / 255.0, 237.0 / 255.0), 1.0);
+
+    const camera = new THREE.PerspectiveCamera(
+        50,
+        canvas.clientWidth / canvas.clientHeight,
+        0.1, 100,
+    );
+    camera.position.set(0.0, 1.2, -5.0);
+	camera.lookAt(0.0, 1.2, 0.0);
+    scene.add( camera );
+
+    var video_element = document.getElementById("texture_video_el");
+
+    Vol3js.create( scene, renderer, header_url, sequence_url, video_url, initModule, video_element );
+
+    function render() {
+		renderer.render(scene, camera);
+	}
+
+    var load_button = document.getElementById("load_vols_files_button");
+    load_button.hidden = false;
+    load_button.onclick = () => {
+        renderer.setAnimationLoop(render);
+        Vol3js.start();
+    }
+    
+</script>
+
+</html>
