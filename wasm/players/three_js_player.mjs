@@ -83,14 +83,6 @@ function init_video() {
         //});
         spare_texure.needsUpdate = true;
         console.debug( THREE.RGBFormat, spare_texure );
-        const test_geometry = new THREE.PlaneGeometry(2, 2, 1, 1);
-        const test_material = new THREE.MeshBasicMaterial({
-            color: 0xffffff, side: THREE.DoubleSide, map: spare_texure
-        });
-        const test_plane = new THREE.Mesh( test_geometry, test_material );
-        test_plane.position.set(1, 0, 0);
-        //test_plane.rotation.set(0, Math.PI, 0);
-        scene.add( test_plane );
 
     }, false );
     
