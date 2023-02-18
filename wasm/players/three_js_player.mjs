@@ -10,7 +10,6 @@ vologram.fps = 30.0;           // Change this value if not using 30 frames-per-s
 var init_done = false;         // If the basic shaders/objects are set up. A vologram can be downloaded & prepared after this is true.
 
 var texture_width, texture_height = -1;
-var spare_texure;
 
 function create_vologram_geometry() {
     vologram.geometry = new THREE.BufferGeometry();
@@ -74,16 +73,6 @@ function init_video() {
         console.log(vologram.texture.format);
         texture_width = e.target.videoWidth;
         texture_height = e.target.videoHeight;
-        var data = new Uint8Array(texture_width * texture_height * 3);
-        spare_texure = new THREE.DataTexture(data, texture_width, texture_height, vologram.texture.format);
-        //spare_texure.flipY = true;
-        //vologram.mesh.material = new THREE.MeshBasicMaterial({
-        //    color: 0xffffff,
-        //    map: spare_texure,
-        //});
-        spare_texure.needsUpdate = true;
-        console.debug( THREE.RGBFormat, spare_texure );
-
     }, false );
     
 }
@@ -117,17 +106,6 @@ Module['onRuntimeInitialized'] = function() {
 function mesh_from_frame(frame_idx) {
     if (!vologram.geometry) { return; }
     if (vologram.last_frame_loaded == frame_idx) { return; } // Safety catch to avoid reloading the same frame twice.
-
-    if (spare_texure && renderer && vologram.texture) {
-        //console.log(spare_texure, vologram.texture);
-        renderer.copyTextureToTexture(
-            new THREE.Vector2(0, 0),
-            vologram.texture,
-            spare_texure
-        );
-        spare_texure.needsUpdate = true;
-        // vologram.mesh.material.map = spare_texure;
-    }
 
     // Ask the vol_geom WASM to read the frame data from the vologram file into `_frame_data`.
     var ret = Module.ccall('read_frame', 'boolean', ['number'], [frame_idx]);

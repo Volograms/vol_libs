@@ -23,3 +23,5 @@ jobs:
       - run: npm publish --dry-run
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      # The diff fails if the version is the same as the one published
+      - run: npm diff | grep version -q
