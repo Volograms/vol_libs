@@ -42,7 +42,6 @@ To Run:
 <script type="module">
 	import initModule from "./vol_geom.mjs";
 	import * as THREE from "./three.mjs";
-	//import * as Vol3js from "three_js_player";
 
 	var Module = {};
 	var canvas;
@@ -148,18 +147,7 @@ To Run:
 		return true;
 	}
 
-	var angle = 0;
 	function render() {
-		/*//DEBUG PURPOSES: Rotate camera
-		{
-			var x = 5 * Math.cos(angle);
-			var z = 5 * Math.sin(angle);
-			camera.position.x = x;
-			camera.position.z = z;
-			camera.lookAt(0.0, 1.2, 0.0)
-			angle += 0.05;
-		}*/
-
 		renderer.render(scene, camera);
 	}
 
