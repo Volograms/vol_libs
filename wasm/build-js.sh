@@ -20,13 +20,19 @@ set -e
 
 echo "emcc..."
 emcc -O3 \
--s "EXPORTED_RUNTIME_METHODS=['ccall','cwrap','FS']" \
+--pre-js ./pre.js \
+-sEXPORTED_RUNTIME_METHODS=ccall,cwrap,FS \
 -g \
-wasm_vol_geom.c ../src/vol_geom.c \
--sUSE_ES6_IMPORT_META=0 -sENVIRONMENT='web' -sSINGLE_FILE \
--sEXPORT_ES6 -sFORCE_FILESYSTEM -sASYNCIFY -sALLOW_MEMORY_GROWTH \
+wasm_vol_geom.c \
+../src/vol_geom.c \
+-sENVIRONMENT='web' \
+-sSINGLE_FILE \
+-sMODULARIZE \
+-sFORCE_FILESYSTEM \
+-sASYNCIFY \
+-sALLOW_MEMORY_GROWTH \
 -I ../src/ \
--o vol_web.mjs
+-o vol_web.js
 echo "emcc done"
 
 trap : 0

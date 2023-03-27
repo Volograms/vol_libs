@@ -27,41 +27,50 @@ To Run:
 </head>
 
 <body>
-	<input type="button" id="load_vols_files_button" value="load vologram" hidden></input>
+	<input type="button" id="load_vols_files_button" value="load vologram"></input>
+    <input type="button" id="stop_vols_files_button" value="stop vologram"></input>
 	<canvas id="canvas"></canvas>
 	<!-- playsinline stops mobile browsers fullscreen-ing the video (iOS 10+)-->
 	<video controls id="texture_video_el" type="video/mp4;" width="256" height="256" loop playsinline></video>
 </body>
-<!--script type="module" src="./three.mjs"></script-->
-<!--script src="./three.js"></script-->
-<!--script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script-->
-<!--script type="module" src="https://cdn.jsdelivr.net/gh/Volograms/vol_libs@distribution-set-up/wasm/players/three_js_player.mjs"></script-->
 <script async src="https://unpkg.com/es-module-shims@1.3.6/dist/es-module-shims.js"></script>
+
+<!-- 
+    To import from the vol player from github use the following cdn template:
+    `https://cdn.jsdelivr.net/gh/Volograms/vol_libs@<BRANCH_NAME>/wasm/<FILE_NAME>`
+ -->
+
 <script type="importmap">
 {
     "imports": {
         "WebVolLib": 
-            "https://cdn.jsdelivr.net/gh/Volograms/vol_libs@distribution-set-up/wasm/vol_geom.mjs",
+            "https://cdn.jsdelivr.net/gh/Volograms/vol_libs@VOLUAPP-1240-sync-issue-fix-with-texture-copy/wasm/vol_geom.mjs",
         "Vol3js": 
-            "../../wasm/players/three_js_player.mjs",
+            "https://cdn.jsdelivr.net/gh/Volograms/vol_libs@VOLUAPP-1240-sync-issue-fix-with-texture-copy/wasm/players/three_js_player.mjs",
         "three":
             "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js"
     }
 }
 </script>
 <script type="module">
+    // Currently working with modules, but non-module versions are available
+    
     import initModule from "WebVolLib";
     import * as Vol3js from 'Vol3js';
+    
     import * as THREE from 'three';
 
+    // Initialise canvas for web drawing
     const canvas = document.getElementById('canvas');
     canvas.width = window.innerWidth - 50;
 	canvas.height = window.innerHeight - 50;
 
+    // Define vologram files paths
     const header_url = "./numbers_ld/header.vols";
 	const sequence_url = "./numbers_ld/sequence_0.vols";
 	const video_url = "./numbers_ld/output.mp4";
 
+    // Initialise three js rendering objects
     const scene = new THREE.Scene();
     const renderer = new THREE.WebGLRenderer({
         canvas: canvas,
@@ -78,19 +87,41 @@ To Run:
 	camera.lookAt(0.0, 1.2, 0.0);
     scene.add( camera );
 
+    // Create video element that will serve has the texture for the vologram
     var video_element = document.getElementById("texture_video_el");
 
+    /*
+    Create the vologram with parameters:
+     scene: three js scene
+     renderer: three js renderer
+     header_url: path to header file
+     sequence_url: path to the sequence file 
+     video_url: path to video file
+     initModule: wasm init function for initialising interface to c code
+     video_element: video html element 
+    */
     Vol3js.create( scene, renderer, header_url, sequence_url, video_url, initModule, video_element );
 
+    // three js render function 
     function render() {
+        Vol3js.update();
 		renderer.render(scene, camera);
 	}
 
+    function anim_frame() {
+        Vol3js.update();
+        window.requestAnimationFrame(anim_frame);
+    }
+
     var load_button = document.getElementById("load_vols_files_button");
-    load_button.hidden = false;
+    var stop_button = document.getElementById("stop_vols_files_button");
     load_button.onclick = () => {
         renderer.setAnimationLoop(render);
         Vol3js.start();
+        window.requestAnimationFrame(anim_frame);
+    }
+    stop_button.onclick = () => {
+        Vol3js.close();
     }
     
 </script>
