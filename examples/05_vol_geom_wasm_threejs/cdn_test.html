@@ -44,9 +44,9 @@ To Run:
 {
     "imports": {
         "WebVolLib": 
-            "https://cdn.jsdelivr.net/gh/Volograms/vol_libs@VOLUAPP-1240-sync-issue-fix-with-texture-copy/wasm/vol_geom.mjs",
+            "https://cdn.jsdelivr.net/gh/Volograms/vol_libs@main/wasm/vol_web.mjs",
         "Vol3js": 
-            "https://cdn.jsdelivr.net/gh/Volograms/vol_libs@VOLUAPP-1240-sync-issue-fix-with-texture-copy/wasm/players/three_js_player.mjs",
+            "https://cdn.jsdelivr.net/gh/Volograms/vol_libs@main/wasm/players/three_js_player.mjs",
         "three":
             "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js"
     }
@@ -57,7 +57,6 @@ To Run:
     
     import initModule from "WebVolLib";
     import * as Vol3js from 'Vol3js';
-    
     import * as THREE from 'three';
 
     // Initialise canvas for web drawing
@@ -66,9 +65,9 @@ To Run:
 	canvas.height = window.innerHeight - 50;
 
     // Define vologram files paths
-    const header_url = "./numbers_ld/header.vols";
-	const sequence_url = "./numbers_ld/sequence_0.vols";
-	const video_url = "./numbers_ld/output.mp4";
+    const header_url = "./calif/header.vols";
+	const sequence_url = "./calif/sequence_0.vols";
+	const video_url = "./calif/output_720.mp4";
 
     // Initialise three js rendering objects
     const scene = new THREE.Scene();
@@ -104,12 +103,10 @@ To Run:
 
     // three js render function 
     function render() {
-        Vol3js.update();
 		renderer.render(scene, camera);
 	}
 
     function anim_frame() {
-        Vol3js.update();
         window.requestAnimationFrame(anim_frame);
     }
 
