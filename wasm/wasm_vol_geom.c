@@ -43,6 +43,12 @@ EMSCRIPTEN_KEEPALIVE
 bool free_file_info( void ) { return vol_geom_free_file_info( &_info ); }
 
 EMSCRIPTEN_KEEPALIVE
+int32_t frame_count( void ) { return _info.hdr.frame_count; }
+
+EMSCRIPTEN_KEEPALIVE
+int32_t loaded_frame_number( void ) { return _info.frame_headers_ptr->frame_number; }
+
+EMSCRIPTEN_KEEPALIVE
 bool read_frame( int frame_idx ) {
   return vol_geom_read_frame( _seq_filename, &_info, frame_idx, &_frame_data );
 }

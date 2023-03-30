@@ -32,17 +32,16 @@ To Run:
 	<!-- playsinline stops mobile browsers fullscreen-ing the video (iOS 10+)-->
 	<video controls id="texture_video_el" type="video/mp4;" width="256" height="256" loop playsinline></video>
 </body>
-<script type="module" src="./vol_geom.mjs"></script>
+<!--script type="module" src="./vol_geom.mjs"></script-->
 <!-- Import three.js either locally or through cdn -->
-<script type="module" src="./three.mjs"></script>
+<!--script type="module" src="./three.mjs"></script-->
 <!--script src="./three.js"></script-->
 <!--script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script-->
-<script type="module" src="https://cdn.jsdelivr.net/gh/Volograms/vol_libs@distribution-set-up/wasm/players/three_js_player.mjs"></script>
+<!--script type="module" src="https://cdn.jsdelivr.net/gh/Volograms/vol_libs@distribution-set-up/wasm/players/three_js_player.mjs"></script-->
 
 <script type="module">
-	import initModule from "./vol_geom.mjs";
+	import initModule from "../../wasm/vol_web.mjs";
 	import * as THREE from "./three.mjs";
-	//import * as Vol3js from "three_js_player";
 
 	var Module = {};
 	var canvas;
@@ -51,9 +50,9 @@ To Run:
 	var camera;
 	var scene;
 	var vologram = new Object();   // Stores state about the current vologram.
-	vologram.header_url = "./numbers_ld/header.vols";
-	vologram.sequence_url = "./numbers_ld/sequence_0.vols";
-	vologram.video_url = "./numbers_ld/output.mp4";
+	vologram.header_url = "./calif/header.vols";
+	vologram.sequence_url = "./calif/sequence_0.vols";
+	vologram.video_url = "./calif/output.mp4";
 	vologram.fps = 30.0;           // Change this value if not using 30 frames-per-second video.
 	var init_done = false;         // If the basic shaders/objects are set up. A vologram can be downloaded & prepared after this is true.
 
@@ -148,24 +147,13 @@ To Run:
 		return true;
 	}
 
-	var angle = 0;
 	function render() {
-		/*//DEBUG PURPOSES: Rotate camera
-		{
-			var x = 5 * Math.cos(angle);
-			var z = 5 * Math.sin(angle);
-			camera.position.x = x;
-			camera.position.z = z;
-			camera.lookAt(0.0, 1.2, 0.0)
-			angle += 0.05;
-		}*/
-
 		renderer.render(scene, camera);
 	}
 
 	Module['onRuntimeInitialized'] = function() {
+		Module.initVologramFunctions();
 		console.log('WASM for VOL_GEOM started...');
-
 		init();
 		if (!init) { return false; }
 
@@ -183,21 +171,21 @@ To Run:
 		if (vologram.last_frame_loaded == frame_idx) { return; } // Safety catch to avoid reloading the same frame twice.
 
 		// Ask the vol_geom WASM to read the frame data from the vologram file into `_frame_data`.
-		var ret = Module.ccall('read_frame', 'boolean', ['number'], [frame_idx]);
+		var ret = Module.read_frame(frame_idx);
 		if (!ret) { return false; }
 
-		var is_key = Module.ccall('is_keyframe', 'boolean', ['number'], [frame_idx]);
+		var is_key = Module.is_keyframe(frame_idx);
 
 		// Positions - fetch and upload.
-		var vp_copied = Module.ccall('frame_vp_copied', 'number');
-		var vp_sz = Module.ccall('frame_vertices_sz', 'number');
+		var vp_copied = Module.frame_vp_copied();
+		var vp_sz = Module.frame_vertices_sz();
 		var vp_f32 = new Float32Array(Module.HEAP8.buffer, vp_copied, vp_sz / 4);
 		vologram.geometry.setAttribute( 'position', new THREE.Float32BufferAttribute(vp_f32, 3 ));
 
 		if (vologram.has_normals) { // Not all volograms include normals.
 			// Normals - fetch and upload.
-			var normals_copied = Module.ccall('frame_normals_copied', 'number');
-			var normals_sz = Module.ccall('frame_normals_sz', 'number');
+			var normals_copied = Module.frame_normals_copied();
+			var normals_sz = Module.frame_normals_sz();
 			var vn_f32 = new Float32Array(Module.HEAP8.buffer, normals_copied, normals_sz / 4);
 			vologram.geometry.setAttribute( 'normal', new THREE.Float32BufferAttribute(vn_f32, 3 ));
 		}
@@ -207,14 +195,14 @@ To Run:
 			vologram.last_keyframe_loaded = frame_idx;
 
 			// Texture Coordinates - fetch and upload.
-			var uvs_copied = Module.ccall('frame_uvs_copied', 'number');
-			var uvs_sz = Module.ccall('frame_uvs_sz', 'number');
+			var uvs_copied = Module.frame_uvs_copied();
+			var uvs_sz = Module.frame_uvs_sz();
 			var uvs_f32 = new Float32Array(Module.HEAP8.buffer, uvs_copied, uvs_sz / 4);
 			vologram.geometry.setAttribute( 'uv', new THREE.Float32BufferAttribute( uvs_f32, 2 ));
 
 			// Indices - fetch and upload.
-			var indices_copied = Module.ccall('frame_indices_copied', 'number');
-			var indices_sz = Module.ccall('frame_i_sz', 'number');
+			var indices_copied = Module.frame_indices_copied();
+			var indices_sz = Module.frame_i_sz();
 			vologram.n_indices = indices_sz / 2; // ushort
 			var indices_u16 = new Uint16Array(Module.HEAP8.buffer, indices_copied, vologram.n_indices);
 			vologram.geometry.setIndex( new THREE.Uint16BufferAttribute( indices_u16, 1 ))
@@ -239,7 +227,6 @@ To Run:
 	function start_video() {
 		var texture_video_el = document.getElementById("texture_video_el");
 		texture_video_el.src = vologram.video_url;
-		console.debug(texture_video_el)
 		texture_video_el.requestVideoFrameCallback(doSomethingWithTheFrame);
 		texture_video_el.play();
 		console.log("video started");
@@ -247,14 +234,14 @@ To Run:
 
 	function init_vologram() {
 		if (!vologram.header_ready || !vologram.sequence_ready || vologram.ready) { return; } // Wait until both files are downloaded.
-		var ret = Module.ccall('create_file_info', 'boolean', ['string', 'string'], ['header.vols', 'sequence_0.vols']);
+		var ret = Module.create_file_info('header.vols', 'sequence_0.vols');
 		console.log('create_file_info = ' + ret);
 		if (!ret) {
 			console.error("failed to load vologram");
 			return;
 		}
-		vologram.has_normals = Module.ccall('has_normals', 'boolean');
-		vologram.max_blob_size = Module.ccall('max_blob_sz', 'number')
+		vologram.has_normals = Module.has_normals();
+		vologram.max_blob_size = Module.max_blob_sz();
 		console.log( "max blob size =", vologram.max_blob_size );
 		create_vologram();
 		console.log("vologram.has_normals = " + vologram.has_normals);
@@ -266,13 +253,13 @@ To Run:
 
 	// This can be called to add an artificial slow-down in the code. Parameter value is in micro-seconds.
 	function test_usleep(us) {
-		Module.ccall('do_usleep', 'number', ['number'], [us]);
+		Module.do_usleep(us);
 	}
 
 	// Calls mesh_from_frame() but first loads a keyframe, if required.
 	function update_mesh_frame_allowing_skip(desired_frame_index) {
 		// int find_previous_keyframe( int frame_idx );
-		var keyframe_required = Module.ccall('find_previous_keyframe', 'number', ['number'], [desired_frame_index]);
+		var keyframe_required = Module.find_previous_keyframe(desired_frame_index);
 
 		// If running slowly we may skip over a keyframe. Grab that now to avoid stale keyframe desync.
 		if (vologram.last_keyframe_loaded != keyframe_required) { mesh_from_frame(keyframe_required); }

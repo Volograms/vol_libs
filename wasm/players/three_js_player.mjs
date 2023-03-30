@@ -94,6 +94,11 @@ function init() {
 Module['onRuntimeInitialized'] = function() {
     console.log('WASM for VOL_GEOM started...');
 
+    // VERY IMPORTANT:
+    // Calls cwrap on all the volograms wasm functions
+    // and exposes them in the Module object
+    Module.initVologramFunctions();
+
     init();
     if (!init) { return false; }
 
@@ -108,21 +113,21 @@ function mesh_from_frame(frame_idx) {
     if (vologram.last_frame_loaded == frame_idx) { return; } // Safety catch to avoid reloading the same frame twice.
 
     // Ask the vol_geom WASM to read the frame data from the vologram file into `_frame_data`.
-    var ret = Module.ccall('read_frame', 'boolean', ['number'], [frame_idx]);
+    var ret = Module.read_frame(frame_idx);
     if (!ret) { return false; }
 
-    var is_key = Module.ccall('is_keyframe', 'boolean', ['number'], [frame_idx]);
+    var is_key = Module.is_keyframe(frame_idx);
 
     // Positions - fetch and upload.
-    var vp_copied = Module.ccall('frame_vp_copied', 'number');
-    var vp_sz = Module.ccall('frame_vertices_sz', 'number');
+    var vp_copied = Module.frame_vp_copied();
+    var vp_sz = Module.frame_vertices_sz();
     var vp_f32 = new Float32Array(Module.HEAP8.buffer, vp_copied, vp_sz / 4);
     vologram.geometry.setAttribute( 'position', new THREE.Float32BufferAttribute(vp_f32, 3 ));
 
     if (vologram.has_normals) { // Not all volograms include normals.
         // Normals - fetch and upload.
-        var normals_copied = Module.ccall('frame_normals_copied', 'number');
-        var normals_sz = Module.ccall('frame_normals_sz', 'number');
+        var normals_copied = Module.frame_normals_copied();
+        var normals_sz = Module.frame_normals_sz();
         var vn_f32 = new Float32Array(Module.HEAP8.buffer, normals_copied, normals_sz / 4);
         vologram.geometry.setAttribute( 'normal', new THREE.Float32BufferAttribute(vn_f32, 3 ));
     }
@@ -132,14 +137,14 @@ function mesh_from_frame(frame_idx) {
         vologram.last_keyframe_loaded = frame_idx;
 
         // Texture Coordinates - fetch and upload.
-        var uvs_copied = Module.ccall('frame_uvs_copied', 'number');
-        var uvs_sz = Module.ccall('frame_uvs_sz', 'number');
+        var uvs_copied = Module.frame_uvs_copied();
+        var uvs_sz = Module.frame_uvs_sz();
         var uvs_f32 = new Float32Array(Module.HEAP8.buffer, uvs_copied, uvs_sz / 4);
         vologram.geometry.setAttribute( 'uv', new THREE.Float32BufferAttribute( uvs_f32, 2 ));
 
         // Indices - fetch and upload.
-        var indices_copied = Module.ccall('frame_indices_copied', 'number');
-        var indices_sz = Module.ccall('frame_i_sz', 'number');
+        var indices_copied = Module.frame_indices_copied();
+        var indices_sz = Module.frame_i_sz();
         vologram.n_indices = indices_sz / 2; // ushort
         var indices_u16 = new Uint16Array(Module.HEAP8.buffer, indices_copied, vologram.n_indices);
         vologram.geometry.setIndex( new THREE.Uint16BufferAttribute( indices_u16, 1 ))
@@ -168,14 +173,14 @@ function start_video() {
 
 function init_vologram() {
     if (!vologram.header_ready || !vologram.sequence_ready || vologram.ready) { return; } // Wait until both files are downloaded.
-    var ret = Module.ccall('create_file_info', 'boolean', ['string', 'string'], ['header.vols', 'sequence_0.vols']);
+    var ret = Module.create_file_info('header.vols', 'sequence_0.vols');
     console.log('create_file_info = ' + ret);
     if (!ret) {
         console.error("failed to load vologram");
         return;
     }
-    vologram.has_normals = Module.ccall('has_normals', 'boolean');
-    vologram.max_blob_size = Module.ccall('max_blob_sz', 'number')
+    vologram.has_normals = Module.has_normals();
+    vologram.max_blob_size = Module.max_blob_sz();
     console.log( "max blob size =", vologram.max_blob_size );
     
     console.log("vologram.has_normals = " + vologram.has_normals);
@@ -193,7 +198,7 @@ function test_usleep(us) {
 // Calls mesh_from_frame() but first loads a keyframe, if required.
 function update_mesh_frame_allowing_skip(desired_frame_index) {
     // int find_previous_keyframe( int frame_idx );
-    var keyframe_required = Module.ccall('find_previous_keyframe', 'number', ['number'], [desired_frame_index]);
+    var keyframe_required = Module.find_previous_keyframe(desired_frame_index);
 
     // If running slowly we may skip over a keyframe. Grab that now to avoid stale keyframe desync.
     if (vologram.last_keyframe_loaded != keyframe_required) { mesh_from_frame(keyframe_required); }
@@ -279,6 +284,6 @@ export function close() {
         vologram.geometry = null;
         vologram.texture = null;
     }
-    Module.ccall('free_file_info', 'boolean');
+    Module.free_file_info();
     init_done = false;
 }
