@@ -32,12 +32,6 @@ To Run:
 	<!-- playsinline stops mobile browsers fullscreen-ing the video (iOS 10+)-->
 	<video controls id="texture_video_el" type="video/mp4;" width="256" height="256" loop playsinline></video>
 </body>
-<!--script type="module" src="./vol_geom.mjs"></script-->
-<!-- Import three.js either locally or through cdn -->
-<!--script type="module" src="./three.mjs"></script-->
-<!--script src="./three.js"></script-->
-<!--script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script-->
-<!--script type="module" src="https://cdn.jsdelivr.net/gh/Volograms/vol_libs@distribution-set-up/wasm/players/three_js_player.mjs"></script-->
 
 <script type="module">
 	import initModule from "../../wasm/vol_web.mjs";
@@ -50,9 +44,9 @@ To Run:
 	var camera;
 	var scene;
 	var vologram = new Object();   // Stores state about the current vologram.
-	vologram.header_url = "./calif/header.vols";
-	vologram.sequence_url = "./calif/sequence_0.vols";
-	vologram.video_url = "./calif/output.mp4";
+	vologram.header_url = "../example_vologram/calif/header.vols";
+	vologram.sequence_url = "../example_vologram/calif/sequence_0.vols";
+	vologram.video_url = "../example_vologram/calif/output_720.mp4";
 	vologram.fps = 30.0;           // Change this value if not using 30 frames-per-second video.
 	var init_done = false;         // If the basic shaders/objects are set up. A vologram can be downloaded & prepared after this is true.
 
