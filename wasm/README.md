@@ -220,7 +220,7 @@ The following table shows the correct parameters for ccall-ing the vologram func
 | `frame_count` | `"frame_count"` | `"number"` |  |
 | `frame_data_ptr` | `"frame_data_ptr"` | `"array"` |  |
 | `frame_indices_copied` | `"frame_indices_copied"` | `"array"` |  |
-| `frame_indices` | `"frame_indices"` | `"array"` |  |
+| `frame_indices` | `"frame_i"` | `"array"` |  |
 | `frame_i_sz` | `"frame_i_sz"` | `"number"` |  |
 | `frame_normals_copied` | `"frame_normals_copied"` | `"array"` |  |
 | `frame_normals_sz` | `"frame_normals_sz"` | `"number"` |  |
