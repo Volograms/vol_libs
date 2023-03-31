@@ -99,6 +99,8 @@ Parameters:
 
 Initialise and expose vologram related wasm functions (for convenience, but recommended)
 
+***
+
 ### After `initVologramFunctions`
 
 #### `Module.create_file_info(hdr: String, seq: String): Boolean`
@@ -198,6 +200,8 @@ Reads a frame of the vologram. Returns `true` if successful and `false` otherwis
 Parameters:
 * `frame_idx: Number` - Frame index to read 
 
+***
+
 ### Without `initVologramFunctions`
 
 If you have not called `initVologramFunctions` you can still call the volograms wasm function using emscripten's `ccall`. To do this you need to pass in the name of the c function you want to call, the return type as a string, a string array of the parameter types and an array containing the parameters.
@@ -237,6 +241,7 @@ The following table shows the correct parameters for ccall-ing the vologram func
 | `max_blob_sz` | `"max_blob_sz"` | `"number"` |  |
 | `read_frame` | `"read_frame"` | `"boolean"` | `["number"]` |
  
+***
 
 ## Building Your Own Modules
 
@@ -245,6 +250,7 @@ The following table shows the correct parameters for ccall-ing the vologram func
 
 ### Build
 Run the `wasm/build.sh` script to build a new `vol_geom.mjs` file
+
 
 ## Repository Contents
 TODO
