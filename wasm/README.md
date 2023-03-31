@@ -26,6 +26,9 @@ import initModule from "@volograms/web_vol_lib/vol_web.mjs";
 ### cdn 
 
 * cdn is hosted by [jsdelivr](https://www.jsdelivr.com)
+
+**Importing mjs**
+
 * In your HTML file you can use an `importmap` to import the modules:
 
 ```html
@@ -43,15 +46,37 @@ import initModule from "WebVolLib";
 ```
 * Note the matching `WebVolLib` name; this can be whatever you like but they must be consistent in your project
 
+**Importing js**
+
+* In your HTML file you can import the javascript code with:
+
+```html
+<script src="https://cdn.jsdelivr.net/gh/Volograms/vol_libs@main/wasm/vol_web.js"></script>
+
+<!-- To use it in your main script -->
+<script> 
+/** 
+ * Note that the initialise function is imported with 
+ * the name `Module` by default. However the following 
+ * code makes the object and function names consistent 
+ * with the mjs version.
+ */
+const initModule = Module;
+Module = new Object();
+</script>
+```
+
 ### Source 
 
 * You can also copy can paste the modules into your own project and reference them as another of your source files:
+
+**Importing mjs**
 
 ```js
 import initModule from "path/to/your/vol_web.mjs";
 ```
 
-* You can also the non-module version like so: 
+**Importing js**
 
 ```js
 import initModule from "path/to/your/vol_web.js";
