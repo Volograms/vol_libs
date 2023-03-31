@@ -1,6 +1,9 @@
 // This is an example of pre-js
 Module.initVologramFunctions = () => {
     Module['has_normals'] = Module.cwrap('has_normals', 'boolean');
+    Module['has_texture'] = Module.cwrap('has_texture', 'boolean');
+    Module['texture_width'] = Module.cwrap('texture_width', 'number');
+    Module['texture_height'] = Module.cwrap('texture_height', 'number');
     Module['create_file_info'] = Module.cwrap(
         'create_file_info', 'boolean',
         ['string', 'string']
@@ -40,6 +43,12 @@ Module.initVologramFunctions = () => {
     );
     Module['frame_normals_sz'] = Module.cwrap(
         'frame_normals_sz', 'number'
+    );
+    Module['frame_texture_data_ptr'] = Module.cwrap(
+        'frame_texture_data_ptr', 'number'
+    );
+    Module['frame_texture_sz'] = Module.cwrap(
+        'frame_texture_sz', 'number'
     );
     Module['frame_indices'] = Module.cwrap(
         'frame_i', 'array'
