@@ -1,6 +1,6 @@
 # vol_libs/wasm #
 
-Javascript modules useful for volograms playback on web, as well as the resources needed to build the modules
+JavaScript modules useful for volograms playback on web, as well as the resources needed to build the modules
 
 The base module is designed to grab the volograms data and make it accessible to the user. This way, a developer can use the player in whatever environment. There is also an interface script that can be used in threejs projects. 
 
@@ -11,19 +11,19 @@ Please refer to the following examples for support:
 
 ## Importing Modules in your Projects
 
-You can import the modules into your projects a number of way 
+You can import the modules into your projects a number of ways:
 
-### npm
+### NPM
 
 * Open your terminal and `cd` into your node project
 * Run the command `npm i @volograms/web_vol_lib`
-* Import the modulke into your script using
+* Import the module into your script using:
 
 ```js
 import initModule from "@volograms/web_vol_lib/vol_web.mjs";
 ```
 
-### cdn 
+### CDN 
 
 * cdn is hosted by [jsdelivr](https://www.jsdelivr.com)
 * In your HTML file you can use an `importmap` to import the modules:
