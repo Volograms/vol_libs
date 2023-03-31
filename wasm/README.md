@@ -33,7 +33,7 @@ import initModule from "@volograms/web_vol_lib/vol_web.mjs";
 {
     "imports": {
         "WebVolLib": 
-            "https://cdn.jsdelivr.net/gh/Volograms/vol_libs@distribution-set-up/wasm/vol_web.mjs"
+            "https://cdn.jsdelivr.net/gh/Volograms/vol_libs@main/wasm/vol_web.mjs"
     }
 }
 ```
