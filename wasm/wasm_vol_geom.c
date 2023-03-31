@@ -3,10 +3,12 @@
  * --------- | ---------------------------------------------
  * Authors   | Anton Gerdelan     <anton@volograms.com>
  *           | Patrick Geoghegan  <patrick@volograms.com>
- * Copyright | 2022, Volograms (http://volograms.com/)
+ * Copyright | 2022-2023, Volograms (http://volograms.com/)
  * Language  | C99
  * Files     | 1
  * Licence   | The MIT License. See LICENSE.md for details.
+ * Version   | 1.1 Added texture functions to support Basis Universal transcoding.
+ *           | 1.0 First version.
  */
 
 #include "vol_geom.h"
@@ -33,6 +35,15 @@ EMSCRIPTEN_KEEPALIVE
 bool has_normals( void ) { return _info.hdr.normals; }
 
 EMSCRIPTEN_KEEPALIVE
+bool has_texture( void ) { return _info.hdr.textured; }
+
+EMSCRIPTEN_KEEPALIVE
+int32_t texture_width( void ) { return (int32_t)_info.hdr.texture_width; }
+
+EMSCRIPTEN_KEEPALIVE
+int32_t texture_height( void ) { return (int32_t)_info.hdr.texture_height; }
+
+EMSCRIPTEN_KEEPALIVE
 bool create_file_info( const char* hdr_filename, const char* seq_filename ) {
   _seq_filename[0] = '\0';
   strncat( _seq_filename, seq_filename, 255 );
@@ -43,7 +54,7 @@ EMSCRIPTEN_KEEPALIVE
 bool free_file_info( void ) { return vol_geom_free_file_info( &_info ); }
 
 EMSCRIPTEN_KEEPALIVE
-int32_t frame_count( void ) { return _info.hdr.frame_count; }
+int32_t frame_count( void ) { return (int32_t)_info.hdr.frame_count; }
 
 EMSCRIPTEN_KEEPALIVE
 int32_t loaded_frame_number( void ) { return _info.frame_headers_ptr->frame_number; }
@@ -78,6 +89,12 @@ int32_t frame_uvs_sz( void ) { return _frame_data.uvs_sz; }
 
 EMSCRIPTEN_KEEPALIVE
 int32_t frame_normals_sz( void ) { return _frame_data.normals_sz; }
+
+EMSCRIPTEN_KEEPALIVE
+uint8_t* frame_texture_data_ptr( void ) { return &_frame_data.block_data_ptr[_frame_data.texture_offset]; }
+
+EMSCRIPTEN_KEEPALIVE
+int32_t frame_texture_sz( void ) { return _frame_data.texture_sz; }
 
 EMSCRIPTEN_KEEPALIVE
 uint8_t* frame_i( void ) { // 'frame_indices' name REFUSED to export
