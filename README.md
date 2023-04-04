@@ -1,8 +1,6 @@
 # vol_libs #
 
-Stand-alone C libraries for extracting data from captured vologram files.
-
-The libraries here are designed to be used in native plugins for Unity and Unreal, and can also be used to drive any custom vologram player or converter software. This will give you frame-by-frame triangulated mesh data, with images for the texture, that can be used with any API.
+The libraries here are designed to be used in native plugins for Unity, Unreal and web pages, and can also be used to drive any custom vologram player or converter software. This will give you frame-by-frame triangulated mesh data, with images for the texture, that can be used with any API.
 
 See individual libraries headers for version history and current features.
 
@@ -67,7 +65,9 @@ cd examples/
 | dump_images         | As `get_images` but dumps images to files.                                                                                                                                                                    | `./dump_images.bin ../samples/counter.webm`                                   |
 | vol_geom_opengl     | Example using vol_geom to load mesh frames from a vologram and render in OpenGL without a texture. Loads a cube by default,  or supply a path to a vologram header and sequence file.                         | `./vol_geom_opengl.bin ../samples/cone_hdr.vol ../samples/cone_seq.vol`       |
 | vol_geom_av_opengl  | Combines both vol_geom and vol_av and renders a textured vologram sequence in OpenGL. Displays the first frame of a video on a quad by default, but supply paths to a header, sequence, and video file to display a vologram. Advance one frame with `spacebar`, play/pause with `p`. |       |
-| vol_geom_wasm_webgl | Plays a vologram in a webpage using vol_geom compiled to web assembly.                                                                                                                                        | Host an HTTP server from the example's directory, and connect with a browser. |
+| vol_geom_wasm_webgl | Plays a vologram in a webpage, with WebGL, using vol_geom compiled to web assembly.                                                                                                                                        | Host an HTTP server from the project's root directory, and connect with a browser. |
+| vol_geom_wasm_threejs | Plays a vologram in a webpage, with [Three.js](https://threejs.org/), using vol_geom compiled to web assembly.                                                                                                                                        | Host an HTTP server from the project's root directory, and connect with a browser. |
+
 
 ![vol_geom_av_opengl used to load a Vologram captured with Volu and animate it in OpenGL](example_jan.png)
 
@@ -88,7 +88,7 @@ There is a more detailed answer at https://apple.stackexchange.com/questions/414
 
 ```
 doc/                         -- API documentation will be generated here after running `doxygen` from the main directory.
-examples/                    -- Demo programs for both vol_av and vol_geom. Compile with: `make example`, and run each from the `examples/` directory.
+examples/                    -- Demo programs for both vol_av and vol_geom.
 fuzzing/                     -- Folder structure used for automated testing with the AFL fuzzer.
 samples/                     -- Sample data files used by examples and tests.
 src/                         -- Code for the libraries. Drop these directly into your code source to use vol_av, vol_geom, or both.
@@ -131,12 +131,11 @@ PR Descriptions should include this template:
 
 ## Maintainers/Contact ##
 
-* Anton Gerdelan <anton@volograms.com>
 * Feel free to jump onto [Volograms Discord](https://discord.gg/dz5G4bHb) channel and chat about any of these projects, or get some troubleshooting help. 
 
 ## Licences and Dependencies ##
 
-Copyright 2021, Volograms. The MIT License. See the LICENSE file for details.
+Copyright 2021-2023, Volograms. The MIT License. See the LICENSE file for details.
 
 ### Dependencies
 
