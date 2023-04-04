@@ -84,24 +84,6 @@ export LIBRARY_PATH=/opt/homebrew/lib
 
 There is a more detailed answer at https://apple.stackexchange.com/questions/414622/installing-a-c-c-library-with-homebrew-on-m1-macs
 
-## Repository Contents
-
-```
-doc/                         -- API documentation will be generated here after running `doxygen` from the main directory.
-examples/                    -- Demo programs for both vol_av and vol_geom.
-fuzzing/                     -- Folder structure used for automated testing with the AFL fuzzer.
-samples/                     -- Sample data files used by examples and tests.
-src/                         -- Code for the libraries. Drop these directly into your code source to use vol_av, vol_geom, or both.
-tests/                       -- Unit tests for vol_av and vol_geom. Compile with `make test`. These are run by the CI on PRs and configured with `bitbucket-pipelines.yml`.
-thirdparty/                  -- Files to compile and run dependencies of vol_av and various examples.
-tools/                       -- Utility programs for testing and debugging, and for exporting volograms to other formats.
-wasm/                        -- Files for building the web assembly version of vol_geom using the [Emscripten](https://emscripten.org/) compiler.
-build_msvc.bat               -- MS batch file for a command-line build of the largest example. Run periodically to check for compiler warnings across libraries. 
-LICENSE                      -- Licence information for this project. See also: separate licences for third-party dependencies.
-Makefile                     -- A GNU Makefile for building demos, tests, and samples. Used by CI builds. You can use this to build the examples in a local install if you wish.
-run_tests.sh                 -- Bash script for CI/CD automation to run unit tests after building on PRs. 
-```
-
 ## Tests and Fuzzing
 
 * Typical unit test programs for each library are found under `tests/`.
