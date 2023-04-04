@@ -77,7 +77,7 @@ To Run:
 			gl_FragColor.rgba = vec4( texel_rgb, 1.0 );
 		}
 		</script>
-<script src="./vol_web.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/Volograms/vol_libs@main/wasm/vol_web.js"></script>
 <script src="./apg_maths.js"></script>
 <script>
 	// This 2 lines just make this example consistent
@@ -88,9 +88,9 @@ To Run:
 	var canvas;
 	var gl;
 	var vologram = new Object();   // Stores state about the current vologram.
-	vologram.header_url = "./calif/header.vols";
-	vologram.sequence_url = "./calif/sequence_0.vols";
-	vologram.video_url = "./calif/output_720.mp4";
+	vologram.header_url = "../example_vologram/calif/header.vols";
+	vologram.sequence_url = "../example_vologram/calif/sequence_0.vols";
+	vologram.video_url = "../example_vologram/calif/output_720.mp4";
 	vologram.fps = 30.0;           // Change this value if not using 30 frames-per-second video.
 	var init_done = false;         // If the basic shaders/objects are set up. A vologram can be downloaded & prepared after this is true.
 
