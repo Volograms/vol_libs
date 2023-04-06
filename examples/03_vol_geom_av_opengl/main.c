@@ -182,7 +182,6 @@ int main( int argc, char** argv ) {
     "out vec4 o_frag_colour;\n"
     "void main() {\n"
     "  vec4 rgba = texture( u_texture_a, v_vt );\n"
-//    "  rgba.rgb = pow( rgba.rgb, vec3( 1.0 / 2.2 ) );\n" // Gamma correction.
     "  o_frag_colour = vec4( rgba.rgb, 1.0 );\n"
     "}\n";
 
