@@ -1,55 +1,111 @@
+<!-- 
+This document serves as a simple example of a PR template.
+It also contains some recommended headings along with some
+other useful headers. At the end of the document are some
+extra blocks of Markdown that could be used in many 
+different PRs and the hope is they can be copied and pasted.
+-->
+
+<!-- ( Optional Header ) --\>
+## Pre-PR Checklist 
+
+- [ ] New code sufficiently commented and documented?
+- [ ] New code passes unit tests?
+
+***
+-->
+
 ## Purpose of this PR
+<!-- ( Recommened Header )
+List here the problems that the PR is trying to fix.
+Use your JIRA cards for inspiration for this section.
 
-Replace this text with a short, clear, description of **_why_** you did this work in plain English.
+Examples:
+-->
+* To improve web lib interface
+* To improve documentation
+* To add access to more c functions needed in projects
 
-* Does this PR fix a bug or is it a new feature? Briefly describe the bug or feature.
-* Name/code, (and link to #1 issue if one exists on the same platform as the PR).
+***
 
 ## Changes made in this PR
+<!-- ( Recommened Header )
+Give a brief description of the work done on each issue
+listed in the section above.
 
-Write a summary here describing **_what_** work you did in your branch, and **_how_** you did it (explain your approach).
+Consider using screenshots/videos to describe your work:
+https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/attaching-files
 
-* A bullet of changes here is okay.
-* But add more detailed text than just a paste of commit messages.
-* Try to attach **screenshots** wherever possible - a picture is worth 1000 words.
-* An attached video, or gif, may be worth even more.
-* Did you update any unit tests or automated tests to cover your changes e.g. scripts run in GitHub Actions?
-* Did you update the docs to cover new interface code? This could be function interface comments, or external documentation, as project-appropriate.
-* Did you update comments in code to explain difficult-to-read sections?
+Example:
+-->
+* Improved interface to vol_web 
+  * Added `pre.js`, which is added to the wasm module during compilation and provides the function that creates the new interface 
+* Added access to c functions that return the index of the current loaded frame, and total amount of frames in a vologram
+* Added documentation for three.js
+* Added info to readme
+
+
+***
 
 ## Testing Summary
+<!-- ( Recommened Header )
+Explained how reviewers build, deploy, and test your code and what should they look for that would indicate a bug or regression.
 
-Provide more detail here as required.
+This is an opportunity to add the base build and testing commands to the template that developers can copy, paste and/or modify to hightlight any changes to the build process (e.g. as a result of a new dependency):
+-->
 
-- [ ] Explained how reviewers build, deploy, and test your code and what should they look for that would indicate a bug or regression.
-- [ ] Tested locally. Which platforms? OS/hardware/devices/compilers used.
-- [ ] Stated supported platforms have you not tested on, that you need help with?
-- [ ] Named specific tools have you ran over the code: e.g. which { compilers, debuggers, fuzzers, profilers, sanitisers, linters, other tools }.
-- [ ] Ran any unit tests that cover this code.
-- [ ] Explained inputs used to test for bugs. e.g. existing known working data, large files, empty files, etc.
+### Build Command
 
-## Risk Introduced and any Breaking Changes
+* Created 2 build scripts for building js code and js module
+* Added `--pre.js` flag to add function that creates nicer interface to the wasm module
 
-Provide more detail here as required.
+```sh
+cd wasm
+./build-mjs.sh
+```
+<!--
+State what devices, iOS'es, browsers, etc. were tested on. You can also ask
+for others to help test on platforms you cannot.
 
-- [ ] This PR introduces breaking changes (API or ABI). Instructions are provided for existing users to update their projects.
-- [ ] This PR introduces new dependencies. You have provided links and licences in this section. This is **_extremely important!_**.
-- [ ] New dependencies: Explained how any new dependencies are linked and built againt - .dll, inline code etc.?
-- [ ] Gaps in testing: Is any code not covered by tests?
-- [ ] Gaps in testing: Are you unable to test on some platform? Or is some input data not available to you for testing?
-- [ ] Analysed any other potential risks here.
+Example:
+-->
 
-## Pre-Merge Checklist
+### Checklist
 
-* If you have a problem with the review process (e.g. it's taking too long, or the reviewers forgot) get in touch with the Team Lead of the project!
+#### Chrome on Mac 
 
-- [ ] Before making your PR, refresh your branch with a merge from its parent in case of conflicting changes since you started your branch.
-- [ ] This PR description is written clearly so that reviewers can understand the why/what/how of the work done.
-- [ ] Reviewed your own PR and checked your changed code.
-- [ ] Invited a range of good reviewers.
-- [ ] Wait for a PR to be properly reviewed. Responded to all questions, and made any required changes.
-- [ ] Received one other reviewer's approval. Ideally wait for 2+ approvals, especially if you didn't get a thorough reivew on the first approval.
-- [ ] If a reviewer asks a question, even if you have another approval, got the approval of the other reviewers as well before merging.
-- [ ] Made sure existing reviewers approved any changes to the PR.
-- [ ] Resolved any merge conflicts after making the PR.
-- [ ] CI/CD builds are not reporting any errors.
+##### Import Type
+
+- [ ] Direct file import 
+- [ ] npm
+- [ ] cdn
+
+##### Build type
+
+- [ ] Module built with `build-mjs.sh`
+- [ ] Code built with `build-js.sh`
+
+***
+
+## Risk Introduced
+<!-- ( Recommended Header ) -->
+
+- [ ] Gaps in testing - need to test npm and cdn before merge
+- [ ] Change to build scripts could fail on untested platforms
+
+***
+
+# Pre-Merge Checklist
+
+<!-- ( Recommended Header ) 
+If you have a problem with the review process (e.g. it's taking too long, or the reviewers forgot) get in touch with the Team Lead of the project!
+-->
+
+- [ ] No conflicts with destination branch
+- [ ] Reviewed your own PR and checked your changed code
+- [ ] Invited reviewers (ideally +2)
+- [ ] All questions/comments answered (where necessary)
+- [ ] Approvals received after latest changes (ideally 2+)
+<!-- - [ ] CI/CD builds successful -->
+
+***
