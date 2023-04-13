@@ -16,6 +16,9 @@ int main( int argc, char** argv ) {
   printf( "Loading combined header&sequence file `%s`\n", filename_vols );
 
   // TODO validate - new API in vol_geom required I guess.
+  //               - perhaps use a generic data interface (hdr_ptr seq_ptr)
+  //               - with a get_seq_ptr() function we can use to point to data following the header
+  //               - need to think ahead a bit about streaming - maybe just a new process_frame(next_frame_ptr) later.
 
   // validate file exists and is not a directory
 
