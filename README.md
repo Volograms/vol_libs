@@ -47,7 +47,7 @@ cd tests/
 
 ### Example Programs
 
-* Examples are *code example* for how you might invoke the libraries in your projects to render volograms.
+* `examples/` contains *code examples* for how you might invoke the libraries in your projects to render volograms.
 * See the table below for what each example is and how to use it.
 * For a visual output example try *vol_geom_av_opengl* to load a Vologram you have captured with Volu and exported to the desktop.
 
