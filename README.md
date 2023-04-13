@@ -21,7 +21,7 @@ See individual libraries headers for version history and current features.
 ## Set Up
 
 * Clone this repository.
-* Set up FFmpeg development libraries:
+* (Not required for web) Set up FFmpeg development libraries:
     * For Windows these can be found under the `thirdparty/ffmpeg_lgpl_free/` sub-directory, and you do not need to do anything.
     * On Ubuntu `sudo apt-get install build-essential clang libavcodec-dev libavdevice-dev libavformat-dev libavutil-dev libswscale-dev`.
     * On macOS `brew install ffmpeg`.
@@ -39,8 +39,8 @@ cd tests/
 
 ### Using Libraries in your Projects
 
-* Volograms libraries are designed to be dropped directly into a C/C++ project, or may be compiled as a static or shared library.
-* For vol_av you will also need to link against the FFmpeg dynamic libraries.
+* Volograms libraries are designed to be dropped directly into a C/C++ project, or may be compiled as a static or shared library, or as web assembly (WASM).
+* To play volograms that use external WebM or MP4 video textures you need to use vol_av. This links against the FFmpeg dynamic libraries. _Web players do not use vol_av or FFmpeg_.
 * `#include vol_av.h` or `#include vol_geom.h` and call interface functions from those headers.
 * Library functions are documented in the header files.
 * You can also generate API documentation using Doxygen. To do so install Doxygen, and invoke `doxygen` from the main directory of the repository.
