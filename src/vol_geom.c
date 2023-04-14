@@ -37,7 +37,6 @@
 #define VOL_GEOM_LOG_STR_MAX_LEN 512 // Careful - this is stored on the stack to be thread and memory-safe so don't make it too large.
 /// File header section size in bytes. Used in sanity checks to test for corrupted files that are below minimum sizes expected.
 #define VOL_GEOM_FILE_HDR_V10_MIN_SZ 24 /// "VOLS" (4 bytes) + 4 string length bytes + 4 ints in v10 hdr.
-#define VOL_GEOM_FILE_HDR_MAX_SZ 512    /// Version 1.3 is 44 bytes. Older versions are mostly 94 bytes, but can be longer, depending on strings.
 /// File header section size in bytes. Used in sanity checks to test for corrupted files that are below minimum sizes expected.
 #define VOL_GEOM_FRAME_MIN_SZ 17 /// 3 ints, 1 byte, 1 int inside vertices array. the rest are optional
 
@@ -214,7 +213,7 @@ bool vol_geom_read_hdr( const uint8_t* data_ptr, int32_t data_sz, vol_geom_file_
 VOL_GEOM_EXPORT bool vol_geom_read_hdr_from_file( const char* filename, vol_geom_file_hdr_t* hdr_ptr, vol_geom_size_t* hdr_sz_ptr ) {
   vol_geom_file_record_t record = ( vol_geom_file_record_t ){ .byte_ptr = NULL };
   if ( !filename || !hdr_ptr || !hdr_sz_ptr ) { return false; }
-  if ( !_read_file( filename, &record, VOL_GEOM_FILE_HDR_MAX_SZ ) ) { return false; }
+  if ( !_read_file( filename, &record, sizeof( vol_geom_file_hdr_t ) ) ) { return false; }
   if ( !vol_geom_read_hdr( record.byte_ptr, record.sz, hdr_ptr, hdr_sz_ptr ) ) { return false; }
   return true;
 }
