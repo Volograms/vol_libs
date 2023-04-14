@@ -197,7 +197,7 @@ VOL_GEOM_EXPORT bool vol_geom_read_hdr_from_mem( const uint8_t* data_ptr, int32_
 /** Read a header from the top of a .vols file. */
 VOL_GEOM_EXPORT bool vol_geom_read_hdr_from_file( const char* filename, vol_geom_file_hdr_t* hdr_ptr, vol_geom_size_t* hdr_sz_ptr );
 
-VOL_GEOM_EXPORT bool vol_geom_create_file_info_from_file( const char* vols_filename, vol_geom_info_t* info_ptr, bool streaming_mode );
+VOL_GEOM_EXPORT bool vol_geom_create_file_info_from_file( const char* vols_filename, vol_geom_info_t* info_ptr );
 
 /** Call this function before playing a vologram sequence.
  * It will build a directory of file and frame information about the VOL sequence, and pre-allocate memory.

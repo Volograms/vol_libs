@@ -228,44 +228,62 @@ static bool _read_vol_frame( const vol_geom_info_t* info_ptr, int frame_idx, vol
 static bool _build_frames_directory_from_file( const char* seq_filename, vol_geom_info_t* info_ptr, vol_geom_size_t chunk_offset ) {
   if ( !seq_filename || !info_ptr ) { return false; }
 
+  { // Allocate memory for frame headers and frames directory.
+    vol_geom_size_t frame_headers_sz = info_ptr->hdr.frame_count * sizeof( vol_geom_frame_hdr_t );
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Allocating %" PRId64 " bytes for frame headers.\n", frame_headers_sz );
+    info_ptr->frame_headers_ptr = calloc( 1, (size_t)frame_headers_sz );
+    if ( !info_ptr->frame_headers_ptr ) {
+      _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: OOM allocating frames headers\n" );
+      goto bfdff_fail;
+    }
+
+    vol_geom_size_t frames_directory_sz = info_ptr->hdr.frame_count * sizeof( vol_geom_frame_directory_entry_t );
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Allocating %" PRId64 " bytes for frames directory.\n", frames_directory_sz );
+    info_ptr->frames_directory_ptr = calloc( 1, (size_t)frames_directory_sz );
+    if ( !info_ptr->frames_directory_ptr ) {
+      _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: OOM allocating frames directory\n" );
+      goto bfdff_fail;
+    }
+  }
+
   vol_geom_size_t sequence_file_sz = 0;
-  if ( !_get_file_sz( seq_filename, &sequence_file_sz ) ) { return false; }
+  if ( !_get_file_sz( seq_filename, &sequence_file_sz ) ) { goto bfdff_fail; }
   _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Sequence file is %" PRId64 " bytes\n", sequence_file_sz );
 
   FILE* f_ptr = fopen( seq_filename, "rb" );
-  if ( !f_ptr ) { return false; }
-  if ( 0 != vol_geom_fseeko( f_ptr, chunk_offset, SEEK_SET ) ) { goto _build_frames_directory_from_file_failed_to_read_info; }
+  if ( !f_ptr ) { goto bfdff_fail; }
+  if ( 0 != vol_geom_fseeko( f_ptr, chunk_offset, SEEK_SET ) ) { goto bfdff_fail; }
 
   for ( int32_t i = 0; i < info_ptr->hdr.frame_count; i++ ) {
     vol_geom_frame_hdr_t frame_hdr = ( vol_geom_frame_hdr_t ){ .mesh_data_sz = 0 };
 
     vol_geom_size_t frame_start_offset = vol_geom_ftello( f_ptr );
-    if ( -1LL == frame_start_offset ) { goto _build_frames_directory_from_file_failed_to_read_info; }
+    if ( -1LL == frame_start_offset ) { goto bfdff_fail; }
 
     if ( !fread( &frame_hdr.frame_number, sizeof( int32_t ), 1, f_ptr ) ) {
       _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: frame_number at frame %i in sequence file was out of file size range\n", i );
-      goto _build_frames_directory_from_file_failed_to_read_info;
+      goto bfdff_fail;
     }
     if ( frame_hdr.frame_number != i ) {
       _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: frame_number was %i at frame %i in sequence file\n", frame_hdr.frame_number, i );
-      goto _build_frames_directory_from_file_failed_to_read_info;
+      goto bfdff_fail;
     }
     if ( !fread( &frame_hdr.mesh_data_sz, sizeof( int32_t ), 1, f_ptr ) ) {
       _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: mesh_data_sz %i was out of file size range in sequence file\n", frame_hdr.mesh_data_sz );
-      goto _build_frames_directory_from_file_failed_to_read_info;
+      goto bfdff_fail;
     }
     if ( frame_hdr.mesh_data_sz < 0 || (vol_geom_size_t)frame_hdr.mesh_data_sz > sequence_file_sz ) {
       _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: frame %i has mesh_data_sz %i, which is invalid. Sequence file is %" PRId64 " bytes\n", i,
         frame_hdr.mesh_data_sz, sequence_file_sz );
-      goto _build_frames_directory_from_file_failed_to_read_info;
+      goto bfdff_fail;
     }
     if ( !fread( &frame_hdr.keyframe, sizeof( uint8_t ), 1, f_ptr ) ) {
       _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: keyframe (type) was out of file size range in sequence file\n" );
-      goto _build_frames_directory_from_file_failed_to_read_info;
+      goto bfdff_fail;
     }
 
     vol_geom_size_t frame_current_offset = vol_geom_ftello( f_ptr );
-    if ( -1LL == frame_current_offset ) { goto _build_frames_directory_from_file_failed_to_read_info; }
+    if ( -1LL == frame_current_offset ) { goto bfdff_fail; }
     info_ptr->frames_directory_ptr[i].hdr_sz = (vol_geom_size_t)frame_current_offset - (vol_geom_size_t)frame_start_offset;
 
     // in version 12 mesh_data_sz includes array sizes, but earlier versions need to add that to payload size
@@ -286,16 +304,16 @@ static bool _build_frames_directory_from_file( const char* seq_filename, vol_geo
     if ( info_ptr->frames_directory_ptr[i].corrected_payload_sz > sequence_file_sz ) {
       _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: frame %i corrected_payload_sz %" PRId64 " bytes was too large for a sequence of %" PRId64 " bytes\n", i,
         info_ptr->frames_directory_ptr[i].corrected_payload_sz, sequence_file_sz );
-      goto _build_frames_directory_from_file_failed_to_read_info;
+      goto bfdff_fail;
     }
 
     // Seek past mesh data and past the final integer "frame data size". See if file is big enough.
     if ( 0 != vol_geom_fseeko( f_ptr, info_ptr->frames_directory_ptr[i].corrected_payload_sz + 4, SEEK_CUR ) ) {
       _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: not enough memory in sequence file for frame %i contents\n", i );
-      goto _build_frames_directory_from_file_failed_to_read_info;
+      goto bfdff_fail;
     }
     frame_current_offset = vol_geom_ftello( f_ptr );
-    if ( -1LL == frame_current_offset ) { goto _build_frames_directory_from_file_failed_to_read_info; }
+    if ( -1LL == frame_current_offset ) { goto bfdff_fail; }
 
     // Update frame directory and store frame header.
     info_ptr->frames_directory_ptr[i].offset_sz = (vol_geom_size_t)frame_start_offset;
@@ -304,7 +322,7 @@ static bool _build_frames_directory_from_file( const char* seq_filename, vol_geo
     if ( info_ptr->frames_directory_ptr[i].total_sz > sequence_file_sz ) {
       _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: frame %i total_sz %" PRId64 " bytes was too large for a sequence of %" PRId64 " bytes\n", i,
         info_ptr->frames_directory_ptr[i].total_sz, sequence_file_sz );
-      goto _build_frames_directory_from_file_failed_to_read_info;
+      goto bfdff_fail;
     }
 
     if ( info_ptr->frames_directory_ptr[i].total_sz > info_ptr->biggest_frame_blob_sz ) {
@@ -315,8 +333,16 @@ static bool _build_frames_directory_from_file( const char* seq_filename, vol_geo
   f_ptr = NULL; // this is checked later, so make = NULL
   return true;
 
-_build_frames_directory_from_file_failed_to_read_info:
+bfdff_fail:
   if ( f_ptr ) { fclose( f_ptr ); }
+  if ( info_ptr->frame_headers_ptr ) {
+    free( info_ptr->frame_headers_ptr );
+    info_ptr->frame_headers_ptr = NULL;
+  }
+  if ( info_ptr->frames_directory_ptr ) {
+    free( info_ptr->frames_directory_ptr );
+    info_ptr->frames_directory_ptr = NULL;
+  }
   return false;
 }
 
@@ -394,209 +420,85 @@ bool vol_geom_read_hdr_from_mem( const uint8_t* data_ptr, int32_t data_sz, vol_g
 bool vol_geom_read_hdr_from_file( const char* filename, vol_geom_file_hdr_t* hdr_ptr, vol_geom_size_t* hdr_sz_ptr ) {
   vol_geom_file_record_t record = ( vol_geom_file_record_t ){ .byte_ptr = NULL };
   if ( !filename || !hdr_ptr || !hdr_sz_ptr ) { return false; }
-  if ( !_read_file( filename, &record, sizeof( vol_geom_file_hdr_t ) ) ) { return false; }
-  if ( !vol_geom_read_hdr_from_mem( record.byte_ptr, record.sz, hdr_ptr, hdr_sz_ptr ) ) { return false; }
+  if ( !_read_file( filename, &record, sizeof( vol_geom_file_hdr_t ) ) ) { goto rhff_fail; }
+  if ( !vol_geom_read_hdr_from_mem( record.byte_ptr, record.sz, hdr_ptr, hdr_sz_ptr ) ) { goto rhff_fail; }
   if ( record.byte_ptr != NULL ) { free( record.byte_ptr ); }
   return true;
+rhff_fail:
+  if ( record.byte_ptr != NULL ) { free( record.byte_ptr ); }
+  return false;
 }
 
-bool vol_geom_create_file_info_from_file( const char* vols_filename, vol_geom_info_t* info_ptr, bool streaming_mode ) {
+bool vol_geom_create_file_info_from_file( const char* vols_filename, vol_geom_info_t* info_ptr ) {
   if ( !vols_filename || !info_ptr || !_is_file( vols_filename ) ) { return false; }
 
   vol_geom_size_t hdr_sz = 0;
-  if ( !vol_geom_read_hdr_from_file( vols_filename, &info_ptr->hdr, &hdr_sz ) ) { goto vol_geom_create_file_info_from_file_failed_to_read_info; }
+  if ( !vol_geom_read_hdr_from_file( vols_filename, &info_ptr->hdr, &hdr_sz ) ) { goto cfiff_fail; }
 
   // TODO(Anton) if audio section is included or we have a value from the header to use then change this.
   info_ptr->sequence_offset = hdr_sz;
 
-  { // Allocate memory for frame headers and frames directory.
-    vol_geom_size_t frame_headers_sz = info_ptr->hdr.frame_count * sizeof( vol_geom_frame_hdr_t );
-    _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Allocating %" PRId64 " bytes for frame headers.\n", frame_headers_sz );
-    info_ptr->frame_headers_ptr = calloc( 1, (size_t)frame_headers_sz );
-    if ( !info_ptr->frame_headers_ptr ) {
-      _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: OOM allocating frames headers\n" );
-      goto vol_geom_create_file_info_from_file_failed_to_read_info;
-    }
-
-    vol_geom_size_t frames_directory_sz = info_ptr->hdr.frame_count * sizeof( vol_geom_frame_directory_entry_t );
-    _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Allocating %" PRId64 " bytes for frames directory.\n", frames_directory_sz );
-    info_ptr->frames_directory_ptr = calloc( 1, (size_t)frames_directory_sz );
-    if ( !info_ptr->frames_directory_ptr ) {
-      _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: OOM allocating frames directory\n" );
-      goto vol_geom_create_file_info_from_file_failed_to_read_info;
-    }
-  }
-
   if ( !_build_frames_directory_from_file( vols_filename, info_ptr, info_ptr->sequence_offset ) ) {
     _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: vol_geom_create_file_info_from_file(): Failed to create frames directory.\n" );
-    goto vol_geom_create_file_info_from_file_failed_to_read_info;
+    goto cfiff_fail;
   }
 
-  // TODO parse bits out of sequence section here.
-  // TODO update sequence functions to use offset value
-  // TODO update ...
+  _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Allocating preallocated_frame_blob_ptr bytes %" PRId64 "\n", info_ptr->biggest_frame_blob_sz );
+  if ( info_ptr->biggest_frame_blob_sz >= 1024 * 1024 * 1024 ) {
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: extremely high frame size %" PRId64 " reported - assuming error.\n", info_ptr->biggest_frame_blob_sz );
+    goto cfiff_fail;
+  }
+  info_ptr->preallocated_frame_blob_ptr = calloc( 1, info_ptr->biggest_frame_blob_sz );
+  if ( !info_ptr->preallocated_frame_blob_ptr ) {
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: out of memory allocating frame blob reserve.\n" );
+    goto cfiff_fail;
+  }
 
   return true;
 
-vol_geom_create_file_info_from_file_failed_to_read_info:
-  /* TODO
-    _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: vol_geom_create_file_info_from_file(): Failed to parse info from vologram geometry files.\n" );
-    if ( f_ptr ) { fclose( f_ptr ); }
-    if ( record.byte_ptr ) {
-      _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Freeing record.byte_ptr\n" );
-      free( record.byte_ptr );
-    }
-  */
+cfiff_fail:
   vol_geom_free_file_info( info_ptr );
 }
 
 bool vol_geom_create_file_info( const char* hdr_filename, const char* seq_filename, vol_geom_info_t* info_ptr, bool streaming_mode ) {
   if ( !hdr_filename || !seq_filename || !info_ptr ) { return false; }
 
-  FILE* f_ptr                   = NULL; // This is checked later so declare & init up top.
   vol_geom_file_record_t record = ( vol_geom_file_record_t ){ .sz = 0 };
   vol_geom_size_t hdr_sz        = 0;
   *info_ptr                     = ( vol_geom_info_t ){ .biggest_frame_blob_sz = 0 };
+  info_ptr->sequence_offset     = 0; // Using separate files here, so there is no offset.
 
-  if ( !vol_geom_read_hdr_from_file( hdr_filename, &info_ptr->hdr, &hdr_sz ) ) { goto failed_to_read_info; }
+  if ( !vol_geom_read_hdr_from_file( hdr_filename, &info_ptr->hdr, &hdr_sz ) ) { goto cfi_fail; }
 
-  { // Allocate memory for frame headers and frames directory.
-    vol_geom_size_t frame_headers_sz = info_ptr->hdr.frame_count * sizeof( vol_geom_frame_hdr_t );
-    _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Allocating %" PRId64 " bytes for frame headers.\n", frame_headers_sz );
-    info_ptr->frame_headers_ptr = calloc( 1, (size_t)frame_headers_sz );
-    if ( !info_ptr->frame_headers_ptr ) {
-      _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: OOM allocating frames headers\n" );
-      goto failed_to_read_info;
-    }
-
-    vol_geom_size_t frames_directory_sz = info_ptr->hdr.frame_count * sizeof( vol_geom_frame_directory_entry_t );
-    _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Allocating %" PRId64 " bytes for frames directory.\n", frames_directory_sz );
-    info_ptr->frames_directory_ptr = calloc( 1, (size_t)frames_directory_sz );
-    if ( !info_ptr->frames_directory_ptr ) {
-      _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: OOM allocating frames directory\n" );
-      goto failed_to_read_info;
-    }
-  }
-
-  info_ptr->biggest_frame_blob_sz = 0;
-
-  // find out the size and offset of every frame
-  { // fetch frame from sequence file
-    vol_geom_size_t sequence_file_sz = 0;
-    if ( !_get_file_sz( seq_filename, &sequence_file_sz ) ) { goto failed_to_read_info; }
-    _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Sequence file is %" PRId64 " bytes\n", sequence_file_sz );
-
-    f_ptr = fopen( seq_filename, "rb" );
-    if ( !f_ptr ) {
-      _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: Could not open file `%s`\n", seq_filename );
-      goto failed_to_read_info;
-    }
-
-    // loop to get each frame's details
-    for ( int32_t i = 0; i < info_ptr->hdr.frame_count; i++ ) {
-      vol_geom_frame_hdr_t frame_hdr = ( vol_geom_frame_hdr_t ){ .mesh_data_sz = 0 };
-
-      vol_geom_size_t frame_start_offset = vol_geom_ftello( f_ptr );
-      if ( -1LL == frame_start_offset ) { goto failed_to_read_info; }
-
-      if ( !fread( &frame_hdr.frame_number, sizeof( int32_t ), 1, f_ptr ) ) {
-        _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: frame_number at frame %i in sequence file was out of file size range\n", i );
-        goto failed_to_read_info;
-      }
-      if ( frame_hdr.frame_number != i ) {
-        _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: frame_number was %i at frame %i in sequence file\n", frame_hdr.frame_number, i );
-        goto failed_to_read_info;
-      }
-      if ( !fread( &frame_hdr.mesh_data_sz, sizeof( int32_t ), 1, f_ptr ) ) {
-        _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: mesh_data_sz %i was out of file size range in sequence file\n", frame_hdr.mesh_data_sz );
-        goto failed_to_read_info;
-      }
-      if ( frame_hdr.mesh_data_sz < 0 || (vol_geom_size_t)frame_hdr.mesh_data_sz > sequence_file_sz ) {
-        _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: frame %i has mesh_data_sz %i, which is invalid. Sequence file is %" PRId64 " bytes\n", i,
-          frame_hdr.mesh_data_sz, sequence_file_sz );
-        goto failed_to_read_info;
-      }
-      if ( !fread( &frame_hdr.keyframe, sizeof( uint8_t ), 1, f_ptr ) ) {
-        _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: keyframe (type) was out of file size range in sequence file\n" );
-        goto failed_to_read_info;
-      }
-
-      vol_geom_size_t frame_current_offset = vol_geom_ftello( f_ptr );
-      if ( -1LL == frame_current_offset ) { goto failed_to_read_info; }
-      info_ptr->frames_directory_ptr[i].hdr_sz = (vol_geom_size_t)frame_current_offset - (vol_geom_size_t)frame_start_offset;
-
-      // in version 12 mesh_data_sz includes array sizes, but earlier versions need to add that to payload size
-      info_ptr->frames_directory_ptr[i].corrected_payload_sz = frame_hdr.mesh_data_sz;
-      if ( info_ptr->hdr.version < 12 ) {
-        // keyframe value 2 only exists in v12 plus but value 1 exists.
-        if ( 1 == frame_hdr.keyframe ) {
-          info_ptr->frames_directory_ptr[i].corrected_payload_sz += 8; // indices and UVs size
-        }
-        // version 10 doesn't have normals/texture, but 11 can do.
-        if ( 11 == info_ptr->hdr.version ) {
-          info_ptr->frames_directory_ptr[i].corrected_payload_sz += 4; // normals sz
-          if ( info_ptr->hdr.textured ) {
-            info_ptr->frames_directory_ptr[i].corrected_payload_sz += 4; // texture sz
-          }
-        }
-      }
-      if ( info_ptr->frames_directory_ptr[i].corrected_payload_sz > sequence_file_sz ) {
-        _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: frame %i corrected_payload_sz %" PRId64 " bytes was too large for a sequence of %" PRId64 " bytes\n", i,
-          info_ptr->frames_directory_ptr[i].corrected_payload_sz, sequence_file_sz );
-        goto failed_to_read_info;
-      }
-
-      // Seek past mesh data and past the final integer "frame data size". see if file is big enough.
-      if ( 0 != vol_geom_fseeko( f_ptr, info_ptr->frames_directory_ptr[i].corrected_payload_sz + 4, SEEK_CUR ) ) {
-        _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: not enough memory in sequence file for frame %i contents\n", i );
-        goto failed_to_read_info;
-      }
-      frame_current_offset = vol_geom_ftello( f_ptr );
-      if ( -1LL == frame_current_offset ) { goto failed_to_read_info; }
-
-      // Update frame directory and store frame header.
-      info_ptr->frames_directory_ptr[i].offset_sz = (vol_geom_size_t)frame_start_offset;
-      info_ptr->frames_directory_ptr[i].total_sz  = (vol_geom_size_t)frame_current_offset - (vol_geom_size_t)frame_start_offset;
-      info_ptr->frame_headers_ptr[i]              = frame_hdr;
-      if ( info_ptr->frames_directory_ptr[i].total_sz > sequence_file_sz ) {
-        _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: frame %i total_sz %" PRId64 " bytes was too large for a sequence of %" PRId64 " bytes\n", i,
-          info_ptr->frames_directory_ptr[i].total_sz, sequence_file_sz );
-        goto failed_to_read_info;
-      }
-
-      if ( info_ptr->frames_directory_ptr[i].total_sz > info_ptr->biggest_frame_blob_sz ) {
-        info_ptr->biggest_frame_blob_sz = info_ptr->frames_directory_ptr[i].total_sz;
-      }
-    }
-    fclose( f_ptr );
-    f_ptr = NULL; // this is checked later, so make = NULL
+  if ( !_build_frames_directory_from_file( seq_filename, info_ptr, info_ptr->sequence_offset ) ) {
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: vol_geom_create_file_info_from_file(): Failed to create frames directory.\n" );
+    goto cfi_fail;
   }
 
   _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Allocating preallocated_frame_blob_ptr bytes %" PRId64 "\n", info_ptr->biggest_frame_blob_sz );
   if ( info_ptr->biggest_frame_blob_sz >= 1024 * 1024 * 1024 ) {
     _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: extremely high frame size %" PRId64 " reported - assuming error.\n", info_ptr->biggest_frame_blob_sz );
-    goto failed_to_read_info;
+    goto cfi_fail;
   }
   info_ptr->preallocated_frame_blob_ptr = calloc( 1, info_ptr->biggest_frame_blob_sz );
   if ( !info_ptr->preallocated_frame_blob_ptr ) {
     _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: out of memory allocating frame blob reserve.\n" );
-    goto failed_to_read_info;
+    goto cfi_fail;
   }
 
   // If not dealing with huge sequence files - preload the whole thing to memory to avoid file I/O problems.
   if ( !streaming_mode ) {
     _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Reading entire sequence file to blob memory\n" );
     vol_geom_file_record_t seq_blob = ( vol_geom_file_record_t ){ .sz = 0 };
-    if ( !_read_file( seq_filename, &seq_blob, 0 ) ) { goto failed_to_read_info; }
+    if ( !_read_file( seq_filename, &seq_blob, 0 ) ) { goto cfi_fail; }
     info_ptr->sequence_blob_byte_ptr = (uint8_t*)seq_blob.byte_ptr;
   }
 
   return true;
 
-failed_to_read_info:
+cfi_fail:
 
   _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: Failed to parse info from vologram geometry files.\n" );
-  if ( f_ptr ) { fclose( f_ptr ); }
   if ( record.byte_ptr ) {
     _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Freeing record.byte_ptr\n" );
     free( record.byte_ptr );
