@@ -15,6 +15,15 @@ int main( int argc, char** argv ) {
   const char* filename_vols = argv[1];
   printf( "Loading combined header&sequence file `%s`\n", filename_vols );
 
+  vol_geom_file_hdr_t hdr = ( vol_geom_file_hdr_t ){ .compression = 0 };
+  vol_geom_size_t hdr_sz  = 0;
+  if ( !vol_geom_read_hdr_from_file( filename_vols, &hdr, &hdr_sz ) ) {
+    fprintf( stderr, "ERROR reading header from file\n" );
+    return 1;
+  }
+
+  printf( "hdr_sz = %li\n", hdr_sz );
+
   // TODO validate - new API in vol_geom required I guess.
   //               - perhaps use a generic data interface (hdr_ptr seq_ptr)
   //               - with a get_seq_ptr() function we can use to point to data following the header
