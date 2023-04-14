@@ -3,7 +3,7 @@
  *
  * vol_geom  | .vol Geometry Decoding API
  * --------- | ---------------------
- * Version   | 0.10
+ * Version   | 0.11
  * Authors   | See matching header file.
  * Copyright | 2021, Volograms (http://volograms.com/)
  * Language  | C99
@@ -37,8 +37,15 @@
 #define VOL_GEOM_LOG_STR_MAX_LEN 512 // Careful - this is stored on the stack to be thread and memory-safe so don't make it too large.
 /// File header section size in bytes. Used in sanity checks to test for corrupted files that are below minimum sizes expected.
 #define VOL_GEOM_FILE_HDR_V10_MIN_SZ 24 /// "VOLS" (4 bytes) + 4 string length bytes + 4 ints in v10 hdr.
+#define VOL_GEOM_FILE_HDR_MAX_SZ 512    /// Version 1.3 is 44 bytes. Older versions are mostly 94 bytes, but can be longer, depending on strings.
 /// File header section size in bytes. Used in sanity checks to test for corrupted files that are below minimum sizes expected.
 #define VOL_GEOM_FRAME_MIN_SZ 17 /// 3 ints, 1 byte, 1 int inside vertices array. the rest are optional
+
+/// Helper struct to refer to an entire file loaded from disk via `_read_file()`.
+typedef struct vol_geom_file_record_t {
+  uint8_t* byte_ptr;  // Pointer to contents of file.
+  vol_geom_size_t sz; // Size of file in bytes.
+} vol_geom_file_record_t;
 
 static void _default_logger( vol_geom_log_type_t log_type, const char* message_str ) {
   FILE* stream_ptr = ( VOL_GEOM_LOG_TYPE_ERROR == log_type || VOL_GEOM_LOG_TYPE_WARNING == log_type ) ? stderr : stdout;
@@ -58,142 +65,157 @@ static void _vol_loggerf( vol_geom_log_type_t log_type, const char* message_str,
   _logger_ptr( log_type, log_str );
 }
 
-/// Helper struct to refer to an entire file loaded from disk via `_read_entire_file()`.
-typedef struct vol_geom_file_record_t {
-  /// Pointer to contents of file.
-  uint8_t* byte_ptr;
-  /// Size of file in bytes.
-  vol_geom_size_t sz;
-} vol_geom_file_record_t;
-
-/******************************************************************************
-  BASIC API
-******************************************************************************/
+/** Helper function to check if a path is a file (i.e. is not a directory). */
+static bool _is_file( const char* path ) {
+  struct vol_geom_stat64_t path_stat;
+  if ( 0 != vol_geom_stat64( path, &path_stat ) ) { return false; }
+#ifdef _MSC_VER
+  return path_stat.st_mode & _S_IFREG;
+#else /* POSIX */
+  return S_ISREG( path_stat.st_mode );
+#endif
+}
 
 /** Helper function to check the actual size of a file on disk.
- * @param filename Pointer to nul-terminated file path string. Must not be NULL.
- * @param sz_ptr   Size of the file, in bytes, is written to address pointed to by sz_ptr. Must not be NULL. Not written when returning false.
- * @return         False on any error, including bad parameters or file not found. Otherwise true on success, where sz_ptr is set.
+ * @param filename Input: path to a file.
+ * @param sz_ptr   Output: size of the file in bytes.
+ * @return         true if a valid file was found and a size could be obtained.
  */
 static bool _get_file_sz( const char* filename, vol_geom_size_t* sz_ptr ) {
   struct vol_geom_stat64_t stbuf;
+  if ( !_is_file( filename ) ) { return false; }
   if ( 0 != vol_geom_stat64( filename, &stbuf ) ) { return false; }
   *sz_ptr = stbuf.st_size;
   return true;
 }
 
 /** Helper function to read an entire file into an array of bytes within struct pointed to by `fr_ptr`.
- * @warning        This function allocates memory that the caller must manually free after use.
- * @param filename Pointer to nul-terminated file path string. Must not be NULL.
- * @param fr_ptr   File contents and size are written to a structure pointed to by `fr_ptr`. Must not be NULL.
- * @return         False on any error.
+ * @param max_bytes If zero then read the entire file, otherwise read up to max_bytes into memory.
  */
-static bool _read_entire_file( const char* filename, vol_geom_file_record_t* fr_ptr ) {
+static bool _read_file( const char* filename, vol_geom_file_record_t* fr_ptr, vol_geom_size_t max_bytes ) {
   FILE* f_ptr = NULL;
 
-  if ( !filename || !fr_ptr ) { goto vol_geom_read_entire_file_failed; }
-
-  if ( !_get_file_sz( filename, &fr_ptr->sz ) ) { goto vol_geom_read_entire_file_failed; }
+  if ( !filename || !fr_ptr ) { goto vol_geom_read_file_failed; }
+  if ( !_get_file_sz( filename, &fr_ptr->sz ) ) { goto vol_geom_read_file_failed; }
+  fr_ptr->sz = ( 0 == max_bytes || fr_ptr->sz < max_bytes ) ? fr_ptr->sz : max_bytes;
 
   _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Allocating %" PRId64 " bytes for reading file\n", fr_ptr->sz );
+  fr_ptr->byte_ptr = NULL;
   fr_ptr->byte_ptr = malloc( (size_t)fr_ptr->sz );
-  if ( !fr_ptr->byte_ptr ) { goto vol_geom_read_entire_file_failed; }
+  if ( !fr_ptr->byte_ptr ) { goto vol_geom_read_file_failed; }
 
   f_ptr = fopen( filename, "rb" );
-  if ( !f_ptr ) { goto vol_geom_read_entire_file_failed; }
+  if ( !f_ptr ) { goto vol_geom_read_file_failed; }
   vol_geom_size_t nr = fread( fr_ptr->byte_ptr, fr_ptr->sz, 1, f_ptr );
-  if ( 1 != nr ) { goto vol_geom_read_entire_file_failed; }
-
+  if ( 1 != nr ) { goto vol_geom_read_file_failed; }
   fclose( f_ptr );
+
   return true;
-vol_geom_read_entire_file_failed:
+vol_geom_read_file_failed:
   if ( f_ptr ) { fclose( f_ptr ); }
+  if ( fr_ptr ) {
+    if ( fr_ptr->byte_ptr ) {
+      free( fr_ptr->byte_ptr );
+      fr_ptr->byte_ptr = NULL;
+    }
+    fr_ptr->sz = 0;
+  }
   return false;
 }
 
-/** Helper function to read Unity-style strings, specified in VOL format, from a loaded file.
- * @warning      The file's string format is ambiguous so insecure assumptions are made here.
- * @param fr_ptr Pointer to a file record loaded with a call to `_read_entire_file()`. Must not be NULL.
- * @param offset Offset, in bytes, of the string's location within the file record.
- * @param sstr   Pointer to a struct to write the string's contents. Must not be NULL.
- * @return       False on any error.
- */
-static bool _read_short_str( const vol_geom_file_record_t* fr_ptr, vol_geom_size_t offset, vol_geom_short_str_t* sstr ) {
-  if ( !fr_ptr || !sstr ) { return false; }
-  if ( offset >= fr_ptr->sz ) { return false; } // OOB
+/** Helper function to read Unity-style strings, specified in VOL format, from a loaded file. */
+static bool _read_short_str( const uint8_t* data_ptr, int32_t data_sz, vol_geom_size_t offset, vol_geom_short_str_t* sstr ) {
+  if ( !data_ptr || !sstr ) { return false; }
+  if ( offset >= data_sz ) { return false; } // OOB
 
-  sstr->sz = fr_ptr->byte_ptr[offset]; // assumes the 1-byte length
+  sstr->sz = data_ptr[offset]; // assumes the 1-byte length
   if ( sstr->sz > 127 ) {
     _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: string length %i given is > 127\n", (int)sstr->sz );
     return false;
   }
-  if ( offset + sstr->sz >= fr_ptr->sz ) { return false; } // OOB
-  memcpy( sstr->bytes, &fr_ptr->byte_ptr[offset + 1], sstr->sz );
+  if ( offset + sstr->sz >= data_sz ) { return false; } // OOB
+  memcpy( sstr->bytes, &data_ptr[offset + 1], sstr->sz );
   sstr->bytes[sstr->sz] = '\0';
 
   return true;
 }
 
-static bool _read_vol_file_hdr( const vol_geom_file_record_t* fr, vol_geom_file_hdr_t* hdr, vol_geom_size_t* hdr_sz ) {
-  if ( !fr || !hdr || !hdr_sz || fr->sz < VOL_GEOM_FILE_HDR_V10_MIN_SZ ) { return false; }
+/******************************************************************************
+  BASIC API
+******************************************************************************/
+
+void vol_geom_set_log_callback( void ( *user_function_ptr )( vol_geom_log_type_t log_type, const char* message_str ) ) { _logger_ptr = user_function_ptr; }
+
+void vol_geom_reset_log_callback( void ) { _logger_ptr = _default_logger; }
+
+bool vol_geom_read_hdr( const uint8_t* data_ptr, int32_t data_sz, vol_geom_file_hdr_t* hdr_ptr, vol_geom_size_t* hdr_sz_ptr ) {
+  if ( !data_ptr || !hdr_ptr || !hdr_sz_ptr || data_sz < VOL_GEOM_FILE_HDR_V10_MIN_SZ ) { return false; }
 
   vol_geom_size_t offset = 0;
 
-  // parse v10 part of header
-  if ( !_read_short_str( fr, 0, &hdr->format ) ) { return false; }
-  if ( strncmp( "VOLS", hdr->format.bytes, 4 ) != 0 ) { return false; } // format check
-  offset += ( hdr->format.sz + 1 );
-  if ( offset + 4 * (vol_geom_size_t)sizeof( int32_t ) + 3 >= fr->sz ) { return false; } // OOB
-  memcpy( &hdr->version, &fr->byte_ptr[offset], sizeof( int32_t ) );
+  // Parse v10 part of header.
+  if ( !_read_short_str( data_ptr, data_sz, 0, &hdr_ptr->format ) ) { return false; }
+  if ( strncmp( "VOLS", hdr_ptr->format.bytes, 4 ) != 0 ) { return false; } // Format check.
+  offset += ( hdr_ptr->format.sz + 1 );
+  if ( offset + 4 * (vol_geom_size_t)sizeof( int32_t ) + 3 >= data_sz ) { return false; } // OOB
+  memcpy( &hdr_ptr->version, &data_ptr[offset], sizeof( int32_t ) );
   offset += (vol_geom_size_t)sizeof( int32_t );
-  if ( hdr->version != 10 && hdr->version != 11 && hdr->version != 12 ) { return false; } // version check
-  memcpy( &hdr->compression, &fr->byte_ptr[offset], sizeof( int32_t ) );
+  if ( hdr_ptr->version != 10 && hdr_ptr->version != 11 && hdr_ptr->version != 12 ) { return false; } // version check
+  memcpy( &hdr_ptr->compression, &data_ptr[offset], sizeof( int32_t ) );
   offset += (vol_geom_size_t)sizeof( int32_t );
-  if ( !_read_short_str( fr, offset, &hdr->mesh_name ) ) { return false; }
-  offset += ( hdr->mesh_name.sz + 1 );
-  if ( offset + 2 * (vol_geom_size_t)sizeof( int32_t ) + 2 >= fr->sz ) { return false; } // OOB
-  if ( !_read_short_str( fr, offset, &hdr->material ) ) { return false; }
-  offset += ( hdr->material.sz + 1 );
-  if ( offset + 2 * (vol_geom_size_t)sizeof( int32_t ) + 1 >= fr->sz ) { return false; } // OOB
-  if ( !_read_short_str( fr, offset, &hdr->shader ) ) { return false; }
-  offset += ( hdr->shader.sz + 1 );
-  if ( offset + 2 * (vol_geom_size_t)sizeof( int32_t ) >= fr->sz ) { return false; } // OOB
-  memcpy( &hdr->topology, &fr->byte_ptr[offset], sizeof( int32_t ) );
+  if ( !_read_short_str( data_ptr, data_sz, offset, &hdr_ptr->mesh_name ) ) { return false; }
+  offset += ( hdr_ptr->mesh_name.sz + 1 );
+  if ( offset + 2 * (vol_geom_size_t)sizeof( int32_t ) + 2 >= data_sz ) { return false; } // OOB
+  if ( !_read_short_str( data_ptr, data_sz, offset, &hdr_ptr->material ) ) { return false; }
+  offset += ( hdr_ptr->material.sz + 1 );
+  if ( offset + 2 * (vol_geom_size_t)sizeof( int32_t ) + 1 >= data_sz ) { return false; } // OOB
+  if ( !_read_short_str( data_ptr, data_sz, offset, &hdr_ptr->shader ) ) { return false; }
+  offset += ( hdr_ptr->shader.sz + 1 );
+  if ( offset + 2 * (vol_geom_size_t)sizeof( int32_t ) >= data_sz ) { return false; } // OOB
+  memcpy( &hdr_ptr->topology, &data_ptr[offset], sizeof( int32_t ) );
   offset += (vol_geom_size_t)sizeof( int32_t );
-  memcpy( &hdr->frame_count, &fr->byte_ptr[offset], sizeof( int32_t ) );
+  memcpy( &hdr_ptr->frame_count, &data_ptr[offset], sizeof( int32_t ) );
   offset += (vol_geom_size_t)sizeof( int32_t );
 
-  // parse v11 part of header
-  if ( hdr->version < 11 ) {
-    *hdr_sz = offset;
+  // Parse v11 part of header.
+  if ( hdr_ptr->version < 11 ) {
+    *hdr_sz_ptr = offset;
     return true;
   }
   const vol_geom_size_t v11_section_sz = (vol_geom_size_t)( 3 * sizeof( uint16_t ) + 2 * sizeof( uint8_t ) );
-  if ( offset + v11_section_sz > fr->sz ) { return false; } // OOB
-  hdr->normals  = (bool)fr->byte_ptr[offset++];
-  hdr->textured = (bool)fr->byte_ptr[offset++];
-  memcpy( &hdr->texture_width, &fr->byte_ptr[offset], sizeof( uint16_t ) );
+  if ( offset + v11_section_sz > data_sz ) { return false; } // OOB
+  hdr_ptr->normals  = (bool)data_ptr[offset++];
+  hdr_ptr->textured = (bool)data_ptr[offset++];
+  memcpy( &hdr_ptr->texture_width, &data_ptr[offset], sizeof( uint16_t ) );
   offset += (vol_geom_size_t)sizeof( uint16_t );
-  memcpy( &hdr->texture_height, &fr->byte_ptr[offset], sizeof( uint16_t ) );
+  memcpy( &hdr_ptr->texture_height, &data_ptr[offset], sizeof( uint16_t ) );
   offset += (vol_geom_size_t)sizeof( uint16_t );
-  memcpy( &hdr->texture_format, &fr->byte_ptr[offset], sizeof( uint16_t ) );
+  memcpy( &hdr_ptr->texture_format, &data_ptr[offset], sizeof( uint16_t ) );
   offset += (vol_geom_size_t)sizeof( uint16_t );
 
-  // parse v12 part of header
-  if ( hdr->version < 12 ) {
-    *hdr_sz = offset;
+  // Parse v12 part of header.
+  if ( hdr_ptr->version < 12 ) {
+    *hdr_sz_ptr = offset;
     return true;
   }
   const vol_geom_size_t v12_section_sz = 8 * sizeof( float );
-  if ( offset + v12_section_sz > fr->sz ) { return false; } // OOB
-  memcpy( hdr->translation, &fr->byte_ptr[offset], 3 * sizeof( float ) );
+  if ( offset + v12_section_sz > data_sz ) { return false; } // OOB
+  memcpy( hdr_ptr->translation, &data_ptr[offset], 3 * sizeof( float ) );
   offset += 3 * sizeof( float );
-  memcpy( hdr->rotation, &fr->byte_ptr[offset], 4 * sizeof( float ) );
+  memcpy( hdr_ptr->rotation, &data_ptr[offset], 4 * sizeof( float ) );
   offset += 4 * sizeof( float );
-  memcpy( &hdr->scale, &fr->byte_ptr[offset], sizeof( float ) );
+  memcpy( &hdr_ptr->scale, &data_ptr[offset], sizeof( float ) );
   offset += sizeof( float );
 
-  *hdr_sz = offset;
+  *hdr_sz_ptr = offset;
+  return true;
+}
+
+VOL_GEOM_EXPORT bool vol_geom_read_hdr_from_file( const char* filename, vol_geom_file_hdr_t* hdr_ptr, vol_geom_size_t* hdr_sz_ptr ) {
+  vol_geom_file_record_t record = ( vol_geom_file_record_t ){ .byte_ptr = NULL };
+  if ( !filename || !hdr_ptr || !hdr_sz_ptr ) { return false; }
+  if ( !_read_file( filename, &record, VOL_GEOM_FILE_HDR_MAX_SZ ) ) { return false; }
+  if ( !vol_geom_read_hdr( record.byte_ptr, record.sz, hdr_ptr, hdr_sz_ptr ) ) { return false; }
   return true;
 }
 
@@ -350,8 +372,8 @@ bool vol_geom_create_file_info( const char* hdr_filename, const char* seq_filena
   vol_geom_size_t hdr_sz        = 0;
   *info_ptr                     = ( vol_geom_info_t ){ .biggest_frame_blob_sz = 0 }; // zero in case of struct re-use.
   {
-    if ( !_read_entire_file( hdr_filename, &record ) ) { goto failed_to_read_info; }
-    if ( !_read_vol_file_hdr( &record, &info_ptr->hdr, &hdr_sz ) ) { goto failed_to_read_info; }
+    if ( !_read_file( hdr_filename, &record, 0 ) ) { goto failed_to_read_info; }
+    if ( !vol_geom_read_hdr( record.byte_ptr, record.sz, &info_ptr->hdr, &hdr_sz ) ) { goto failed_to_read_info; }
 
     // done with file record so tidy-up memory
     if ( record.byte_ptr != NULL ) {
@@ -491,7 +513,7 @@ bool vol_geom_create_file_info( const char* hdr_filename, const char* seq_filena
   if ( !streaming_mode ) {
     _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Reading entire sequence file to blob memory\n" );
     vol_geom_file_record_t seq_blob = ( vol_geom_file_record_t ){ .sz = 0 };
-    if ( !_read_entire_file( seq_filename, &seq_blob ) ) { goto failed_to_read_info; }
+    if ( !_read_file( seq_filename, &seq_blob, 0 ) ) { goto failed_to_read_info; }
     info_ptr->sequence_blob_byte_ptr = (uint8_t*)seq_blob.byte_ptr;
   }
 
@@ -552,7 +574,3 @@ int vol_geom_find_previous_keyframe( const vol_geom_info_t* info_ptr, int frame_
   }
   return -1;
 }
-
-void vol_geom_set_log_callback( void ( *user_function_ptr )( vol_geom_log_type_t log_type, const char* message_str ) ) { _logger_ptr = user_function_ptr; }
-
-void vol_geom_reset_log_callback( void ) { _logger_ptr = _default_logger; }

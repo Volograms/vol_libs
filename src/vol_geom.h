@@ -3,7 +3,7 @@
  *
  * vol_geom  | .vol Geometry Decoding API
  * --------- | ---------------------
- * Version   | 0.10
+ * Version   | 0.11
  * Authors   | Anton Gerdelan     <anton@volograms.com>
  *           | Patrick Geoghegan  <patrick@volograms.com>
  * Copyright | 2021, Volograms (http://volograms.com/)
@@ -21,6 +21,7 @@
  *
  * History
  * -------
+ * - 0.11.0 (2022/04/)   - Support for reading single-file volograms.
  * - 0.10.0 (2022/03/22) - Support added for reading >2GB volograms.
  * - 0.9.0  (2022/03/22) - Version bump for parity with vol_av.
  * - 0.7.1  (2021/01/24) - New option streaming_mode paramter to vol_geom_create_file_info().
@@ -185,6 +186,12 @@ typedef enum vol_geom_log_type_t {
 
 VOL_GEOM_EXPORT void vol_geom_set_log_callback( void ( *user_function_ptr )( vol_geom_log_type_t log_type, const char* message_str ) );
 VOL_GEOM_EXPORT void vol_geom_reset_log_callback( void );
+
+/** Read a header from the top of a .vols blob in memory. */
+VOL_GEOM_EXPORT bool vol_geom_read_hdr( const uint8_t* data_ptr, int32_t data_sz, vol_geom_file_hdr_t* hdr_ptr, vol_geom_size_t* hdr_sz_ptr );
+
+/** Read a header from the top of a .vols file. */
+VOL_GEOM_EXPORT bool vol_geom_read_hdr_from_file( const char* filename, vol_geom_file_hdr_t* hdr_ptr, vol_geom_size_t* hdr_sz_ptr );
 
 /** Call this function before playing a vologram sequence.
  * It will build a directory of file and frame information about the VOL sequence, and pre-allocate memory.
