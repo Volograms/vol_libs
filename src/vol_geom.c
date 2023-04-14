@@ -139,85 +139,6 @@ static bool _read_short_str( const uint8_t* data_ptr, int32_t data_sz, vol_geom_
   return true;
 }
 
-/******************************************************************************
-  BASIC API
-******************************************************************************/
-
-void vol_geom_set_log_callback( void ( *user_function_ptr )( vol_geom_log_type_t log_type, const char* message_str ) ) { _logger_ptr = user_function_ptr; }
-
-void vol_geom_reset_log_callback( void ) { _logger_ptr = _default_logger; }
-
-bool vol_geom_read_hdr( const uint8_t* data_ptr, int32_t data_sz, vol_geom_file_hdr_t* hdr_ptr, vol_geom_size_t* hdr_sz_ptr ) {
-  if ( !data_ptr || !hdr_ptr || !hdr_sz_ptr || data_sz < VOL_GEOM_FILE_HDR_V10_MIN_SZ ) { return false; }
-
-  vol_geom_size_t offset = 0;
-
-  // Parse v10 part of header.
-  if ( !_read_short_str( data_ptr, data_sz, 0, &hdr_ptr->format ) ) { return false; }
-  if ( strncmp( "VOLS", hdr_ptr->format.bytes, 4 ) != 0 ) { return false; } // Format check.
-  offset += ( hdr_ptr->format.sz + 1 );
-  if ( offset + 4 * (vol_geom_size_t)sizeof( int32_t ) + 3 >= data_sz ) { return false; } // OOB
-  memcpy( &hdr_ptr->version, &data_ptr[offset], sizeof( int32_t ) );
-  offset += (vol_geom_size_t)sizeof( int32_t );
-  if ( hdr_ptr->version != 10 && hdr_ptr->version != 11 && hdr_ptr->version != 12 ) { return false; } // version check
-  memcpy( &hdr_ptr->compression, &data_ptr[offset], sizeof( int32_t ) );
-  offset += (vol_geom_size_t)sizeof( int32_t );
-  if ( !_read_short_str( data_ptr, data_sz, offset, &hdr_ptr->mesh_name ) ) { return false; }
-  offset += ( hdr_ptr->mesh_name.sz + 1 );
-  if ( offset + 2 * (vol_geom_size_t)sizeof( int32_t ) + 2 >= data_sz ) { return false; } // OOB
-  if ( !_read_short_str( data_ptr, data_sz, offset, &hdr_ptr->material ) ) { return false; }
-  offset += ( hdr_ptr->material.sz + 1 );
-  if ( offset + 2 * (vol_geom_size_t)sizeof( int32_t ) + 1 >= data_sz ) { return false; } // OOB
-  if ( !_read_short_str( data_ptr, data_sz, offset, &hdr_ptr->shader ) ) { return false; }
-  offset += ( hdr_ptr->shader.sz + 1 );
-  if ( offset + 2 * (vol_geom_size_t)sizeof( int32_t ) >= data_sz ) { return false; } // OOB
-  memcpy( &hdr_ptr->topology, &data_ptr[offset], sizeof( int32_t ) );
-  offset += (vol_geom_size_t)sizeof( int32_t );
-  memcpy( &hdr_ptr->frame_count, &data_ptr[offset], sizeof( int32_t ) );
-  offset += (vol_geom_size_t)sizeof( int32_t );
-
-  // Parse v11 part of header.
-  if ( hdr_ptr->version < 11 ) {
-    *hdr_sz_ptr = offset;
-    return true;
-  }
-  const vol_geom_size_t v11_section_sz = (vol_geom_size_t)( 3 * sizeof( uint16_t ) + 2 * sizeof( uint8_t ) );
-  if ( offset + v11_section_sz > data_sz ) { return false; } // OOB
-  hdr_ptr->normals  = (bool)data_ptr[offset++];
-  hdr_ptr->textured = (bool)data_ptr[offset++];
-  memcpy( &hdr_ptr->texture_width, &data_ptr[offset], sizeof( uint16_t ) );
-  offset += (vol_geom_size_t)sizeof( uint16_t );
-  memcpy( &hdr_ptr->texture_height, &data_ptr[offset], sizeof( uint16_t ) );
-  offset += (vol_geom_size_t)sizeof( uint16_t );
-  memcpy( &hdr_ptr->texture_format, &data_ptr[offset], sizeof( uint16_t ) );
-  offset += (vol_geom_size_t)sizeof( uint16_t );
-
-  // Parse v12 part of header.
-  if ( hdr_ptr->version < 12 ) {
-    *hdr_sz_ptr = offset;
-    return true;
-  }
-  const vol_geom_size_t v12_section_sz = 8 * sizeof( float );
-  if ( offset + v12_section_sz > data_sz ) { return false; } // OOB
-  memcpy( hdr_ptr->translation, &data_ptr[offset], 3 * sizeof( float ) );
-  offset += 3 * sizeof( float );
-  memcpy( hdr_ptr->rotation, &data_ptr[offset], 4 * sizeof( float ) );
-  offset += 4 * sizeof( float );
-  memcpy( &hdr_ptr->scale, &data_ptr[offset], sizeof( float ) );
-  offset += sizeof( float );
-
-  *hdr_sz_ptr = offset;
-  return true;
-}
-
-VOL_GEOM_EXPORT bool vol_geom_read_hdr_from_file( const char* filename, vol_geom_file_hdr_t* hdr_ptr, vol_geom_size_t* hdr_sz_ptr ) {
-  vol_geom_file_record_t record = ( vol_geom_file_record_t ){ .byte_ptr = NULL };
-  if ( !filename || !hdr_ptr || !hdr_sz_ptr ) { return false; }
-  if ( !_read_file( filename, &record, sizeof( vol_geom_file_hdr_t ) ) ) { return false; }
-  if ( !vol_geom_read_hdr( record.byte_ptr, record.sz, hdr_ptr, hdr_sz_ptr ) ) { return false; }
-  return true;
-}
-
 static bool _read_vol_frame( const vol_geom_info_t* info_ptr, int frame_idx, vol_geom_frame_data_t* frame_data_ptr ) {
   assert( info_ptr && info_ptr->preallocated_frame_blob_ptr && frame_data_ptr );
   if ( !info_ptr || !info_ptr->preallocated_frame_blob_ptr || !frame_data_ptr ) { return false; }
@@ -301,95 +222,200 @@ static bool _read_vol_frame( const vol_geom_info_t* info_ptr, int frame_idx, vol
   return true;
 }
 
-bool vol_geom_read_frame( const char* seq_filename, const vol_geom_info_t* info_ptr, int frame_idx, vol_geom_frame_data_t* frame_data_ptr ) {
-  assert( seq_filename && info_ptr && frame_data_ptr );
-  if ( !seq_filename || !info_ptr || !frame_data_ptr ) { return false; }
+/** Find out the size and offset of every frame and store in the info struct pointed to by info_ptr.
+ * @param chunk_offset If the sequence chunk is offset into the file then this offset can be provided here, in bytes from the start of the file.
+ */
+static bool _build_frames_directory_from_file( const char* seq_filename, vol_geom_info_t* info_ptr, vol_geom_size_t chunk_offset ) {
+  if ( !seq_filename || !info_ptr ) { return false; }
 
-  if ( frame_idx < 0 || frame_idx >= info_ptr->hdr.frame_count ) {
-    _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: frame requested (%i) is not in valid range of 0-%i for sequence\n", frame_idx, info_ptr->hdr.frame_count );
-    return false;
-  }
+  vol_geom_size_t sequence_file_sz = 0;
+  if ( !_get_file_sz( seq_filename, &sequence_file_sz ) ) { return false; }
+  _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Sequence file is %" PRId64 " bytes\n", sequence_file_sz );
 
-  // Get the offset of that frame and size required to allocate for it.
-  vol_geom_size_t offset_sz = info_ptr->frames_directory_ptr[frame_idx].offset_sz;
-  vol_geom_size_t total_sz  = info_ptr->frames_directory_ptr[frame_idx].total_sz;
+  FILE* f_ptr = fopen( seq_filename, "rb" );
+  if ( !f_ptr ) { return false; }
+  if ( 0 != vol_geom_fseeko( f_ptr, chunk_offset, SEEK_SET ) ) { goto _build_frames_directory_from_file_failed_to_read_info; }
 
-  // Get file size and check for file size issues before allocating memory or reading
-  vol_geom_size_t file_sz = 0;
-  if ( !_get_file_sz( seq_filename, &file_sz ) ) {
-    _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: sequence file `%s` could not be opened.\n", seq_filename );
-    return false;
-  }
-  if ( file_sz < ( offset_sz + total_sz ) ) {
-    _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: sequence file is too short to contain frame %i data.\n", frame_idx );
-    return false;
-  }
+  for ( int32_t i = 0; i < info_ptr->hdr.frame_count; i++ ) {
+    vol_geom_frame_hdr_t frame_hdr = ( vol_geom_frame_hdr_t ){ .mesh_data_sz = 0 };
 
-  if ( info_ptr->biggest_frame_blob_sz < total_sz ) {
-    _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: pre-allocated frame blob was too small for frame %i: %" PRId64 "/%" PRId64 " bytes.\n", frame_idx,
-      info_ptr->biggest_frame_blob_sz, total_sz );
-    return false;
-  }
+    vol_geom_size_t frame_start_offset = vol_geom_ftello( f_ptr );
+    if ( -1LL == frame_start_offset ) { goto _build_frames_directory_from_file_failed_to_read_info; }
 
-  // Find frame section within sequence file blob if it was pre-loaded.
-  if ( info_ptr->sequence_blob_byte_ptr ) {
-    memcpy( info_ptr->preallocated_frame_blob_ptr, &info_ptr->sequence_blob_byte_ptr[offset_sz], total_sz );
-
-    // Read frame blob from file.
-  } else {
-    FILE* f_ptr = fopen( seq_filename, "rb" );
-    if ( !f_ptr ) {
-      _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR could not open file `%s` for frame data.\n", seq_filename );
-      return false;
+    if ( !fread( &frame_hdr.frame_number, sizeof( int32_t ), 1, f_ptr ) ) {
+      _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: frame_number at frame %i in sequence file was out of file size range\n", i );
+      goto _build_frames_directory_from_file_failed_to_read_info;
     }
-    if ( 0 != vol_geom_fseeko( f_ptr, offset_sz, SEEK_SET ) ) {
-      _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR seeking frame %i from sequence file - file too small for data\n", frame_idx );
-      fclose( f_ptr );
-      return false;
+    if ( frame_hdr.frame_number != i ) {
+      _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: frame_number was %i at frame %i in sequence file\n", frame_hdr.frame_number, i );
+      goto _build_frames_directory_from_file_failed_to_read_info;
     }
-    if ( !fread( info_ptr->preallocated_frame_blob_ptr, total_sz, 1, f_ptr ) ) {
-      _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR reading frame %i from sequence file\n", frame_idx );
-      fclose( f_ptr );
-      return false;
+    if ( !fread( &frame_hdr.mesh_data_sz, sizeof( int32_t ), 1, f_ptr ) ) {
+      _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: mesh_data_sz %i was out of file size range in sequence file\n", frame_hdr.mesh_data_sz );
+      goto _build_frames_directory_from_file_failed_to_read_info;
     }
-    fclose( f_ptr );
-  } // end FILE i/o block
+    if ( frame_hdr.mesh_data_sz < 0 || (vol_geom_size_t)frame_hdr.mesh_data_sz > sequence_file_sz ) {
+      _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: frame %i has mesh_data_sz %i, which is invalid. Sequence file is %" PRId64 " bytes\n", i,
+        frame_hdr.mesh_data_sz, sequence_file_sz );
+      goto _build_frames_directory_from_file_failed_to_read_info;
+    }
+    if ( !fread( &frame_hdr.keyframe, sizeof( uint8_t ), 1, f_ptr ) ) {
+      _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: keyframe (type) was out of file size range in sequence file\n" );
+      goto _build_frames_directory_from_file_failed_to_read_info;
+    }
 
-  if ( !_read_vol_frame( info_ptr, frame_idx, frame_data_ptr ) ) {
-    _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR parsing frame %i\n", frame_idx );
-    return false;
+    vol_geom_size_t frame_current_offset = vol_geom_ftello( f_ptr );
+    if ( -1LL == frame_current_offset ) { goto _build_frames_directory_from_file_failed_to_read_info; }
+    info_ptr->frames_directory_ptr[i].hdr_sz = (vol_geom_size_t)frame_current_offset - (vol_geom_size_t)frame_start_offset;
+
+    // in version 12 mesh_data_sz includes array sizes, but earlier versions need to add that to payload size
+    info_ptr->frames_directory_ptr[i].corrected_payload_sz = frame_hdr.mesh_data_sz;
+    if ( info_ptr->hdr.version < 12 ) {
+      // keyframe value 2 only exists in v12 plus but value 1 exists.
+      if ( 1 == frame_hdr.keyframe ) {
+        info_ptr->frames_directory_ptr[i].corrected_payload_sz += 8; // indices and UVs size
+      }
+      // version 10 doesn't have normals/texture, but 11 can do.
+      if ( 11 == info_ptr->hdr.version ) {
+        info_ptr->frames_directory_ptr[i].corrected_payload_sz += 4; // normals sz
+        if ( info_ptr->hdr.textured ) {
+          info_ptr->frames_directory_ptr[i].corrected_payload_sz += 4; // texture sz
+        }
+      }
+    }
+    if ( info_ptr->frames_directory_ptr[i].corrected_payload_sz > sequence_file_sz ) {
+      _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: frame %i corrected_payload_sz %" PRId64 " bytes was too large for a sequence of %" PRId64 " bytes\n", i,
+        info_ptr->frames_directory_ptr[i].corrected_payload_sz, sequence_file_sz );
+      goto _build_frames_directory_from_file_failed_to_read_info;
+    }
+
+    // Seek past mesh data and past the final integer "frame data size". See if file is big enough.
+    if ( 0 != vol_geom_fseeko( f_ptr, info_ptr->frames_directory_ptr[i].corrected_payload_sz + 4, SEEK_CUR ) ) {
+      _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: not enough memory in sequence file for frame %i contents\n", i );
+      goto _build_frames_directory_from_file_failed_to_read_info;
+    }
+    frame_current_offset = vol_geom_ftello( f_ptr );
+    if ( -1LL == frame_current_offset ) { goto _build_frames_directory_from_file_failed_to_read_info; }
+
+    // Update frame directory and store frame header.
+    info_ptr->frames_directory_ptr[i].offset_sz = (vol_geom_size_t)frame_start_offset;
+    info_ptr->frames_directory_ptr[i].total_sz  = (vol_geom_size_t)frame_current_offset - (vol_geom_size_t)frame_start_offset;
+    info_ptr->frame_headers_ptr[i]              = frame_hdr;
+    if ( info_ptr->frames_directory_ptr[i].total_sz > sequence_file_sz ) {
+      _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: frame %i total_sz %" PRId64 " bytes was too large for a sequence of %" PRId64 " bytes\n", i,
+        info_ptr->frames_directory_ptr[i].total_sz, sequence_file_sz );
+      goto _build_frames_directory_from_file_failed_to_read_info;
+    }
+
+    if ( info_ptr->frames_directory_ptr[i].total_sz > info_ptr->biggest_frame_blob_sz ) {
+      info_ptr->biggest_frame_blob_sz = info_ptr->frames_directory_ptr[i].total_sz;
+    }
   }
+  fclose( f_ptr );
+  f_ptr = NULL; // this is checked later, so make = NULL
+  return true;
+
+_build_frames_directory_from_file_failed_to_read_info:
+  if ( f_ptr ) { fclose( f_ptr ); }
+  return false;
+}
+
+/******************************************************************************
+  BASIC API
+******************************************************************************/
+
+void vol_geom_set_log_callback( void ( *user_function_ptr )( vol_geom_log_type_t log_type, const char* message_str ) ) { _logger_ptr = user_function_ptr; }
+
+void vol_geom_reset_log_callback( void ) { _logger_ptr = _default_logger; }
+
+bool vol_geom_read_hdr_from_mem( const uint8_t* data_ptr, int32_t data_sz, vol_geom_file_hdr_t* hdr_ptr, vol_geom_size_t* hdr_sz_ptr ) {
+  if ( !data_ptr || !hdr_ptr || !hdr_sz_ptr || data_sz < VOL_GEOM_FILE_HDR_V10_MIN_SZ ) { return false; }
+
+  vol_geom_size_t offset = 0;
+
+  // Parse v10 part of header.
+  if ( !_read_short_str( data_ptr, data_sz, 0, &hdr_ptr->format ) ) { return false; }
+  if ( strncmp( "VOLS", hdr_ptr->format.bytes, 4 ) != 0 ) { return false; } // Format check.
+  offset += ( hdr_ptr->format.sz + 1 );
+  if ( offset + 4 * (vol_geom_size_t)sizeof( int32_t ) + 3 >= data_sz ) { return false; } // OOB
+  memcpy( &hdr_ptr->version, &data_ptr[offset], sizeof( int32_t ) );
+  offset += (vol_geom_size_t)sizeof( int32_t );
+  if ( hdr_ptr->version != 10 && hdr_ptr->version != 11 && hdr_ptr->version != 12 ) { return false; } // version check
+  memcpy( &hdr_ptr->compression, &data_ptr[offset], sizeof( int32_t ) );
+  offset += (vol_geom_size_t)sizeof( int32_t );
+  if ( !_read_short_str( data_ptr, data_sz, offset, &hdr_ptr->mesh_name ) ) { return false; }
+  offset += ( hdr_ptr->mesh_name.sz + 1 );
+  if ( offset + 2 * (vol_geom_size_t)sizeof( int32_t ) + 2 >= data_sz ) { return false; } // OOB
+  if ( !_read_short_str( data_ptr, data_sz, offset, &hdr_ptr->material ) ) { return false; }
+  offset += ( hdr_ptr->material.sz + 1 );
+  if ( offset + 2 * (vol_geom_size_t)sizeof( int32_t ) + 1 >= data_sz ) { return false; } // OOB
+  if ( !_read_short_str( data_ptr, data_sz, offset, &hdr_ptr->shader ) ) { return false; }
+  offset += ( hdr_ptr->shader.sz + 1 );
+  if ( offset + 2 * (vol_geom_size_t)sizeof( int32_t ) >= data_sz ) { return false; } // OOB
+  memcpy( &hdr_ptr->topology, &data_ptr[offset], sizeof( int32_t ) );
+  offset += (vol_geom_size_t)sizeof( int32_t );
+  memcpy( &hdr_ptr->frame_count, &data_ptr[offset], sizeof( int32_t ) );
+  offset += (vol_geom_size_t)sizeof( int32_t );
+
+  // Parse v11 part of header.
+  if ( hdr_ptr->version < 11 ) {
+    *hdr_sz_ptr = offset;
+    return true;
+  }
+  const vol_geom_size_t v11_section_sz = (vol_geom_size_t)( 3 * sizeof( uint16_t ) + 2 * sizeof( uint8_t ) );
+  if ( offset + v11_section_sz > data_sz ) { return false; } // OOB
+  hdr_ptr->normals  = (bool)data_ptr[offset++];
+  hdr_ptr->textured = (bool)data_ptr[offset++];
+  memcpy( &hdr_ptr->texture_width, &data_ptr[offset], sizeof( uint16_t ) );
+  offset += (vol_geom_size_t)sizeof( uint16_t );
+  memcpy( &hdr_ptr->texture_height, &data_ptr[offset], sizeof( uint16_t ) );
+  offset += (vol_geom_size_t)sizeof( uint16_t );
+  memcpy( &hdr_ptr->texture_format, &data_ptr[offset], sizeof( uint16_t ) );
+  offset += (vol_geom_size_t)sizeof( uint16_t );
+
+  // Parse v12 part of header.
+  if ( hdr_ptr->version < 12 ) {
+    *hdr_sz_ptr = offset;
+    return true;
+  }
+  const vol_geom_size_t v12_section_sz = 8 * sizeof( float );
+  if ( offset + v12_section_sz > data_sz ) { return false; } // OOB
+  memcpy( hdr_ptr->translation, &data_ptr[offset], 3 * sizeof( float ) );
+  offset += 3 * sizeof( float );
+  memcpy( hdr_ptr->rotation, &data_ptr[offset], 4 * sizeof( float ) );
+  offset += 4 * sizeof( float );
+  memcpy( &hdr_ptr->scale, &data_ptr[offset], sizeof( float ) );
+  offset += sizeof( float );
+
+  *hdr_sz_ptr = offset;
   return true;
 }
 
-bool vol_geom_create_file_info( const char* hdr_filename, const char* seq_filename, vol_geom_info_t* info_ptr, bool streaming_mode ) {
-  if ( !hdr_filename || !seq_filename || !info_ptr ) { return false; }
+bool vol_geom_read_hdr_from_file( const char* filename, vol_geom_file_hdr_t* hdr_ptr, vol_geom_size_t* hdr_sz_ptr ) {
+  vol_geom_file_record_t record = ( vol_geom_file_record_t ){ .byte_ptr = NULL };
+  if ( !filename || !hdr_ptr || !hdr_sz_ptr ) { return false; }
+  if ( !_read_file( filename, &record, sizeof( vol_geom_file_hdr_t ) ) ) { return false; }
+  if ( !vol_geom_read_hdr_from_mem( record.byte_ptr, record.sz, hdr_ptr, hdr_sz_ptr ) ) { return false; }
+  if ( record.byte_ptr != NULL ) { free( record.byte_ptr ); }
+  return true;
+}
 
-  FILE* f_ptr = NULL; // this is checked later so declare & init up top.
-  // Read file header.
-  vol_geom_file_record_t record = ( vol_geom_file_record_t ){ .sz = 0 };
-  vol_geom_size_t hdr_sz        = 0;
-  *info_ptr                     = ( vol_geom_info_t ){ .biggest_frame_blob_sz = 0 }; // zero in case of struct re-use.
-  {
-    if ( !_read_file( hdr_filename, &record, 0 ) ) { goto failed_to_read_info; }
-    if ( !vol_geom_read_hdr( record.byte_ptr, record.sz, &info_ptr->hdr, &hdr_sz ) ) { goto failed_to_read_info; }
+bool vol_geom_create_file_info_from_file( const char* vols_filename, vol_geom_info_t* info_ptr, bool streaming_mode ) {
+  if ( !vols_filename || !info_ptr || !_is_file( vols_filename ) ) { return false; }
 
-    // done with file record so tidy-up memory
-    if ( record.byte_ptr != NULL ) {
-      _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Freeing record.byte_ptr\n" );
-      free( record.byte_ptr );
-      record.byte_ptr = NULL; // this is checked later, so make = NULL
-    }
-    _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "hdr sz was %" PRId64 ". %" PRId64 " bytes in file\n", hdr_sz, record.sz );
-  }
+  vol_geom_size_t hdr_sz = 0;
+  if ( !vol_geom_read_hdr_from_file( vols_filename, &info_ptr->hdr, &hdr_sz ) ) { goto vol_geom_create_file_info_from_file_failed_to_read_info; }
 
-  { // allocate memory for frame headers and frames directory
+  // TODO(Anton) if audio section is included or we have a value from the header to use then change this.
+  info_ptr->sequence_offset = hdr_sz;
+
+  { // Allocate memory for frame headers and frames directory.
     vol_geom_size_t frame_headers_sz = info_ptr->hdr.frame_count * sizeof( vol_geom_frame_hdr_t );
     _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Allocating %" PRId64 " bytes for frame headers.\n", frame_headers_sz );
     info_ptr->frame_headers_ptr = calloc( 1, (size_t)frame_headers_sz );
     if ( !info_ptr->frame_headers_ptr ) {
       _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: OOM allocating frames headers\n" );
-      return false;
+      goto vol_geom_create_file_info_from_file_failed_to_read_info;
     }
 
     vol_geom_size_t frames_directory_sz = info_ptr->hdr.frame_count * sizeof( vol_geom_frame_directory_entry_t );
@@ -397,12 +423,62 @@ bool vol_geom_create_file_info( const char* hdr_filename, const char* seq_filena
     info_ptr->frames_directory_ptr = calloc( 1, (size_t)frames_directory_sz );
     if ( !info_ptr->frames_directory_ptr ) {
       _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: OOM allocating frames directory\n" );
-      return false;
+      goto vol_geom_create_file_info_from_file_failed_to_read_info;
+    }
+  }
+
+  if ( !_build_frames_directory_from_file( vols_filename, info_ptr, info_ptr->sequence_offset ) ) {
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: vol_geom_create_file_info_from_file(): Failed to create frames directory.\n" );
+    goto vol_geom_create_file_info_from_file_failed_to_read_info;
+  }
+
+  // TODO parse bits out of sequence section here.
+  // TODO update sequence functions to use offset value
+  // TODO update ...
+
+  return true;
+
+vol_geom_create_file_info_from_file_failed_to_read_info:
+  /* TODO
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: vol_geom_create_file_info_from_file(): Failed to parse info from vologram geometry files.\n" );
+    if ( f_ptr ) { fclose( f_ptr ); }
+    if ( record.byte_ptr ) {
+      _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Freeing record.byte_ptr\n" );
+      free( record.byte_ptr );
+    }
+  */
+  vol_geom_free_file_info( info_ptr );
+}
+
+bool vol_geom_create_file_info( const char* hdr_filename, const char* seq_filename, vol_geom_info_t* info_ptr, bool streaming_mode ) {
+  if ( !hdr_filename || !seq_filename || !info_ptr ) { return false; }
+
+  FILE* f_ptr                   = NULL; // This is checked later so declare & init up top.
+  vol_geom_file_record_t record = ( vol_geom_file_record_t ){ .sz = 0 };
+  vol_geom_size_t hdr_sz        = 0;
+  *info_ptr                     = ( vol_geom_info_t ){ .biggest_frame_blob_sz = 0 };
+
+  if ( !vol_geom_read_hdr_from_file( hdr_filename, &info_ptr->hdr, &hdr_sz ) ) { goto failed_to_read_info; }
+
+  { // Allocate memory for frame headers and frames directory.
+    vol_geom_size_t frame_headers_sz = info_ptr->hdr.frame_count * sizeof( vol_geom_frame_hdr_t );
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Allocating %" PRId64 " bytes for frame headers.\n", frame_headers_sz );
+    info_ptr->frame_headers_ptr = calloc( 1, (size_t)frame_headers_sz );
+    if ( !info_ptr->frame_headers_ptr ) {
+      _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: OOM allocating frames headers\n" );
+      goto failed_to_read_info;
+    }
+
+    vol_geom_size_t frames_directory_sz = info_ptr->hdr.frame_count * sizeof( vol_geom_frame_directory_entry_t );
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Allocating %" PRId64 " bytes for frames directory.\n", frames_directory_sz );
+    info_ptr->frames_directory_ptr = calloc( 1, (size_t)frames_directory_sz );
+    if ( !info_ptr->frames_directory_ptr ) {
+      _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: OOM allocating frames directory\n" );
+      goto failed_to_read_info;
     }
   }
 
   info_ptr->biggest_frame_blob_sz = 0;
-  int biggest_frame_idx           = -1;
 
   // find out the size and offset of every frame
   { // fetch frame from sequence file
@@ -470,7 +546,7 @@ bool vol_geom_create_file_info( const char* hdr_filename, const char* seq_filena
         goto failed_to_read_info;
       }
 
-      // seek past mesh data and past the final integer "frame data size". see if file is big enough
+      // Seek past mesh data and past the final integer "frame data size". see if file is big enough.
       if ( 0 != vol_geom_fseeko( f_ptr, info_ptr->frames_directory_ptr[i].corrected_payload_sz + 4, SEEK_CUR ) ) {
         _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: not enough memory in sequence file for frame %i contents\n", i );
         goto failed_to_read_info;
@@ -478,7 +554,7 @@ bool vol_geom_create_file_info( const char* hdr_filename, const char* seq_filena
       frame_current_offset = vol_geom_ftello( f_ptr );
       if ( -1LL == frame_current_offset ) { goto failed_to_read_info; }
 
-      // update frame directory and store frame header
+      // Update frame directory and store frame header.
       info_ptr->frames_directory_ptr[i].offset_sz = (vol_geom_size_t)frame_start_offset;
       info_ptr->frames_directory_ptr[i].total_sz  = (vol_geom_size_t)frame_current_offset - (vol_geom_size_t)frame_start_offset;
       info_ptr->frame_headers_ptr[i]              = frame_hdr;
@@ -490,14 +566,13 @@ bool vol_geom_create_file_info( const char* hdr_filename, const char* seq_filena
 
       if ( info_ptr->frames_directory_ptr[i].total_sz > info_ptr->biggest_frame_blob_sz ) {
         info_ptr->biggest_frame_blob_sz = info_ptr->frames_directory_ptr[i].total_sz;
-        biggest_frame_idx               = i;
       }
     }
     fclose( f_ptr );
     f_ptr = NULL; // this is checked later, so make = NULL
   }
 
-  _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Allocating preallocated_frame_blob_ptr bytes %" PRId64 " (frame %i)\n", info_ptr->biggest_frame_blob_sz, biggest_frame_idx );
+  _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Allocating preallocated_frame_blob_ptr bytes %" PRId64 "\n", info_ptr->biggest_frame_blob_sz );
   if ( info_ptr->biggest_frame_blob_sz >= 1024 * 1024 * 1024 ) {
     _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: extremely high frame size %" PRId64 " reported - assuming error.\n", info_ptr->biggest_frame_blob_sz );
     goto failed_to_read_info;
@@ -508,7 +583,7 @@ bool vol_geom_create_file_info( const char* hdr_filename, const char* seq_filena
     goto failed_to_read_info;
   }
 
-  // If not dealing with huge sequence files - preload the whole thing to memory to avoid file i/o problems.
+  // If not dealing with huge sequence files - preload the whole thing to memory to avoid file I/O problems.
   if ( !streaming_mode ) {
     _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Reading entire sequence file to blob memory\n" );
     vol_geom_file_record_t seq_blob = ( vol_geom_file_record_t ){ .sz = 0 };
@@ -572,4 +647,65 @@ int vol_geom_find_previous_keyframe( const vol_geom_info_t* info_ptr, int frame_
     if ( vol_geom_is_keyframe( info_ptr, i ) ) { return i; }
   }
   return -1;
+}
+
+bool vol_geom_read_frame( const char* seq_filename, const vol_geom_info_t* info_ptr, int frame_idx, vol_geom_frame_data_t* frame_data_ptr ) {
+  assert( seq_filename && info_ptr && frame_data_ptr );
+  if ( !seq_filename || !info_ptr || !frame_data_ptr ) { return false; }
+
+  if ( frame_idx < 0 || frame_idx >= info_ptr->hdr.frame_count ) {
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: frame requested (%i) is not in valid range of 0-%i for sequence\n", frame_idx, info_ptr->hdr.frame_count );
+    return false;
+  }
+
+  // Get the offset of that frame and size required to allocate for it.
+  vol_geom_size_t offset_sz = info_ptr->frames_directory_ptr[frame_idx].offset_sz;
+  vol_geom_size_t total_sz  = info_ptr->frames_directory_ptr[frame_idx].total_sz;
+
+  // Get file size and check for file size issues before allocating memory or reading
+  vol_geom_size_t file_sz = 0;
+  if ( !_get_file_sz( seq_filename, &file_sz ) ) {
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: sequence file `%s` could not be opened.\n", seq_filename );
+    return false;
+  }
+  if ( file_sz < ( offset_sz + total_sz ) ) {
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: sequence file is too short to contain frame %i data.\n", frame_idx );
+    return false;
+  }
+
+  if ( info_ptr->biggest_frame_blob_sz < total_sz ) {
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: pre-allocated frame blob was too small for frame %i: %" PRId64 "/%" PRId64 " bytes.\n", frame_idx,
+      info_ptr->biggest_frame_blob_sz, total_sz );
+    return false;
+  }
+
+  // Find frame section within sequence file blob if it was pre-loaded.
+  if ( info_ptr->sequence_blob_byte_ptr ) {
+    memcpy( info_ptr->preallocated_frame_blob_ptr, &info_ptr->sequence_blob_byte_ptr[offset_sz], total_sz );
+
+    // Read frame blob from file.
+  } else {
+    FILE* f_ptr = fopen( seq_filename, "rb" );
+    if ( !f_ptr ) {
+      _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR could not open file `%s` for frame data.\n", seq_filename );
+      return false;
+    }
+    if ( 0 != vol_geom_fseeko( f_ptr, offset_sz, SEEK_SET ) ) {
+      _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR seeking frame %i from sequence file - file too small for data.\n", frame_idx );
+      fclose( f_ptr );
+      return false;
+    }
+    if ( !fread( info_ptr->preallocated_frame_blob_ptr, total_sz, 1, f_ptr ) ) {
+      _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR reading frame %i from sequence file\n", frame_idx );
+      fclose( f_ptr );
+      return false;
+    }
+    fclose( f_ptr );
+  } // end FILE i/o block
+
+  if ( !_read_vol_frame( info_ptr, frame_idx, frame_data_ptr ) ) {
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR parsing frame %i\n", frame_idx );
+    return false;
+  }
+  return true;
 }

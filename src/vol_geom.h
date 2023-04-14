@@ -138,6 +138,9 @@ VOL_GEOM_EXPORT typedef struct vol_geom_info_t {
   /// If streaming_mode was not set then sequence file is read to a blob pointed to by this pointer. Otherwise it is NULL and file I/O occurs on every frame read.
   uint8_t* sequence_blob_byte_ptr;
 
+  /// If non-zero then this is the offset of the sequence chunk from the start of the file/blob, in bytes.
+  vol_geom_size_t sequence_offset;
+
 } vol_geom_info_t;
 
 /** Meta-data for each from of the Vologram sequence. */
@@ -185,13 +188,16 @@ typedef enum vol_geom_log_type_t {
 } vol_geom_log_type_t;
 
 VOL_GEOM_EXPORT void vol_geom_set_log_callback( void ( *user_function_ptr )( vol_geom_log_type_t log_type, const char* message_str ) );
+
 VOL_GEOM_EXPORT void vol_geom_reset_log_callback( void );
 
 /** Read a header from the top of a .vols blob in memory. */
-VOL_GEOM_EXPORT bool vol_geom_read_hdr( const uint8_t* data_ptr, int32_t data_sz, vol_geom_file_hdr_t* hdr_ptr, vol_geom_size_t* hdr_sz_ptr );
+VOL_GEOM_EXPORT bool vol_geom_read_hdr_from_mem( const uint8_t* data_ptr, int32_t data_sz, vol_geom_file_hdr_t* hdr_ptr, vol_geom_size_t* hdr_sz_ptr );
 
 /** Read a header from the top of a .vols file. */
 VOL_GEOM_EXPORT bool vol_geom_read_hdr_from_file( const char* filename, vol_geom_file_hdr_t* hdr_ptr, vol_geom_size_t* hdr_sz_ptr );
+
+VOL_GEOM_EXPORT bool vol_geom_create_file_info_from_file( const char* vols_filename, vol_geom_info_t* info_ptr, bool streaming_mode );
 
 /** Call this function before playing a vologram sequence.
  * It will build a directory of file and frame information about the VOL sequence, and pre-allocate memory.
@@ -215,16 +221,6 @@ VOL_GEOM_EXPORT bool vol_geom_create_file_info( const char* hdr_filename, const 
  */
 VOL_GEOM_EXPORT bool vol_geom_free_file_info( vol_geom_info_t* info_ptr );
 
-/** Read a single frame from a Vologram sequence file.
- * @param seq_filename   Pointer to a char array containing the file path to the Vologram sequence file. Must not be NULL.
- * @param info_ptr       Pointer to a `vol_geom_info_t` struct in your application as populated by a previous call `vol_geom_create_file_info()`.
- * @param frame_idx      Index of the frame you wish to read. Frames start at index 0.
- * @param frame_data_ptr Pointer to a `vol_geom_frame_data_t` struct in your application that this function will populate with data.
- * @returns              False on any error including `frame_idx` range validation, File I/O, and memory allocation.
- * @todo                 Memory allocation is probably unnecessary and frame_data_ptr's contents could point into existing memory.
- */
-VOL_GEOM_EXPORT bool vol_geom_read_frame( const char* seq_filename, const vol_geom_info_t* info_ptr, int frame_idx, vol_geom_frame_data_t* frame_data_ptr );
-
 /** This function can be used to determine if a frame can be skipped or has essential keyframe data.
  * @param info_ptr       Collected VOL sequence information created by `vol_geom_create_file_info()`. Must not be NULL.
  * @param frame_idx      Index number of the frame to query within the sequence, starting at 0.
@@ -239,6 +235,16 @@ VOL_GEOM_EXPORT bool vol_geom_is_keyframe( const vol_geom_info_t* info_ptr, int 
  * @returns              The index of the first keyframe found going backwards from current frame to 0, inclusive. Returns -1 on error or if no keyframe is found.
  */
 VOL_GEOM_EXPORT int vol_geom_find_previous_keyframe( const vol_geom_info_t* info_ptr, int frame_idx );
+
+/** Read a single frame from a Vologram sequence file.
+ * @param seq_filename   Pointer to a char array containing the file path to the Vologram sequence file. Must not be NULL.
+ * @param info_ptr       Pointer to a `vol_geom_info_t` struct in your application as populated by a previous call `vol_geom_create_file_info()`.
+ * @param frame_idx      Index of the frame you wish to read. Frames start at index 0.
+ * @param frame_data_ptr Pointer to a `vol_geom_frame_data_t` struct in your application that this function will populate with data.
+ * @returns              False on any error including `frame_idx` range validation, File I/O, and memory allocation.
+ * @todo                 Memory allocation is probably unnecessary and frame_data_ptr's contents could point into existing memory.
+ */
+VOL_GEOM_EXPORT bool vol_geom_read_frame( const char* seq_filename, const vol_geom_info_t* info_ptr, int frame_idx, vol_geom_frame_data_t* frame_data_ptr );
 
 #ifdef __cplusplus
 }
