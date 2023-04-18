@@ -11,11 +11,41 @@
 #include "gfx.h"
 #include "apg_maths.h"
 #include "vol_geom.h"
+#include <stdint.h>
 #include <stdio.h>
 
+static void _update_mesh_with_frame( gfx_mesh_t* mesh_ptr, int frame_number, const char* filename, vol_geom_info_t* vols_info_ptr, gfx_texture_t* texture_ptr ) {
+  // Read the first frame to use as the base mesh.
+  vol_geom_frame_data_t vols_frame_data = ( vol_geom_frame_data_t ){ .block_data_ptr = NULL };
+  if ( !vol_geom_read_frame( filename, vols_info_ptr, frame_number, &vols_frame_data ) ) {
+    fprintf( stderr, "ERROR: reading frame 0 from vol sequence file\n" );
+    return;
+  }
+  // NOTE(Anton) the 'short' ints used here are a brittle part of the spec - be careful!
+  float* points_ptr    = (float*)&vols_frame_data.block_data_ptr[vols_frame_data.vertices_offset];
+  float* uvs_ptr       = (float*)&vols_frame_data.block_data_ptr[vols_frame_data.uvs_offset];
+  uint8_t indices_type = 1; // indices_type      - Data type of indices - 0=unsigned byte, 1=unsigned short, 2=unsigned int.
+  int n_vertices       = vols_frame_data.vertices_sz / ( sizeof( float ) * 3 );
+  if ( vol_geom_is_keyframe( vols_info_ptr, frame_number ) ) {
+    float* normals_ptr       = (float*)&vols_frame_data.block_data_ptr[vols_frame_data.normals_offset];
+    short* indices_short_ptr = (short*)&vols_frame_data.block_data_ptr[vols_frame_data.indices_offset];
+    void* indices_ptr        = indices_short_ptr;          // if indices are uint32s we'd point to that here instead e.g. based on number of vertices.
+    size_t indices_buffer_sz = vols_frame_data.indices_sz; //
+    gfx_update_mesh_from_mem( mesh_ptr, points_ptr, 3, uvs_ptr, 2, normals_ptr, 3, indices_ptr, indices_buffer_sz, indices_type, n_vertices, true );
+  } else {
+    gfx_update_mesh_from_mem( mesh_ptr, points_ptr, 3, uvs_ptr, 2, NULL, 3, NULL, 0, indices_type, n_vertices, true );
+  }
+
+  if ( texture_ptr && vols_info_ptr->hdr.textured ) {
+    uint8_t* vols_texture_ptr = (uint8_t*)&vols_frame_data.block_data_ptr[vols_frame_data.texture_offset];
+    size_t vols_texture_sz    = vols_frame_data.block_data_ptr[vols_frame_data.texture_sz];
+    // TODO update compressed texture here
+    int texture_w = 2048, texture_h = 2048, texture_n_chans = 3; // TODO get these
+    gfx_update_texture( texture_ptr, vols_texture_ptr, texture_w, texture_h, texture_n_chans );
+  }
+}
+
 int main( int argc, char** argv ) {
-  gfx_texture_t texture;
-  gfx_mesh_t mesh;
   gfx_shader_t shader;
   bool loop_vologram = true;
 
@@ -34,25 +64,9 @@ int main( int argc, char** argv ) {
   }
 
   gfx_start( "vol_geom Single Vols File OpenGL Example\n", 512, 512, false );
-
-  {
-    // Read the first frame to use as the base mesh.
-    vol_geom_frame_data_t vols_frame_data = ( vol_geom_frame_data_t ){ .block_data_ptr = NULL };
-    if ( !vol_geom_read_frame( filename_vols, &vols_info, 0, &vols_frame_data ) ) {
-      fprintf( stderr, "ERROR: reading frame 0 from vol sequence file\n" );
-      return 1;
-    }
-    // NOTE(Anton) the 'short' ints used here are a brittle part of the spec - be careful!
-    short* indices_short_ptr = (short*)&vols_frame_data.block_data_ptr[vols_frame_data.indices_offset];
-    float* points_ptr        = (float*)&vols_frame_data.block_data_ptr[vols_frame_data.vertices_offset];
-    float* uvs_ptr           = (float*)&vols_frame_data.block_data_ptr[vols_frame_data.uvs_offset];
-    float* normals_ptr       = (float*)&vols_frame_data.block_data_ptr[vols_frame_data.normals_offset];
-    int n_vertices           = vols_frame_data.vertices_sz / ( sizeof( float ) * 3 );
-    void* indices_ptr        = indices_short_ptr;          // if indices are uint32s we'd point to that here instead e.g. based on number of vertices.
-    size_t indices_buffer_sz = vols_frame_data.indices_sz; //
-    uint8_t indices_type     = 1;                          // indices_type      - Data type of indices - 0=unsigned byte, 1=unsigned short, 2=unsigned int.
-    mesh = gfx_create_mesh_from_mem( points_ptr, 3, uvs_ptr, 2, normals_ptr, 3, indices_ptr, indices_buffer_sz, indices_type, n_vertices, true );
-  }
+  gfx_texture_t texture = gfx_create_texture_from_mem( NULL, 0, 0, 3, ( gfx_texture_properties_t ){ .bilinear = true } );
+  gfx_mesh_t mesh       = gfx_create_mesh_from_mem( NULL, 3, NULL, 2, NULL, 3, NULL, 0, 1, 0, true );
+  _update_mesh_with_frame( &mesh, 0, filename_vols, &vols_info, &texture );
   { // Basic shaders.
     const char* vs_str =
       "#version 410\n"
@@ -81,6 +95,10 @@ int main( int argc, char** argv ) {
   //    vol_geom_read_hdr_from_file()
   //    vol_geom_read_frame_from_mem() for streaming.
 
+  double prev_s       = gfx_get_time_s();
+  double frame_s      = 0.0;
+  int curr_frame      = 0;
+  int loaded_keyframe = 0;
   while ( !gfx_should_window_close() ) {
     int fb_w = 0, fb_h = 0, win_w = 0, win_h = 0;
     gfx_poll_events();
@@ -89,6 +107,27 @@ int main( int argc, char** argv ) {
     float aspect = (float)fb_w / (float)fb_h;
     gfx_window_dims( &win_w, &win_h );
     gfx_viewport( 0, 0, win_w, win_h );
+    double curr_s    = gfx_get_time_s();
+    double elapsed_s = curr_s - prev_s;
+    prev_s           = curr_s;
+    frame_s += elapsed_s;
+    double spf        = 1.0 / 30.0;
+    int jump_n_frames = (int)( frame_s / spf );
+    frame_s -= jump_n_frames * spf;
+    int desired_frame = curr_frame + jump_n_frames;
+    desired_frame %= vols_info.hdr.frame_count;
+    // Update mesh for new frame.
+    if ( desired_frame != curr_frame ) {
+      bool desired_is_key  = vol_geom_is_keyframe( &vols_info, desired_frame );
+      int desired_keyframe = vol_geom_find_previous_keyframe( &vols_info, desired_frame );
+      if ( desired_keyframe != loaded_keyframe && desired_keyframe != desired_frame ) {
+        _update_mesh_with_frame( &mesh, desired_keyframe, filename_vols, &vols_info, NULL ); // NULL so we don't upload a texture.
+        loaded_keyframe = desired_keyframe;
+      }
+      _update_mesh_with_frame( &mesh, desired_frame, filename_vols, &vols_info, &texture );
+      curr_frame = desired_frame;
+      if ( desired_is_key ) { loaded_keyframe = desired_frame; }
+    }
 
     // create camera view and perspective matrices
     // look at cube corner rather than front-on, and hover a bit above so we get a 3D impression.
