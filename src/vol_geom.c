@@ -226,6 +226,7 @@ static bool _read_vol_frame( const vol_geom_info_t* info_ptr, int frame_idx, vol
  * @param chunk_offset If the sequence chunk is offset into the file then this offset can be provided here, in bytes from the start of the file.
  */
 static bool _build_frames_directory_from_file( const char* seq_filename, vol_geom_info_t* info_ptr, vol_geom_size_t chunk_offset ) {
+  FILE* f_ptr = NULL;
   if ( !seq_filename || !info_ptr ) { return false; }
 
   { // Allocate memory for frame headers and frames directory.
@@ -250,7 +251,7 @@ static bool _build_frames_directory_from_file( const char* seq_filename, vol_geo
   if ( !_get_file_sz( seq_filename, &sequence_file_sz ) ) { goto bfdff_fail; }
   _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Sequence file is %" PRId64 " bytes.\n", sequence_file_sz );
 
-  FILE* f_ptr = fopen( seq_filename, "rb" );
+  f_ptr = fopen( seq_filename, "rb" );
   if ( !f_ptr ) { goto bfdff_fail; }
   if ( 0 != vol_geom_fseeko( f_ptr, chunk_offset, SEEK_SET ) ) { goto bfdff_fail; }
 
@@ -458,6 +459,7 @@ bool vol_geom_create_file_info_from_file( const char* vols_filename, vol_geom_in
 
 cfiff_fail:
   vol_geom_free_file_info( info_ptr );
+  return false;
 }
 
 bool vol_geom_create_file_info( const char* hdr_filename, const char* seq_filename, vol_geom_info_t* info_ptr, bool streaming_mode ) {

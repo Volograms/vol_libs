@@ -242,7 +242,6 @@ VOL_GEOM_EXPORT int vol_geom_find_previous_keyframe( const vol_geom_info_t* info
  * @param frame_idx      Index of the frame you wish to read. Frames start at index 0.
  * @param frame_data_ptr Pointer to a `vol_geom_frame_data_t` struct in your application that this function will populate with data.
  * @returns              False on any error including `frame_idx` range validation, File I/O, and memory allocation.
- * @todo                 Memory allocation is probably unnecessary and frame_data_ptr's contents could point into existing memory.
  */
 VOL_GEOM_EXPORT bool vol_geom_read_frame( const char* seq_filename, const vol_geom_info_t* info_ptr, int frame_idx, vol_geom_frame_data_t* frame_data_ptr );
 

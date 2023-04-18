@@ -9,6 +9,12 @@
  -lglfw -lm
  */
 
+// TODO play the contents - see if it works with my cat file and an official combined v1.2 file.
+// TODO also make sure I didn't break the old split file.
+// TODO think longer term about deprecating 'file info' struct and just doing:
+//    vol_geom_read_hdr_from_file()
+//    vol_geom_read_frame_from_mem() for streaming.
+
 #include "gfx.h"
 #include "apg_maths.h"
 #include "vol_geom.h"
@@ -48,8 +54,6 @@ static void _update_mesh_with_frame( gfx_mesh_t* mesh_ptr, int frame_number, con
 
 int main( int argc, char** argv ) {
   gfx_shader_t shader;
-  bool loop_vologram = true;
-
   if ( argc < 2 ) {
     printf( "Usage: %s MYFILE.vols\n", argv[0] );
     return 0;
@@ -89,12 +93,6 @@ int main( int argc, char** argv ) {
       "}\n";
     shader = gfx_create_shader_program_from_strings( vs_str, fs_str );
   }
-
-  // TODO play the contents - see if it works with my cat file and an official combined v1.2 file.
-  // TODO also make sure I didn't break the old split file.
-  // TODO think longer term about deprecating 'file info' struct and just doing:
-  //    vol_geom_read_hdr_from_file()
-  //    vol_geom_read_frame_from_mem() for streaming.
 
   double prev_s       = gfx_get_time_s();
   double frame_s      = 0.0;

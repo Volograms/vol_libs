@@ -60,6 +60,7 @@ example_programs:
 	$(CC) $(FLAGS) $(DEBUG) $(SANS) -o examples/dump_images$(BIN_EXT) examples/01_dump_images/main.c $(SRC_AV) $(INC_DIR) $(STA_LIB_AV) $(LIB_DIR) $(DYN_LIB_AV)
 	$(CC) $(FLAGS) $(DEBUG) $(SANS) -o examples/vol_geom_opengl$(BIN_EXT) examples/02_vol_geom_opengl/main.c $(SRC_GEOM) thirdparty/apg/apg_maths.c thirdparty/apg/gfx.c thirdparty/glad/src/glad.c $(INC_DIR) $(STA_LIB_GL) $(LIB_DIR) $(DYN_LIB_GL)
 	$(CC) $(FLAGS) $(DEBUG) $(SANS) -o examples/vol_geom_av_opengl$(BIN_EXT) examples/03_vol_geom_av_opengl/main.c $(SRC_AV) $(SRC_GEOM) thirdparty/apg/apg_maths.c thirdparty/apg/gfx.c thirdparty/glad/src/glad.c $(INC_DIR) $(STA_LIB_GL) $(LIB_DIR) $(DYN_LIB_GL) $(DYN_LIB_AV)
+	$(CC) $(FLAGS) $(DEBUG) $(SANS) -o examples/vol_geom_single_file$(BIN_EXT) examples/06_vol_geom_single_file/main.c $(SRC_AV) $(SRC_GEOM) thirdparty/apg/apg_maths.c thirdparty/apg/gfx.c thirdparty/glad/src/glad.c $(INC_DIR) $(STA_LIB_GL) $(LIB_DIR) $(DYN_LIB_GL) $(DYN_LIB_AV)
 
 test_programs:
 	$(CC) $(FLAGS) $(DEBUG) $(SANS) -o tests/geom_test$(BIN_EXT) tests/geom_test.c $(SRC_GEOM) $(INC_DIR)
