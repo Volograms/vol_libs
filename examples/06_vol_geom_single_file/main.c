@@ -1,7 +1,8 @@
 /**
  *
  * Compile:
- gcc -g main.c \
+ gcc -g -o vol_geom_combined.bin \
+ main.c \
  ../../src/vol_geom.c  -I ../../src/  \
  ../../thirdparty/apg/gfx.c ../../thirdparty/apg/apg_maths.c  -I ../../thirdparty/apg/ \
  ../../thirdparty/glad/src/glad.c  -I ../../thirdparty/glad/include/ \
