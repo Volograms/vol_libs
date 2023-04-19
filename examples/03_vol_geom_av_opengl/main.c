@@ -36,7 +36,7 @@ static char* default_vol_seq_file   = "../samples/cube_seq.vol";
 static char* default_vol_video_file = "../samples/counter.mp4";
 
 // Fetch the subsequent frame from the video as an image, and update the texture with it.
-static bool _next_video_frame_to_texture() {
+static bool _next_video_frame_to_texture( void ) {
   if ( !vol_av_read_next_frame( &av_info ) ) {
     fprintf( stderr, "ERROR: reading frame from vol video file\n" );
     return false;
