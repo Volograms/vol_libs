@@ -125,6 +125,8 @@ double gfx_get_time_s( void );
 
 bool input_is_key_held( int keycode );
 
+extern gfx_shader_t gfx_default_textured_shader; /** A default shader, as gfx_quad_texture_shader but using u_P, u_V, u_M instead of scale, pos etc. */
+
 #ifdef __cplusplus
 }
 #endif /* CPP */

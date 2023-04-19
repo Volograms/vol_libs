@@ -18,7 +18,7 @@ Author:  Anton Gerdelan <antonofnote at gmail> @capnramses
 #define GFX_MAX_SHADER_STR 10000
 
 GLFWwindow* gfx_window_ptr; // extern in apg_glcontext.h
-gfx_shader_t gfx_default_shader, gfx_quad_texture_shader;
+gfx_shader_t gfx_default_shader, gfx_default_textured_shader, gfx_quad_texture_shader;
 gfx_mesh_t gfx_ss_quad_mesh;
 
 static GLFWmonitor* gfx_monitor_ptr;
@@ -89,6 +89,32 @@ bool gfx_start( const char* window_title, int w, int h, bool fullscreen ) {
   const GLubyte* version  = glGetString( GL_VERSION );
   printf( "Renderer: %s\n", renderer );
   printf( "OpenGL version supported %s\n", version );
+  { // gfx_default_textured_shader
+    const char* vertex_shader =
+      "#version 410 core\n"
+      "in vec3 a_vp;\n"
+      "in vec2 a_vt;\n"
+      "uniform mat4 u_P, u_V, u_M;\n"
+      "out vec2 v_st;\n"
+      "void main () {\n"
+      "  v_st = a_vt;\n"
+      "  v_st.t = 1.0 - v_st.t;\n"
+      "  gl_Position = u_P * u_V * u_M * vec4( a_vp, 1.0 );\n"
+      "}\n";
+    const char* fragment_shader =
+      "#version 410 core\n"
+      "in vec2 v_st;\n"
+      "uniform sampler2D u_tex;\n"
+      "out vec4 o_frag_colour;\n"
+      "void main () {\n"
+      "  vec4 texel = texture( u_tex, v_st );\n"
+      "  texel.rgb = pow( texel.rgb, vec3( 2.2 ) );\n"
+      "  o_frag_colour = texel;\n"
+      "  o_frag_colour.rgb = pow( o_frag_colour.rgb, vec3( 1.0 / 2.2 ) );\n"
+      "}\n";
+    gfx_default_textured_shader = gfx_create_shader_program_from_strings( vertex_shader, fragment_shader );
+    if ( !gfx_default_textured_shader.loaded ) { return false; }
+  } // gfx_default_textured_shader
   {
     const char* vertex_shader =
       "#version 410 core\n"
@@ -127,6 +153,7 @@ bool gfx_start( const char* window_title, int w, int h, bool fullscreen ) {
 }
 
 void gfx_stop( void ) {
+  if ( gfx_default_textured_shader.loaded ) { gfx_delete_shader_program( &gfx_default_textured_shader ); }
   if ( gfx_quad_texture_shader.loaded ) { gfx_delete_shader_program( &gfx_quad_texture_shader ); }
   glfwTerminate();
 }

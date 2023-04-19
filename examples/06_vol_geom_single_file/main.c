@@ -4,11 +4,11 @@
 g++ -fno-strict-aliasing -DBASISD_SUPPORT_KTX2=0 \
 -o basisu_transcoder.o -c ../../thirdparty/basis_universal/transcoder/basisu_transcoder.cpp -I ../../src/ -I ../../thirdparty/
 gcc -o glad.o -c ../../thirdparty/glad/src/glad.c  -I ../../thirdparty/glad/include/
-g++ -o vol_basis.o -c ../../src/vol_basis.cpp -I ../../src/ -I ../../thirdparty/
-gcc -o vol_geom.o -c ../../src/vol_geom.c
-gcc -o gfx.o -c ../../thirdparty/apg/gfx.c -I ../../thirdparty/glad/include/
-gcc -o apg_maths.o -c ../../thirdparty/apg/apg_maths.c
-gcc -o main.o -c main.c -I ../../thirdparty/apg/ -I ../../thirdparty/glad/include/ -I ../../src/
+g++ -g -o vol_basis.o -c ../../src/vol_basis.cpp -I ../../src/ -I ../../thirdparty/
+gcc -g -o vol_geom.o -c ../../src/vol_geom.c
+gcc -g -o gfx.o -c ../../thirdparty/apg/gfx.c -I ../../thirdparty/glad/include/
+gcc -g -o apg_maths.o -c ../../thirdparty/apg/apg_maths.c
+gcc -g -o main.o -c main.c -I ../../thirdparty/apg/ -I ../../thirdparty/glad/include/ -I ../../src/
 g++ -g -Wall -Werror -pedantic -o vol_geom_combined.bin \
 main.o apg_maths.o gfx.o vol_geom.o vol_basis.o glad.o basisu_transcoder.o \
 -lglfw -lm
@@ -65,7 +65,12 @@ static bool _update_mesh_with_frame( gfx_mesh_t* mesh_ptr, int frame_number, con
 
   if ( texture_ptr && vols_info_ptr->hdr.textured ) {
     uint8_t* vols_texture_ptr = (uint8_t*)&vols_frame_data.block_data_ptr[vols_frame_data.texture_offset];
-    size_t vols_texture_sz    = vols_frame_data.block_data_ptr[vols_frame_data.texture_sz];
+    size_t vols_texture_sz    = vols_frame_data.texture_sz; // vols_frame_data.block_data_ptr[vols_frame_data.texture_sz];
+    // TODO ANTON
+    // texture size is returning incorrect value.
+
+    // up to here
+
     if ( !vol_basis_transcode( 3, vols_texture_ptr, vols_texture_sz, output_blocks_ptr, OUTPUT_DIMS * OUTPUT_DIMS, &texture_ptr->w, &texture_ptr->h ) ) {
       fprintf( stderr, "ERROR transcoding image %i failed\n", frame_number );
       return 1;
@@ -84,7 +89,6 @@ int main( int argc, char** argv ) {
   }
   printf( "Vol basis init.\n" );
 
-  gfx_shader_t shader;
   if ( argc < 2 ) {
     printf( "Usage: %s MYFILE.vols\n", argv[0] );
     return 0;
@@ -119,27 +123,6 @@ int main( int argc, char** argv ) {
   }
   gfx_mesh_t mesh = gfx_create_mesh_from_mem( NULL, 3, NULL, 2, NULL, 3, NULL, 0, 1, 0, true );
   if ( !_update_mesh_with_frame( &mesh, 0, filename_vols, &vols_info, &compressed_texture ) ) { return 1; }
-  { // Basic shaders.
-    const char* vs_str =
-      "#version 410\n"
-      "in vec3 a_vp;\n"
-      "in vec2 a_vt;\n"
-      "in vec3 a_vn;\n"
-      "uniform mat4 u_P, u_V, u_M;\n"
-      "out vec3 v_vn_wor;\n"
-      "void main() {\n"
-      "  v_vn_wor = ( u_M * vec4( vec3( -a_vn.x, a_vn.yz ), 0.0 ) ).xyz;\n"
-      "  gl_Position = u_P * u_V * u_M * vec4( -a_vp.x, a_vp.yz, 1.0 );\n"
-      "}\n";
-    const char* fs_str =
-      "#version 410\n"
-      "in vec3 v_vn_wor;\n"
-      "out vec4 o_frag_colour;\n"
-      "void main() {\n"
-      "  o_frag_colour = vec4( v_vn_wor, 1.0 );\n"
-      "}\n";
-    shader = gfx_create_shader_program_from_strings( vs_str, fs_str );
-  }
 
   double prev_s       = gfx_get_time_s();
   double frame_s      = 0.0;
@@ -177,14 +160,13 @@ int main( int argc, char** argv ) {
 
     // create camera view and perspective matrices
     // look at cube corner rather than front-on, and hover a bit above so we get a 3D impression.
-    mat4 V = look_at( ( vec3 ){ 0.0f, 1.0f, 2.0f }, ( vec3 ){ 0.0f, 1.0f, 0.0f }, ( vec3 ){ 0.0f, 1.0f, 0.0f } );
     mat4 P = perspective( 66.6f, aspect, 0.1f, 100.0f );
-    mat4 M = identity_mat4();
-
+    mat4 M = scale_mat4( ( vec3 ){ -1, 1, 1 } );
+    mat4 V = look_at( ( vec3 ){ 0, 1, 2 }, ( vec3 ){ 0, 1, 0 }, ( vec3 ){ 0, 1, 0 } );
     gfx_clear_colour_and_depth_buffers( 0.5f, 0.5f, 0.5f, 1.0f );
 
     gfx_winding_cw( true );
-    gfx_draw_mesh( mesh, GFX_PT_TRIANGLES, shader, P.m, V.m, M.m, NULL, 0 );
+    gfx_draw_mesh( mesh, GFX_PT_TRIANGLES, gfx_default_textured_shader, P.m, V.m, M.m, &compressed_texture, 1 );
     gfx_winding_cw( false );
 
     gfx_swap_buffer();
