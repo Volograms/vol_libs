@@ -1,12 +1,16 @@
 /**
  *
  * Compile:
+g++ -fno-strict-aliasing -DBASISD_SUPPORT_KTX2=0 \
+-o basisu_transcoder.o -c ../../thirdparty/basis_universal/transcoder/basisu_transcoder.cpp -I ../../src/ -I ../../thirdparty/
 gcc -o glad.o -c ../../thirdparty/glad/src/glad.c  -I ../../thirdparty/glad/include/
-gcc -g -Wall -Werror -pedantic -o vol_geom_combined.bin \
-main.c \
-../../src/vol_geom.c  -I ../../src/  \
-../../thirdparty/apg/gfx.c ../../thirdparty/apg/apg_maths.c  -I ../../thirdparty/apg/ \
-glad.o -I ../../thirdparty/glad/include/ \
+g++ -o vol_basis.o -c ../../src/vol_basis.cpp -I ../../src/ -I ../../thirdparty/
+gcc -o vol_geom.o -c ../../src/vol_geom.c
+gcc -o gfx.o -c ../../thirdparty/apg/gfx.c -I ../../thirdparty/glad/include/
+gcc -o apg_maths.o -c ../../thirdparty/apg/apg_maths.c
+gcc -o main.o -c main.c -I ../../thirdparty/apg/ -I ../../thirdparty/glad/include/ -I ../../src/
+g++ -g -Wall -Werror -pedantic -o vol_geom_combined.bin \
+main.o apg_maths.o gfx.o vol_geom.o vol_basis.o glad.o basisu_transcoder.o \
 -lglfw -lm
 */
 
@@ -18,16 +22,31 @@ glad.o -I ../../thirdparty/glad/include/ \
 
 #include "gfx.h"
 #include "apg_maths.h"
+#include "vol_basis.h"
 #include "vol_geom.h"
+#include "glad/glad.h"
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-static void _update_mesh_with_frame( gfx_mesh_t* mesh_ptr, int frame_number, const char* filename, vol_geom_info_t* vols_info_ptr, gfx_texture_t* texture_ptr ) {
+// Scratch memory to use for transcoding compressed textures.
+#define OUTPUT_DIMS 2048
+static uint8_t* output_blocks_ptr;
+
+static void _update_compressed_texture( int level_index, uint8_t* output_blocks_ptr, uint32_t output_blocks_sz, gfx_texture_t* texture_ptr ) {
+  GLenum internal_format = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT; // NOTE DXt5 is for cTFBC3_RGBA!!!
+  glBindTexture( GL_TEXTURE_2D, texture_ptr->handle_gl );
+  glCompressedTexImage2D( GL_TEXTURE_2D, level_index, internal_format, texture_ptr->w, texture_ptr->h, 0, texture_ptr->w * texture_ptr->h, output_blocks_ptr );
+  glBindTexture( GL_TEXTURE_2D, 0 );
+}
+
+static bool _update_mesh_with_frame( gfx_mesh_t* mesh_ptr, int frame_number, const char* filename, vol_geom_info_t* vols_info_ptr, gfx_texture_t* texture_ptr ) {
   // Read the first frame to use as the base mesh.
   vol_geom_frame_data_t vols_frame_data = ( vol_geom_frame_data_t ){ .block_data_ptr = NULL };
   if ( !vol_geom_read_frame( filename, vols_info_ptr, frame_number, &vols_frame_data ) ) {
     fprintf( stderr, "ERROR: reading frame 0 from vol sequence file\n" );
-    return;
+    return false;
   }
   // NOTE(Anton) the 'short' ints used here are a brittle part of the spec - be careful!
   float* points_ptr    = (float*)&vols_frame_data.block_data_ptr[vols_frame_data.vertices_offset];
@@ -46,14 +65,25 @@ static void _update_mesh_with_frame( gfx_mesh_t* mesh_ptr, int frame_number, con
 
   if ( texture_ptr && vols_info_ptr->hdr.textured ) {
     uint8_t* vols_texture_ptr = (uint8_t*)&vols_frame_data.block_data_ptr[vols_frame_data.texture_offset];
-    // size_t vols_texture_sz    = vols_frame_data.block_data_ptr[vols_frame_data.texture_sz];
-    // TODO update compressed texture here
-    int texture_w = 2048, texture_h = 2048, texture_n_chans = 3; // TODO get these
-    gfx_update_texture( texture_ptr, vols_texture_ptr, texture_w, texture_h, texture_n_chans );
+    size_t vols_texture_sz    = vols_frame_data.block_data_ptr[vols_frame_data.texture_sz];
+    if ( !vol_basis_transcode( 3, vols_texture_ptr, vols_texture_sz, output_blocks_ptr, OUTPUT_DIMS * OUTPUT_DIMS, &texture_ptr->w, &texture_ptr->h ) ) {
+      fprintf( stderr, "ERROR transcoding image %i failed\n", frame_number );
+      return 1;
+    }
+    _update_compressed_texture( 0, output_blocks_ptr, OUTPUT_DIMS * OUTPUT_DIMS, texture_ptr );
   }
+  return true;
 }
 
 int main( int argc, char** argv ) {
+  // TODO(Anton) there is already a block in vol_basis we could use?
+  output_blocks_ptr = (uint8_t*)malloc( OUTPUT_DIMS * OUTPUT_DIMS );
+  if ( !vol_basis_init() ) {
+    fprintf( stderr, "ERROR vol_basis_init() failed\n" );
+    return 1;
+  }
+  printf( "Vol basis init.\n" );
+
   gfx_shader_t shader;
   if ( argc < 2 ) {
     printf( "Usage: %s MYFILE.vols\n", argv[0] );
@@ -70,9 +100,25 @@ int main( int argc, char** argv ) {
   }
 
   gfx_start( "vol_geom Single Vols File OpenGL Example\n", 512, 512, false );
-  gfx_texture_t texture = gfx_create_texture_from_mem( NULL, 0, 0, 3, ( gfx_texture_properties_t ){ .bilinear = true } );
-  gfx_mesh_t mesh       = gfx_create_mesh_from_mem( NULL, 3, NULL, 2, NULL, 3, NULL, 0, 1, 0, true );
-  _update_mesh_with_frame( &mesh, 0, filename_vols, &vols_info, &texture );
+  gfx_texture_t compressed_texture;
+  {
+    GLuint tex_cmpr1 = 0;
+    glGenTextures( 1, &tex_cmpr1 );
+    GLenum internal_format = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
+    glBindTexture( GL_TEXTURE_2D, tex_cmpr1 );
+    glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
+    glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
+    glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
+    glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST );
+    glCompressedTexImage2D( GL_TEXTURE_2D, 0, internal_format, OUTPUT_DIMS, OUTPUT_DIMS, 0, OUTPUT_DIMS * OUTPUT_DIMS, NULL );
+    glBindTexture( GL_TEXTURE_2D, 0 );
+    compressed_texture.w = compressed_texture.h = OUTPUT_DIMS;
+    compressed_texture.handle_gl                = tex_cmpr1;
+    compressed_texture.n_channels               = 4;
+    memset( &compressed_texture.properties, 0, sizeof( gfx_texture_properties_t ) );
+  }
+  gfx_mesh_t mesh = gfx_create_mesh_from_mem( NULL, 3, NULL, 2, NULL, 3, NULL, 0, 1, 0, true );
+  if ( !_update_mesh_with_frame( &mesh, 0, filename_vols, &vols_info, &compressed_texture ) ) { return 1; }
   { // Basic shaders.
     const char* vs_str =
       "#version 410\n"
@@ -121,10 +167,10 @@ int main( int argc, char** argv ) {
       bool desired_is_key  = vol_geom_is_keyframe( &vols_info, desired_frame );
       int desired_keyframe = vol_geom_find_previous_keyframe( &vols_info, desired_frame );
       if ( desired_keyframe != loaded_keyframe && desired_keyframe != desired_frame ) {
-        _update_mesh_with_frame( &mesh, desired_keyframe, filename_vols, &vols_info, NULL ); // NULL so we don't upload a texture.
+        if ( !_update_mesh_with_frame( &mesh, desired_keyframe, filename_vols, &vols_info, NULL ) ) { return 1; } // NULL so we don't upload a texture.
         loaded_keyframe = desired_keyframe;
       }
-      _update_mesh_with_frame( &mesh, desired_frame, filename_vols, &vols_info, &texture );
+      if ( !_update_mesh_with_frame( &mesh, desired_frame, filename_vols, &vols_info, &compressed_texture ) ) { return 1; }
       curr_frame = desired_frame;
       if ( desired_is_key ) { loaded_keyframe = desired_frame; }
     }
@@ -147,11 +193,11 @@ int main( int argc, char** argv ) {
   gfx_delete_mesh( &mesh );
   gfx_stop();
 
-  if ( !vol_geom_free_file_info( &vols_info ) ) {
-    fprintf( stderr, "ERROR: freeing vol info\n" );
-    return 1;
-  }
+  if ( !vol_geom_free_file_info( &vols_info ) ) { fprintf( stderr, "ERROR: freeing vol info\n" ); }
 
+  if ( !vol_basis_free() ) { fprintf( stderr, "ERROR: vol_basis_free\n" ); }
+
+  if ( output_blocks_ptr ) { free( output_blocks_ptr ); }
   printf( "Normal exit.\n" );
   return 0;
 }

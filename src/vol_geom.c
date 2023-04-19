@@ -360,14 +360,21 @@ bool vol_geom_read_hdr_from_mem( const uint8_t* data_ptr, int32_t data_sz, vol_g
 
   vol_geom_size_t offset = 0;
 
-  // Parse v10 part of header.
-  if ( !_read_short_str( data_ptr, data_sz, 0, &hdr_ptr->format ) ) { return false; }
-  if ( strncmp( "VOLS", hdr_ptr->format.bytes, 4 ) != 0 ) { return false; } // Format check.
-  offset += ( hdr_ptr->format.sz + 1 );
+  // Support either Unity format "VOLS" string, or IFF-style first-4-bytes "VOLS" magic file numbers.
+  if ( data_ptr[0] == 'V' && data_ptr[1] == 'O' && data_ptr[2] == 'L' && data_ptr[3] == 'S' ) {
+    memcpy( hdr_ptr->format.bytes, data_ptr, 4 );
+    hdr_ptr->format.sz = 4;
+    offset += 4;
+  } else {
+    // Parse v10 part of header.
+    if ( !_read_short_str( data_ptr, data_sz, 0, &hdr_ptr->format ) ) { return false; }
+    if ( strncmp( "VOLS", hdr_ptr->format.bytes, 4 ) != 0 ) { return false; } // Format check.
+    offset += ( hdr_ptr->format.sz + 1 );
+  }
   if ( offset + 4 * (vol_geom_size_t)sizeof( int32_t ) + 3 >= data_sz ) { return false; } // OOB
   memcpy( &hdr_ptr->version, &data_ptr[offset], sizeof( int32_t ) );
   offset += (vol_geom_size_t)sizeof( int32_t );
-  if ( hdr_ptr->version != 10 && hdr_ptr->version != 11 && hdr_ptr->version != 12 ) { return false; } // version check
+  if ( hdr_ptr->version < 10 || hdr_ptr->version > 12 ) { return false; } // version check
   memcpy( &hdr_ptr->compression, &data_ptr[offset], sizeof( int32_t ) );
   offset += (vol_geom_size_t)sizeof( int32_t );
   if ( !_read_short_str( data_ptr, data_sz, offset, &hdr_ptr->mesh_name ) ) { return false; }
