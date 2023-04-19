@@ -1,13 +1,14 @@
 /**
  *
  * Compile:
- gcc -g -o vol_geom_combined.bin \
- main.c \
- ../../src/vol_geom.c  -I ../../src/  \
- ../../thirdparty/apg/gfx.c ../../thirdparty/apg/apg_maths.c  -I ../../thirdparty/apg/ \
- ../../thirdparty/glad/src/glad.c  -I ../../thirdparty/glad/include/ \
- -lglfw -lm
- */
+gcc -o glad.o -c ../../thirdparty/glad/src/glad.c  -I ../../thirdparty/glad/include/
+gcc -g -Wall -Werror -pedantic -o vol_geom_combined.bin \
+main.c \
+../../src/vol_geom.c  -I ../../src/  \
+../../thirdparty/apg/gfx.c ../../thirdparty/apg/apg_maths.c  -I ../../thirdparty/apg/ \
+glad.o -I ../../thirdparty/glad/include/ \
+-lglfw -lm
+*/
 
 // TODO play the contents - see if it works with my cat file and an official combined v1.2 file.
 // TODO also make sure I didn't break the old split file.
@@ -45,7 +46,7 @@ static void _update_mesh_with_frame( gfx_mesh_t* mesh_ptr, int frame_number, con
 
   if ( texture_ptr && vols_info_ptr->hdr.textured ) {
     uint8_t* vols_texture_ptr = (uint8_t*)&vols_frame_data.block_data_ptr[vols_frame_data.texture_offset];
-    size_t vols_texture_sz    = vols_frame_data.block_data_ptr[vols_frame_data.texture_sz];
+    // size_t vols_texture_sz    = vols_frame_data.block_data_ptr[vols_frame_data.texture_sz];
     // TODO update compressed texture here
     int texture_w = 2048, texture_h = 2048, texture_n_chans = 3; // TODO get these
     gfx_update_texture( texture_ptr, vols_texture_ptr, texture_w, texture_h, texture_n_chans );
