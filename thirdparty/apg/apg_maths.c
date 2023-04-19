@@ -98,7 +98,7 @@ vec3 heading_to_vec3( float degrees ) {
   return ( vec3 ){ .x = -sinf( rad ), .y = 0.0f, .z = -cosf( rad ) };
 }
 
-mat4 identity_mat4() {
+mat4 identity_mat4( void ) {
   mat4 r  = { { 0 } };
   r.m[0]  = 1.0f;
   r.m[5]  = 1.0f;

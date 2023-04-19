@@ -140,7 +140,7 @@ float vec3_to_heading( vec3 d );
 /** Very informal function to convert a heading (e.g. y-axis orientation) into a 3D vector with components in x and z axes. */
 vec3 heading_to_vec3( float degrees );
 
-mat4 identity_mat4();
+mat4 identity_mat4( void );
 
 mat4 mult_mat4_mat4( mat4 a, mat4 b );
 

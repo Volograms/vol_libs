@@ -24,7 +24,7 @@ gfx_mesh_t gfx_ss_quad_mesh;
 static GLFWmonitor* gfx_monitor_ptr;
 static int g_win_width = 1920, g_win_height = 1080;
 
-static void _init_ss_quad() {
+static void _init_ss_quad( void ) {
   float ss_quad_pos[] = { -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0, -1.0 };
   gfx_ss_quad_mesh    = gfx_create_mesh_from_mem( //
     ss_quad_pos, 2,                            // vp
@@ -126,7 +126,7 @@ bool gfx_start( const char* window_title, int w, int h, bool fullscreen ) {
   return true;
 }
 
-void gfx_stop() {
+void gfx_stop( void ) {
   if ( gfx_quad_texture_shader.loaded ) { gfx_delete_shader_program( &gfx_quad_texture_shader ); }
   glfwTerminate();
 }
@@ -140,7 +140,7 @@ void gfx_depth_testing( bool enable ) {
   }
 }
 
-bool gfx_should_window_close() {
+bool gfx_should_window_close( void ) {
   assert( gfx_window_ptr );
   return glfwWindowShouldClose( gfx_window_ptr );
 }
@@ -168,13 +168,13 @@ void gfx_window_set_dims( int width, int height ) {
 
 void gfx_window_set_title( const char* title_str ) { glfwSetWindowTitle( gfx_window_ptr, title_str ); }
 
-void gfx_swap_buffer() {
+void gfx_swap_buffer( void ) {
   assert( gfx_window_ptr );
 
   glfwSwapBuffers( gfx_window_ptr );
 }
 
-void gfx_poll_events() {
+void gfx_poll_events( void ) {
   assert( gfx_window_ptr );
 
   glfwPollEvents();
@@ -577,11 +577,11 @@ void gfx_draw_textured_quad( gfx_texture_t texture, vec2 scale, vec2 pos, vec2 t
   glDisable( GL_BLEND );
 }
 
-void gfx_wireframe_mode() { glPolygonMode( GL_FRONT_AND_BACK, GL_LINE ); }
+void gfx_wireframe_mode( void ) { glPolygonMode( GL_FRONT_AND_BACK, GL_LINE ); }
 
-void gfx_polygon_mode() { glPolygonMode( GL_FRONT_AND_BACK, GL_FILL ); }
+void gfx_polygon_mode( void ) { glPolygonMode( GL_FRONT_AND_BACK, GL_FILL ); }
 
-double gfx_get_time_s() { return glfwGetTime(); }
+double gfx_get_time_s( void ) { return glfwGetTime(); }
 
 bool input_is_key_held( int keycode ) {
   assert( gfx_window_ptr && keycode >= 32 && keycode <= GLFW_KEY_LAST );

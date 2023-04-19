@@ -152,7 +152,7 @@ static bool _load_obj( const char* filename ) {
   return true;
 }
 
-static bool _write_vols() {
+static bool _write_vols( void ) {
   int frame_count = 1;
   { // write header.vol
     FILE* f_ptr = fopen( "header.vol", "wb" );
