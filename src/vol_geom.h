@@ -118,25 +118,18 @@ VOL_GEOM_EXPORT typedef struct vol_geom_frame_directory_entry_t {
 /** Meta-data about the whole Vologram sequence. Load this once with `vol_geom_create_file_info()` before using the Vologram. */
 VOL_GEOM_EXPORT typedef struct vol_geom_info_t {
   vol_geom_file_hdr_t hdr;
-
   /// Vologram's directory of blob contents. NOTE(Anton) - this could really be stored the binary file spec right after the header similar to IFF.
   vol_geom_frame_directory_entry_t* frames_directory_ptr;
-
   /// Pointer to frame header structs for each frame.
-  /// NOTE(Anton) if frame headers were fixed size we probably don't need to parse or store the field and can just struct pointer cast at frame offset
   vol_geom_frame_hdr_t* frame_headers_ptr;
-
   /// This is a pre-allocated block of memory, large enough to store the data of any frame in the vologram sequence. Do not manually allocate or free this memory!
   uint8_t* preallocated_frame_blob_ptr;
   /// This is the maximum size of the buffer pointed to by preallocated_frame_blob_ptr.
   vol_geom_size_t biggest_frame_blob_sz;
-
   /// If streaming_mode was not set then sequence file is read to a blob pointed to by this pointer. Otherwise it is NULL and file I/O occurs on every frame read.
   uint8_t* sequence_blob_byte_ptr;
-
-  /// If non-zero then this is the offset of the sequence chunk from the start of the file/blob, in bytes.
+  /// Byte offset of the sequence chunk from the start of file. For separated hdr/seq files this will be 0.
   vol_geom_size_t sequence_offset;
-
 } vol_geom_info_t;
 
 /** Meta-data for each from of the Vologram sequence. */

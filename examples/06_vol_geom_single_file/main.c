@@ -139,7 +139,8 @@ int main( int argc, char** argv ) {
     double elapsed_s = curr_s - prev_s;
     prev_s           = curr_s;
     frame_s += elapsed_s;
-    double spf        = 1.0 / 30.0;
+    double fps        = vols_info.hdr.fps ? vols_info.hdr.fps : 30.0;
+    double spf        = 1.0 / fps;
     int jump_n_frames = (int)( frame_s / spf );
     frame_s -= jump_n_frames * spf;
     int desired_frame = curr_frame + jump_n_frames;
