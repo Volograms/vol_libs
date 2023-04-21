@@ -92,13 +92,13 @@ VOL_GEOM_EXPORT typedef struct vol_geom_file_hdr_t {
 
 /** Items from the actual frame header (excluding the trailing size item, which is a repeat of mesh_data_sz but after the data). */
 VOL_GEOM_EXPORT typedef struct vol_geom_frame_hdr_t {
-  int32_t frame_number;
+  uint32_t frame_number;
   /* V10, 11 = Size of Vertices Data + Normals Data + Indices Data + UVs Data + Texture Data.
    V12 = Size of Vertices Data + Normals Data + Indices Data + UVs Data + Texture Data + 4 Bytes for each "Size of Array" in Vertices, Normals, Indices, UVs
    and Texture (if present)
    */
   /// Mesh data size in bytes.
-  int32_t mesh_data_sz;
+  uint32_t mesh_data_sz;
   /// 0 = tracked frame, 1 = first/key frame, 2 = last tracked frame (for backward traversal, only if Version >= 12)
   uint8_t keyframe;
 } vol_geom_frame_hdr_t;
@@ -148,23 +148,23 @@ VOL_GEOM_EXPORT typedef struct vol_geom_frame_data_t {
   /// &data_ptr[vertices_offset]
   /// and this will be vertices_sz bytes worth of tightly-packed vertex data.
   vol_geom_size_t vertices_offset;
-  int32_t vertices_sz;
+  uint32_t vertices_sz;
 
   /// Only if version >= 11.
   vol_geom_size_t normals_offset;
-  int32_t normals_sz;
+  uint32_t normals_sz;
 
   /// If Keyframe == 1 || 2
   vol_geom_size_t indices_offset;
-  int32_t indices_sz;
+  uint32_t indices_sz;
 
   /// If Keyframe == 1 || 2
   vol_geom_size_t uvs_offset;
-  int32_t uvs_sz;
+  uint32_t uvs_sz;
 
   /// Only if Version >= 11. Not applicable if `textured` is not true in the file header.
   vol_geom_size_t texture_offset;
-  int32_t texture_sz;
+  uint32_t texture_sz;
 } vol_geom_frame_data_t;
 
 /** In your application these enum values can be used to filter out or categorise messages given by vol_geom_log_callback. */
@@ -176,16 +176,20 @@ typedef enum vol_geom_log_type_t {
   VOL_GEOM_LOG_STR_MAX_LEN // Not an error type, just used to count the error types.
 } vol_geom_log_type_t;
 
+/** To silence log output or pipe log messages into a user function.
+ * @param user_function_ptr 
+*/
 VOL_GEOM_EXPORT void vol_geom_set_log_callback( void ( *user_function_ptr )( vol_geom_log_type_t log_type, const char* message_str ) );
 
 VOL_GEOM_EXPORT void vol_geom_reset_log_callback( void );
 
 /** Read a header from the top of a .vols blob in memory. */
-VOL_GEOM_EXPORT bool vol_geom_read_hdr_from_mem( const uint8_t* data_ptr, int32_t data_sz, vol_geom_file_hdr_t* hdr_ptr, vol_geom_size_t* hdr_sz_ptr );
+VOL_GEOM_EXPORT bool vol_geom_read_hdr_from_mem( const uint8_t* data_ptr, uint32_t data_sz, vol_geom_file_hdr_t* hdr_ptr, vol_geom_size_t* hdr_sz_ptr );
 
 /** Read a header from the top of a .vols file. */
 VOL_GEOM_EXPORT bool vol_geom_read_hdr_from_file( const char* filename, vol_geom_file_hdr_t* hdr_ptr, vol_geom_size_t* hdr_sz_ptr );
 
+/** As vol_geom_create_file_info, but for volograms where the contents { header, sequence } are all in one .vols file. */
 VOL_GEOM_EXPORT bool vol_geom_create_file_info_from_file( const char* vols_filename, vol_geom_info_t* info_ptr );
 
 /** Call this function before playing a vologram sequence.
@@ -216,14 +220,14 @@ VOL_GEOM_EXPORT bool vol_geom_free_file_info( vol_geom_info_t* info_ptr );
  * @returns              True if frame number `frame_idx` has keyframe value 1 or 2.
  *                       If the frame is a tracked frame (0) or not in the valid range then the function returns false.
  */
-VOL_GEOM_EXPORT bool vol_geom_is_keyframe( const vol_geom_info_t* info_ptr, int frame_idx );
+VOL_GEOM_EXPORT bool vol_geom_is_keyframe( const vol_geom_info_t* info_ptr, uint32_t frame_idx );
 
 /** Look backwards from a frame to find the previous keyframe. This is useful when seeking to an intermediate frame, so we can load any base data first.
  * @param info_ptr       Pointer to vologram meta-data loaded by a call to vol_geom_create_file_info().
  * @param frame_idx      Index of the current frame to start looking back from. If this frame is a keyframe then the function will return this index.
  * @returns              The index of the first keyframe found going backwards from current frame to 0, inclusive. Returns -1 on error or if no keyframe is found.
  */
-VOL_GEOM_EXPORT int vol_geom_find_previous_keyframe( const vol_geom_info_t* info_ptr, int frame_idx );
+VOL_GEOM_EXPORT int vol_geom_find_previous_keyframe( const vol_geom_info_t* info_ptr, uint32_t frame_idx );
 
 /** Read a single frame from a Vologram sequence file.
  * @param seq_filename   Pointer to a char array containing the file path to the Vologram sequence file. Must not be NULL.
@@ -232,7 +236,7 @@ VOL_GEOM_EXPORT int vol_geom_find_previous_keyframe( const vol_geom_info_t* info
  * @param frame_data_ptr Pointer to a `vol_geom_frame_data_t` struct in your application that this function will populate with data.
  * @returns              False on any error including `frame_idx` range validation, File I/O, and memory allocation.
  */
-VOL_GEOM_EXPORT bool vol_geom_read_frame( const char* seq_filename, const vol_geom_info_t* info_ptr, int frame_idx, vol_geom_frame_data_t* frame_data_ptr );
+VOL_GEOM_EXPORT bool vol_geom_read_frame( const char* seq_filename, const vol_geom_info_t* info_ptr, uint32_t frame_idx, vol_geom_frame_data_t* frame_data_ptr );
 
 #ifdef __cplusplus
 }

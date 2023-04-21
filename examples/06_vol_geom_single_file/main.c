@@ -38,7 +38,7 @@ main.o apg_maths.o gfx.o vol_geom.o vol_basis.o glad.o basisu_transcoder.o \
 #define OUTPUT_DIMS 2048
 static uint8_t* output_blocks_ptr;
 
-static void _update_compressed_texture( int level_index, uint8_t* output_blocks_ptr, uint32_t output_blocks_sz, gfx_texture_t* texture_ptr ) {
+static void _update_compressed_texture( int level_index, uint8_t* output_blocks_ptr, gfx_texture_t* texture_ptr ) {
   GLenum internal_format = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT; // NOTE DXt5 is for cTFBC3_RGBA!!!
   glBindTexture( GL_TEXTURE_2D, texture_ptr->handle_gl );
   glCompressedTexImage2D( GL_TEXTURE_2D, level_index, internal_format, texture_ptr->w, texture_ptr->h, 0, texture_ptr->w * texture_ptr->h, output_blocks_ptr );
@@ -74,7 +74,7 @@ static bool _update_mesh_with_frame( gfx_mesh_t* mesh_ptr, int frame_number, con
       fprintf( stderr, "ERROR transcoding image %i failed\n", frame_number );
       return 1;
     }
-    _update_compressed_texture( 0, output_blocks_ptr, OUTPUT_DIMS * OUTPUT_DIMS, texture_ptr );
+    _update_compressed_texture( 0, output_blocks_ptr, texture_ptr );
   }
   return true;
 }

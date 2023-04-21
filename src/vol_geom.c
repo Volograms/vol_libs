@@ -55,6 +55,7 @@ static void ( *_logger_ptr )( vol_geom_log_type_t log_type, const char* message_
 
 // This function is used in this file as a printf-style logger. It converts that format to a simple string and passes it to _logger_ptr.
 static void _vol_loggerf( vol_geom_log_type_t log_type, const char* message_str, ... ) {
+  if ( !_logger_ptr ) { return; }
   char log_str[VOL_GEOM_LOG_STR_MAX_LEN];
   log_str[0] = '\0';
   va_list arg_ptr; // using va_args lets us make sure any printf-style formatting values are properly written into the string.
@@ -123,7 +124,7 @@ vol_geom_read_file_failed:
 }
 
 /** Helper function to read Unity-style strings, specified in VOL format, from a loaded file. */
-static bool _read_short_str( const uint8_t* data_ptr, int32_t data_sz, vol_geom_size_t offset, vol_geom_short_str_t* sstr ) {
+static bool _read_short_str( const uint8_t* data_ptr, uint32_t data_sz, vol_geom_size_t offset, vol_geom_short_str_t* sstr ) {
   if ( !data_ptr || !sstr ) { return false; }
   if ( offset >= data_sz ) { return false; } // OOB
 
@@ -139,10 +140,10 @@ static bool _read_short_str( const uint8_t* data_ptr, int32_t data_sz, vol_geom_
   return true;
 }
 
-static bool _read_vol_frame( const vol_geom_info_t* info_ptr, int frame_idx, vol_geom_frame_data_t* frame_data_ptr ) {
+static bool _read_vol_frame( const vol_geom_info_t* info_ptr, uint32_t frame_idx, vol_geom_frame_data_t* frame_data_ptr ) {
   assert( info_ptr && info_ptr->preallocated_frame_blob_ptr && frame_data_ptr );
   if ( !info_ptr || !info_ptr->preallocated_frame_blob_ptr || !frame_data_ptr ) { return false; }
-  if ( frame_idx < 0 || frame_idx >= info_ptr->hdr.frame_count ) { return false; }
+  if ( frame_idx >= info_ptr->hdr.frame_count ) { return false; }
 
   *frame_data_ptr = ( vol_geom_frame_data_t ){ .block_data_sz = 0 };
 
@@ -155,26 +156,24 @@ static bool _read_vol_frame( const vol_geom_info_t* info_ptr, int frame_idx, vol
     vol_geom_size_t curr_offset = 0;
 
     { // vertices
-      if ( frame_data_ptr->block_data_sz < ( curr_offset + (vol_geom_size_t)sizeof( int32_t ) + (vol_geom_size_t)frame_data_ptr->vertices_sz ) ) {
+      if ( frame_data_ptr->block_data_sz < ( curr_offset + (vol_geom_size_t)sizeof( uint32_t ) + (vol_geom_size_t)frame_data_ptr->vertices_sz ) ) {
         return false;
       }
 
-      memcpy( &frame_data_ptr->vertices_sz, &frame_data_ptr->block_data_ptr[curr_offset], sizeof( int32_t ) );
-      if ( frame_data_ptr->vertices_sz < 0 ) { return false; }
-      curr_offset += (vol_geom_size_t)sizeof( int32_t );
+      memcpy( &frame_data_ptr->vertices_sz, &frame_data_ptr->block_data_ptr[curr_offset], sizeof( uint32_t ) );
+      curr_offset += (vol_geom_size_t)sizeof( uint32_t );
       frame_data_ptr->vertices_offset = curr_offset;
       curr_offset += (vol_geom_size_t)frame_data_ptr->vertices_sz;
     }
 
     // normals
     if ( info_ptr->hdr.normals && info_ptr->hdr.version >= 11 ) {
-      if ( frame_data_ptr->block_data_sz < ( curr_offset + (vol_geom_size_t)sizeof( int32_t ) + (vol_geom_size_t)frame_data_ptr->normals_sz ) ) {
+      if ( frame_data_ptr->block_data_sz < ( curr_offset + (vol_geom_size_t)sizeof( uint32_t ) + (vol_geom_size_t)frame_data_ptr->normals_sz ) ) {
         return false;
       }
 
-      memcpy( &frame_data_ptr->normals_sz, &frame_data_ptr->block_data_ptr[curr_offset], sizeof( int32_t ) );
-      if ( frame_data_ptr->normals_sz < 0 ) { return false; }
-      curr_offset += (vol_geom_size_t)sizeof( int32_t );
+      memcpy( &frame_data_ptr->normals_sz, &frame_data_ptr->block_data_ptr[curr_offset], sizeof( uint32_t ) );
+      curr_offset += (vol_geom_size_t)sizeof( uint32_t );
       frame_data_ptr->normals_offset = curr_offset;
       curr_offset += (vol_geom_size_t)frame_data_ptr->normals_sz;
     }
@@ -182,23 +181,21 @@ static bool _read_vol_frame( const vol_geom_info_t* info_ptr, int frame_idx, vol
     // indices and UVs
     if ( info_ptr->frame_headers_ptr[frame_idx].keyframe == 1 || ( info_ptr->hdr.version >= 12 && info_ptr->frame_headers_ptr[frame_idx].keyframe == 2 ) ) {
       { // indices
-        if ( frame_data_ptr->block_data_sz < ( curr_offset + (vol_geom_size_t)sizeof( int32_t ) + (vol_geom_size_t)frame_data_ptr->indices_sz ) ) {
+        if ( frame_data_ptr->block_data_sz < ( curr_offset + (vol_geom_size_t)sizeof( uint32_t ) + (vol_geom_size_t)frame_data_ptr->indices_sz ) ) {
           return false;
         }
 
-        memcpy( &frame_data_ptr->indices_sz, &frame_data_ptr->block_data_ptr[curr_offset], sizeof( int32_t ) );
-        if ( frame_data_ptr->indices_sz < 0 ) { return false; }
-        curr_offset += (vol_geom_size_t)sizeof( int32_t );
+        memcpy( &frame_data_ptr->indices_sz, &frame_data_ptr->block_data_ptr[curr_offset], sizeof( uint32_t ) );
+        curr_offset += (vol_geom_size_t)sizeof( uint32_t );
         frame_data_ptr->indices_offset = curr_offset;
         curr_offset += (vol_geom_size_t)frame_data_ptr->indices_sz;
       }
 
       { // UVs
-        if ( frame_data_ptr->block_data_sz < ( curr_offset + (vol_geom_size_t)sizeof( int32_t ) + (vol_geom_size_t)frame_data_ptr->uvs_sz ) ) { return false; }
+        if ( frame_data_ptr->block_data_sz < ( curr_offset + (vol_geom_size_t)sizeof( uint32_t ) + (vol_geom_size_t)frame_data_ptr->uvs_sz ) ) { return false; }
 
-        memcpy( &frame_data_ptr->uvs_sz, &frame_data_ptr->block_data_ptr[curr_offset], sizeof( int32_t ) );
-        if ( frame_data_ptr->uvs_sz < 0 ) { return false; }
-        curr_offset += (vol_geom_size_t)sizeof( int32_t );
+        memcpy( &frame_data_ptr->uvs_sz, &frame_data_ptr->block_data_ptr[curr_offset], sizeof( uint32_t ) );
+        curr_offset += (vol_geom_size_t)sizeof( uint32_t );
         frame_data_ptr->uvs_offset = curr_offset;
         curr_offset += (vol_geom_size_t)frame_data_ptr->uvs_sz;
       }
@@ -207,13 +204,12 @@ static bool _read_vol_frame( const vol_geom_info_t* info_ptr, int frame_idx, vol
     // texture
     // NOTE(Anton) not tested since we aren't using embedded textures at the moment.
     if ( info_ptr->hdr.version >= 11 && info_ptr->hdr.textured ) {
-      if ( frame_data_ptr->block_data_sz < ( curr_offset + (vol_geom_size_t)sizeof( int32_t ) + (vol_geom_size_t)frame_data_ptr->texture_sz ) ) {
+      if ( frame_data_ptr->block_data_sz < ( curr_offset + (vol_geom_size_t)sizeof( uint32_t ) + (vol_geom_size_t)frame_data_ptr->texture_sz ) ) {
         return false;
       }
 
-      memcpy( &frame_data_ptr->texture_sz, &frame_data_ptr->block_data_ptr[curr_offset], sizeof( int32_t ) );
-      if ( frame_data_ptr->texture_sz < 0 ) { return false; }
-      curr_offset += (vol_geom_size_t)sizeof( int32_t );
+      memcpy( &frame_data_ptr->texture_sz, &frame_data_ptr->block_data_ptr[curr_offset], sizeof( uint32_t ) );
+      curr_offset += (vol_geom_size_t)sizeof( uint32_t );
       frame_data_ptr->texture_offset = curr_offset;
       curr_offset += (vol_geom_size_t)frame_data_ptr->texture_sz;
     }
@@ -255,13 +251,13 @@ static bool _build_frames_directory_from_file( const char* seq_filename, vol_geo
   if ( !f_ptr ) { goto bfdff_fail; }
   if ( 0 != vol_geom_fseeko( f_ptr, chunk_offset, SEEK_SET ) ) { goto bfdff_fail; }
 
-  for ( int32_t i = 0; i < info_ptr->hdr.frame_count; i++ ) {
+  for ( uint32_t i = 0; i < info_ptr->hdr.frame_count; i++ ) {
     vol_geom_frame_hdr_t frame_hdr = ( vol_geom_frame_hdr_t ){ .mesh_data_sz = 0 };
 
     vol_geom_size_t frame_start_offset = vol_geom_ftello( f_ptr );
     if ( -1LL == frame_start_offset ) { goto bfdff_fail; }
 
-    if ( !fread( &frame_hdr.frame_number, sizeof( int32_t ), 1, f_ptr ) ) {
+    if ( !fread( &frame_hdr.frame_number, sizeof( uint32_t ), 1, f_ptr ) ) {
       _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: frame_number at frame %i in sequence file was out of file size range.\n", i );
       goto bfdff_fail;
     }
@@ -269,11 +265,11 @@ static bool _build_frames_directory_from_file( const char* seq_filename, vol_geo
       _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: frame_number was %i at frame %i in sequence file.\n", frame_hdr.frame_number, i );
       goto bfdff_fail;
     }
-    if ( !fread( &frame_hdr.mesh_data_sz, sizeof( int32_t ), 1, f_ptr ) ) {
+    if ( !fread( &frame_hdr.mesh_data_sz, sizeof( uint32_t ), 1, f_ptr ) ) {
       _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: mesh_data_sz %i was out of file size range in sequence file.\n", frame_hdr.mesh_data_sz );
       goto bfdff_fail;
     }
-    if ( frame_hdr.mesh_data_sz < 0 || (vol_geom_size_t)frame_hdr.mesh_data_sz > sequence_file_sz ) {
+    if ( (vol_geom_size_t)frame_hdr.mesh_data_sz > sequence_file_sz ) {
       _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: frame %i has mesh_data_sz %i, which is invalid. Sequence file is %" PRId64 " bytes.\n", i,
         frame_hdr.mesh_data_sz, sequence_file_sz );
       goto bfdff_fail;
@@ -355,7 +351,7 @@ void vol_geom_set_log_callback( void ( *user_function_ptr )( vol_geom_log_type_t
 
 void vol_geom_reset_log_callback( void ) { _logger_ptr = _default_logger; }
 
-bool vol_geom_read_hdr_from_mem( const uint8_t* data_ptr, int32_t data_sz, vol_geom_file_hdr_t* hdr_ptr, vol_geom_size_t* hdr_sz_ptr ) {
+bool vol_geom_read_hdr_from_mem( const uint8_t* data_ptr, uint32_t data_sz, vol_geom_file_hdr_t* hdr_ptr, vol_geom_size_t* hdr_sz_ptr ) {
   if ( !data_ptr || !hdr_ptr || !hdr_sz_ptr || data_sz < VOL_GEOM_FILE_HDR_V10_MIN_SZ ) { return false; }
 
   vol_geom_size_t offset = 0;
@@ -399,9 +395,9 @@ bool vol_geom_read_hdr_from_mem( const uint8_t* data_ptr, int32_t data_sz, vol_g
   hdr_ptr->normals  = (bool)data_ptr[offset++];
   hdr_ptr->textured = (bool)data_ptr[offset++];
 
-  if ( hdr_ptr->version >= 13 ) {                          // v1.3 added texture compression fields.
-    uint8_t texture_compression      = data_ptr[offset++]; // { 0 = mp4, 1 = ETC1S, 2 = UASTC }
-    uint8_t texture_container_format = data_ptr[offset++]; // { 0 = raw, 1 = basis, 2 = KTX2 }
+  if ( hdr_ptr->version >= 13 ) {                           // v1.3 added texture compression fields.
+    hdr_ptr->texture_compression      = data_ptr[offset++]; // { 0 = mp4, 1 = ETC1S, 2 = UASTC }
+    hdr_ptr->texture_container_format = data_ptr[offset++]; // { 0 = raw, 1 = basis, 2 = KTX2 }
     memcpy( &hdr_ptr->texture_width, &data_ptr[offset], sizeof( uint32_t ) );
     offset += (vol_geom_size_t)sizeof( uint32_t );
     memcpy( &hdr_ptr->texture_height, &data_ptr[offset], sizeof( uint32_t ) );
@@ -563,29 +559,29 @@ bool vol_geom_free_file_info( vol_geom_info_t* info_ptr ) {
   return true;
 }
 
-bool vol_geom_is_keyframe( const vol_geom_info_t* info_ptr, int frame_idx ) {
+bool vol_geom_is_keyframe( const vol_geom_info_t* info_ptr, uint32_t frame_idx ) {
   assert( info_ptr );
   if ( !info_ptr ) { return false; }
-  if ( frame_idx < 0 || frame_idx >= info_ptr->hdr.frame_count ) { return false; }
+  if ( frame_idx >= info_ptr->hdr.frame_count ) { return false; }
   if ( 0 == info_ptr->frame_headers_ptr[frame_idx].keyframe ) { return false; }
   return true;
 }
 
-int vol_geom_find_previous_keyframe( const vol_geom_info_t* info_ptr, int frame_idx ) {
+int vol_geom_find_previous_keyframe( const vol_geom_info_t* info_ptr, uint32_t frame_idx ) {
   assert( info_ptr );
   if ( !info_ptr ) { return -1; }
-  if ( frame_idx < 0 || frame_idx >= info_ptr->hdr.frame_count ) { return false; }
+  if ( frame_idx >= info_ptr->hdr.frame_count ) { return false; }
   for ( int i = frame_idx; i >= 0; i-- ) {
     if ( vol_geom_is_keyframe( info_ptr, i ) ) { return i; }
   }
   return -1;
 }
 
-bool vol_geom_read_frame( const char* seq_filename, const vol_geom_info_t* info_ptr, int frame_idx, vol_geom_frame_data_t* frame_data_ptr ) {
+bool vol_geom_read_frame( const char* seq_filename, const vol_geom_info_t* info_ptr, uint32_t frame_idx, vol_geom_frame_data_t* frame_data_ptr ) {
   assert( seq_filename && info_ptr && frame_data_ptr );
   if ( !seq_filename || !info_ptr || !frame_data_ptr ) { return false; }
 
-  if ( frame_idx < 0 || frame_idx >= info_ptr->hdr.frame_count ) {
+  if ( frame_idx >= info_ptr->hdr.frame_count ) {
     _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: frame requested (%i) is not in valid range of 0-%i for sequence\n", frame_idx, info_ptr->hdr.frame_count );
     return false;
   }
