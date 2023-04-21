@@ -64,34 +64,30 @@ VOL_GEOM_EXPORT typedef struct vol_geom_short_str_t {
   uint8_t sz;
 } vol_geom_short_str_t;
 
-/** V12 header
- * @note If the ints etc were all in the top and the var mem like strings at the end that would hugely simplify the parsing with a struct ptr cast
- */
+// .vols file header supporting 1.0 to 1.3.
 VOL_GEOM_EXPORT typedef struct vol_geom_file_hdr_t {
-  /// Must be leading byte of decimal value 4, then "VOLS".
-  vol_geom_short_str_t format;
-  /// 10,11,12.
-  int32_t version;
-  int32_t compression;
-  vol_geom_short_str_t mesh_name;
-  vol_geom_short_str_t material;
-  vol_geom_short_str_t shader;
-  int32_t topology;
-  int32_t frame_count;
-
-  // The following are only available if version >= 11 :
-  bool normals;
-  bool textured;
-  uint16_t texture_width;
-  uint16_t texture_height;
-  /// Follows UnityEngine.TextureFormat enum.
-  uint16_t texture_format;
-
-  // The following are only available if version >= 12 :
-  float translation[3];
-  /// w, x, y, z. where [1,0,0,0] is identity, and should face towards +z and +y being upwards.
-  float rotation[4];
-  float scale;
+  vol_geom_short_str_t format;      // Removed in v1.3. Must be leading byte of decimal value 4, then "VOLS".
+  uint32_t version;                 // 10->v1.0, 11->v1.1 etc.
+  uint32_t compression;             // 0 (> 0 if we use quantisation of some of the mesh data).
+  vol_geom_short_str_t mesh_name;   // Removed in v1.3.
+  vol_geom_short_str_t material;    // Removed in v1.3.
+  vol_geom_short_str_t shader;      // Removed in v1.3.
+  uint32_t topology;                // Removed in v1.3.
+  uint32_t frame_count;             //
+  bool normals;                     // Added in v1.2.
+  bool textured;                    // Added in v1.2.
+  uint8_t texture_compression;      // Added in v1.3.
+  uint8_t texture_container_format; // Added in v1.3.
+  uint32_t texture_width;           // Changed from int16_t to uint32_t in v1.3.
+  uint32_t texture_height;          // Changed from int16_t to uint32_t in v1.3.
+  float fps;                        // Added in v1.3. Most volograms are 30.0, but allows 29.97 and similar.
+  uint32_t audio;                   // Added in v1.3. { 0: no audio, 1: opus }.
+  uint32_t audio_start;             // Added in v1.3. Start of audio data as byte offset from start of file. Should be 44 in v1.3.
+  uint32_t frame_body_start;        // Added in v1.3. Byte offset from start of file. Without audio = 48, otherwise 48 + audio file size;
+  uint16_t texture_format;          // Removed in v1.3. Follows UnityEngine.TextureFormat enum.
+  float translation[3];             // Removed in v1.3. Added in v1.2.
+  float rotation[4];                // Removed in v1.3. Added in v1.2. w, x, y, z. where [1,0,0,0] is identity, face towards +z and +y being upwards.
+  float scale;                      // Removed in v1.3. Added in v1.2.
 } vol_geom_file_hdr_t;
 
 /** Items from the actual frame header (excluding the trailing size item, which is a repeat of mesh_data_sz but after the data). */

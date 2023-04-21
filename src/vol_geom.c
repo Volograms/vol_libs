@@ -359,6 +359,7 @@ bool vol_geom_read_hdr_from_mem( const uint8_t* data_ptr, int32_t data_sz, vol_g
   if ( !data_ptr || !hdr_ptr || !hdr_sz_ptr || data_sz < VOL_GEOM_FILE_HDR_V10_MIN_SZ ) { return false; }
 
   vol_geom_size_t offset = 0;
+  memset( hdr_ptr, 0, sizeof( vol_geom_file_hdr_t ) );
 
   // Support either Unity format "VOLS" string, or IFF-style first-4-bytes "VOLS" magic file numbers.
   if ( data_ptr[0] == 'V' && data_ptr[1] == 'O' && data_ptr[2] == 'L' && data_ptr[3] == 'S' ) {
@@ -366,52 +367,67 @@ bool vol_geom_read_hdr_from_mem( const uint8_t* data_ptr, int32_t data_sz, vol_g
     hdr_ptr->format.sz = 4;
     offset += 4;
   } else {
-    // Parse v10 part of header.
     if ( !_read_short_str( data_ptr, data_sz, 0, &hdr_ptr->format ) ) { return false; }
     if ( strncmp( "VOLS", hdr_ptr->format.bytes, 4 ) != 0 ) { return false; } // Format check.
     offset += ( hdr_ptr->format.sz + 1 );
   }
-  if ( offset + 4 * (vol_geom_size_t)sizeof( int32_t ) + 3 >= data_sz ) { return false; } // OOB
-  memcpy( &hdr_ptr->version, &data_ptr[offset], sizeof( int32_t ) );
-  offset += (vol_geom_size_t)sizeof( int32_t );
-  if ( hdr_ptr->version < 10 || hdr_ptr->version > 12 ) { return false; } // version check
-  memcpy( &hdr_ptr->compression, &data_ptr[offset], sizeof( int32_t ) );
-  offset += (vol_geom_size_t)sizeof( int32_t );
-  if ( !_read_short_str( data_ptr, data_sz, offset, &hdr_ptr->mesh_name ) ) { return false; }
-  offset += ( hdr_ptr->mesh_name.sz + 1 );
-  if ( offset + 2 * (vol_geom_size_t)sizeof( int32_t ) + 2 >= data_sz ) { return false; } // OOB
-  if ( !_read_short_str( data_ptr, data_sz, offset, &hdr_ptr->material ) ) { return false; }
-  offset += ( hdr_ptr->material.sz + 1 );
-  if ( offset + 2 * (vol_geom_size_t)sizeof( int32_t ) + 1 >= data_sz ) { return false; } // OOB
-  if ( !_read_short_str( data_ptr, data_sz, offset, &hdr_ptr->shader ) ) { return false; }
-  offset += ( hdr_ptr->shader.sz + 1 );
-  if ( offset + 2 * (vol_geom_size_t)sizeof( int32_t ) >= data_sz ) { return false; } // OOB
-  memcpy( &hdr_ptr->topology, &data_ptr[offset], sizeof( int32_t ) );
-  offset += (vol_geom_size_t)sizeof( int32_t );
-  memcpy( &hdr_ptr->frame_count, &data_ptr[offset], sizeof( int32_t ) );
-  offset += (vol_geom_size_t)sizeof( int32_t );
-
-  // Parse v11 part of header.
-  if ( hdr_ptr->version < 11 ) {
-    *hdr_sz_ptr = offset;
-    return true;
+  if ( offset + 4 * (vol_geom_size_t)sizeof( uint32_t ) + 3 >= data_sz ) { return false; } // OOB
+  memcpy( &hdr_ptr->version, &data_ptr[offset], sizeof( uint32_t ) );
+  offset += (vol_geom_size_t)sizeof( uint32_t );
+  if ( hdr_ptr->version < 10 || hdr_ptr->version > 13 ) { return false; } // Version check.
+  memcpy( &hdr_ptr->compression, &data_ptr[offset], sizeof( uint32_t ) );
+  offset += (vol_geom_size_t)sizeof( uint32_t );
+  if ( hdr_ptr->version < 13 ) { // V1.3 removed strings & topology field from header.
+    if ( !_read_short_str( data_ptr, data_sz, offset, &hdr_ptr->mesh_name ) ) { return false; }
+    offset += ( hdr_ptr->mesh_name.sz + 1 );
+    if ( offset + 2 * (vol_geom_size_t)sizeof( uint32_t ) + 2 >= data_sz ) { return false; } // OOB
+    if ( !_read_short_str( data_ptr, data_sz, offset, &hdr_ptr->material ) ) { return false; }
+    offset += ( hdr_ptr->material.sz + 1 );
+    if ( offset + 2 * (vol_geom_size_t)sizeof( uint32_t ) + 1 >= data_sz ) { return false; } // OOB
+    if ( !_read_short_str( data_ptr, data_sz, offset, &hdr_ptr->shader ) ) { return false; }
+    offset += ( hdr_ptr->shader.sz + 1 );
+    if ( offset + 2 * (vol_geom_size_t)sizeof( uint32_t ) >= data_sz ) { return false; } // OOB
+    memcpy( &hdr_ptr->topology, &data_ptr[offset], sizeof( uint32_t ) );
+    offset += (vol_geom_size_t)sizeof( uint32_t );
   }
+  memcpy( &hdr_ptr->frame_count, &data_ptr[offset], sizeof( uint32_t ) );
+  offset += (vol_geom_size_t)sizeof( uint32_t );
+  // Parse v1.1 part of header.
+  if ( hdr_ptr->version < 11 ) { goto vol_geom_rhfmem_success; }
   const vol_geom_size_t v11_section_sz = (vol_geom_size_t)( 3 * sizeof( uint16_t ) + 2 * sizeof( uint8_t ) );
   if ( offset + v11_section_sz > data_sz ) { return false; } // OOB
   hdr_ptr->normals  = (bool)data_ptr[offset++];
   hdr_ptr->textured = (bool)data_ptr[offset++];
-  memcpy( &hdr_ptr->texture_width, &data_ptr[offset], sizeof( uint16_t ) );
+
+  if ( hdr_ptr->version >= 13 ) {                          // v1.3 added texture compression fields.
+    uint8_t texture_compression      = data_ptr[offset++]; // { 0 = mp4, 1 = ETC1S, 2 = UASTC }
+    uint8_t texture_container_format = data_ptr[offset++]; // { 0 = raw, 1 = basis, 2 = KTX2 }
+    memcpy( &hdr_ptr->texture_width, &data_ptr[offset], sizeof( uint32_t ) );
+    offset += (vol_geom_size_t)sizeof( uint32_t );
+    memcpy( &hdr_ptr->texture_height, &data_ptr[offset], sizeof( uint32_t ) );
+    offset += (vol_geom_size_t)sizeof( uint32_t );
+    memcpy( &hdr_ptr->fps, &data_ptr[offset], sizeof( float ) );
+    offset += (vol_geom_size_t)sizeof( float );
+    memcpy( &hdr_ptr->audio, &data_ptr[offset], sizeof( uint32_t ) );
+    offset += (vol_geom_size_t)sizeof( uint32_t );
+    memcpy( &hdr_ptr->audio_start, &data_ptr[offset], sizeof( uint32_t ) );
+    offset += (vol_geom_size_t)sizeof( uint32_t );
+    memcpy( &hdr_ptr->frame_body_start, &data_ptr[offset], sizeof( uint32_t ) );
+    offset += (vol_geom_size_t)sizeof( uint32_t );
+    if ( offset != 44 ) { return false; }
+    goto vol_geom_rhfmem_success; // End of header for v1.3 here.
+  }
+  uint16_t w = 0, h = 0;
+  memcpy( &w, &data_ptr[offset], sizeof( uint16_t ) );
   offset += (vol_geom_size_t)sizeof( uint16_t );
-  memcpy( &hdr_ptr->texture_height, &data_ptr[offset], sizeof( uint16_t ) );
+  memcpy( &h, &data_ptr[offset], sizeof( uint16_t ) );
   offset += (vol_geom_size_t)sizeof( uint16_t );
+  hdr_ptr->texture_width  = (uint32_t)w;
+  hdr_ptr->texture_height = (uint32_t)h;
   memcpy( &hdr_ptr->texture_format, &data_ptr[offset], sizeof( uint16_t ) );
   offset += (vol_geom_size_t)sizeof( uint16_t );
-
-  // Parse v12 part of header.
-  if ( hdr_ptr->version < 12 ) {
-    *hdr_sz_ptr = offset;
-    return true;
-  }
+  // Parse v1.2 part of header.
+  if ( hdr_ptr->version < 12 ) { goto vol_geom_rhfmem_success; }
   const vol_geom_size_t v12_section_sz = 8 * sizeof( float );
   if ( offset + v12_section_sz > data_sz ) { return false; } // OOB
   memcpy( hdr_ptr->translation, &data_ptr[offset], 3 * sizeof( float ) );
@@ -421,6 +437,7 @@ bool vol_geom_read_hdr_from_mem( const uint8_t* data_ptr, int32_t data_sz, vol_g
   memcpy( &hdr_ptr->scale, &data_ptr[offset], sizeof( float ) );
   offset += sizeof( float );
 
+vol_geom_rhfmem_success:
   *hdr_sz_ptr = offset;
   return true;
 }
@@ -429,7 +446,10 @@ bool vol_geom_read_hdr_from_file( const char* filename, vol_geom_file_hdr_t* hdr
   vol_geom_file_record_t record = ( vol_geom_file_record_t ){ .byte_ptr = NULL };
   if ( !filename || !hdr_ptr || !hdr_sz_ptr ) { return false; }
   if ( !_read_file( filename, &record, sizeof( vol_geom_file_hdr_t ) ) ) { goto rhff_fail; }
-  if ( !vol_geom_read_hdr_from_mem( record.byte_ptr, record.sz, hdr_ptr, hdr_sz_ptr ) ) { goto rhff_fail; }
+  if ( !vol_geom_read_hdr_from_mem( record.byte_ptr, record.sz, hdr_ptr, hdr_sz_ptr ) ) {
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: vol_geom_read_hdr_from_file: Failed to read header from file `%s`.\n", filename );
+    goto rhff_fail;
+  }
   if ( record.byte_ptr != NULL ) { free( record.byte_ptr ); }
   return true;
 rhff_fail:
@@ -442,9 +462,10 @@ bool vol_geom_create_file_info_from_file( const char* vols_filename, vol_geom_in
 
   vol_geom_size_t hdr_sz = 0;
   if ( !vol_geom_read_hdr_from_file( vols_filename, &info_ptr->hdr, &hdr_sz ) ) { goto cfiff_fail; }
+  _vol_loggerf( VOL_GEOM_LOG_TYPE_INFO, "Vologram header v%i.%i\n", info_ptr->hdr.version / 10, info_ptr->hdr.version % 10 );
 
-  // TODO(Anton) if audio section is included or we have a value from the header to use then change this.
-  info_ptr->sequence_offset = hdr_sz;
+  // v1.3 introduced a header offset field for this. Preceding versions are immediately after the header.
+  info_ptr->sequence_offset = info_ptr->hdr.frame_body_start ? info_ptr->hdr.frame_body_start : hdr_sz;
 
   if ( !_build_frames_directory_from_file( vols_filename, info_ptr, info_ptr->sequence_offset ) ) {
     _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: vol_geom_create_file_info_from_file(): Failed to create frames directory.\n" );

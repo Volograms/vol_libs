@@ -1,5 +1,4 @@
-/**
- *
+/** @file main.c Example using vol_geom with a .vols file comprising header, sequence, and Basis Universal textures.
  * Compile:
 g++ -fno-strict-aliasing -DBASISD_SUPPORT_KTX2=0 \
 -o basisu_transcoder.o -c ../../thirdparty/basis_universal/transcoder/basisu_transcoder.cpp -I ../../src/ -I ../../thirdparty/
@@ -14,9 +13,14 @@ main.o apg_maths.o gfx.o vol_geom.o vol_basis.o glad.o basisu_transcoder.o \
 -lglfw -lm
 */
 
-// TODO play the contents - see if it works with my cat file and an official combined v1.2 file.
+// TODO audio - new demo?
+// TODO 1.3 support.
+// TODO - sort out vol_basis and TODOs here about malloc
+// TODO - UASTC support and
+// TODO - switching compressed formats on the fly.
 // TODO also make sure I didn't break the old split file.
 // TODO think longer term about deprecating 'file info' struct and just doing:
+// TODO fuzzing.
 //    vol_geom_read_hdr_from_file()
 //    vol_geom_read_frame_from_mem() for streaming.
 
@@ -65,12 +69,7 @@ static bool _update_mesh_with_frame( gfx_mesh_t* mesh_ptr, int frame_number, con
 
   if ( texture_ptr && vols_info_ptr->hdr.textured ) {
     uint8_t* vols_texture_ptr = (uint8_t*)&vols_frame_data.block_data_ptr[vols_frame_data.texture_offset];
-    size_t vols_texture_sz    = vols_frame_data.texture_sz; // vols_frame_data.block_data_ptr[vols_frame_data.texture_sz];
-    // TODO ANTON
-    // texture size is returning incorrect value.
-
-    // up to here
-
+    size_t vols_texture_sz    = vols_frame_data.texture_sz;
     if ( !vol_basis_transcode( 3, vols_texture_ptr, vols_texture_sz, output_blocks_ptr, OUTPUT_DIMS * OUTPUT_DIMS, &texture_ptr->w, &texture_ptr->h ) ) {
       fprintf( stderr, "ERROR transcoding image %i failed\n", frame_number );
       return 1;
