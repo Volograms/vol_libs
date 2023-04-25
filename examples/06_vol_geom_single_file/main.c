@@ -122,9 +122,13 @@ int main( int argc, char** argv ) {
   gfx_mesh_t mesh = gfx_create_mesh_from_mem( NULL, 3, NULL, 2, NULL, 3, NULL, 0, 1, 0, true );
   if ( !_update_mesh_with_frame( &mesh, 0, filename_vols, &vols_info, &compressed_texture ) ) { return 1; }
 
-  FILE* f_ptr = fopen( "audio.ogg", "wb" );
-  fwrite( vols_info.audio_chunk_ptr, vols_info.audio_chunk_sz, 1, f_ptr );
-  fclose( f_ptr );
+  if ( vols_info.hdr.audio == 1 ) { // 0=no audio, 1=ogg vorbis/opus
+#ifdef WRITE_AUDIO_FILE
+    FILE* f_ptr = fopen( "audio.ogg", "wb" );
+    fwrite( vols_info.audio_chunk_ptr, vols_info.audio_chunk_sz, 1, f_ptr );
+    fclose( f_ptr );
+#endif
+  }
 
   double prev_s       = gfx_get_time_s();
   double frame_s      = 0.0;

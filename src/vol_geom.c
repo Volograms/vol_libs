@@ -405,7 +405,6 @@ bool vol_geom_read_hdr_from_mem( const uint8_t* data_ptr, uint32_t data_sz, vol_
     memcpy( &hdr_ptr->fps, &data_ptr[offset], sizeof( float ) );
     offset += (vol_geom_size_t)sizeof( float );
     memcpy( &hdr_ptr->audio, &data_ptr[offset], sizeof( uint32_t ) );
-    printf( "DB: audio is %u\n", hdr_ptr->audio );
     offset += (vol_geom_size_t)sizeof( uint32_t );
     memcpy( &hdr_ptr->audio_start, &data_ptr[offset], sizeof( uint32_t ) );
     offset += (vol_geom_size_t)sizeof( uint32_t );
@@ -461,7 +460,6 @@ bool vol_geom_read_audio_from_file( const char* vols_filename, vol_geom_info_t* 
   f_ptr = fopen( vols_filename, "rb" );
   if ( !f_ptr ) { goto vgraff_fail; }
   info_ptr->audio_chunk_sz = info_ptr->hdr.frame_body_start - info_ptr->audio_chunk_sz;
-  printf( "DB: audio chunk sz = %u\n", info_ptr->audio_chunk_sz );
   if ( 0 != fseeko( f_ptr, info_ptr->hdr.audio_start, SEEK_SET ) ) { goto vgraff_fail; }
   info_ptr->audio_chunk_ptr = malloc( info_ptr->audio_chunk_sz );
   if ( !info_ptr->audio_chunk_ptr ) { goto vgraff_fail; }
