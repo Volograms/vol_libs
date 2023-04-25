@@ -122,10 +122,9 @@ int main( int argc, char** argv ) {
   gfx_mesh_t mesh = gfx_create_mesh_from_mem( NULL, 3, NULL, 2, NULL, 3, NULL, 0, 1, 0, true );
   if ( !_update_mesh_with_frame( &mesh, 0, filename_vols, &vols_info, &compressed_texture ) ) { return 1; }
 
-  uint32_t audio_type   = vols_info.hdr.audio;
-  uint32_t audio_offset = vols_info.hdr.audio_start;
-  uint32_t audio_sz     = vols_info.hdr.frame_body_start - audio_offset;
-  uint8_t* audio_ptr    = vols_info.sequence_blob_byte_ptr[audio_offset];
+  FILE* f_ptr = fopen( "audio.ogg", "wb" );
+  fwrite( vols_info.audio_chunk_ptr, vols_info.audio_chunk_sz, 1, f_ptr );
+  fclose( f_ptr );
 
   double prev_s       = gfx_get_time_s();
   double frame_s      = 0.0;

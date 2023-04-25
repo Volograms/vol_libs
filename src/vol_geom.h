@@ -118,6 +118,10 @@ VOL_GEOM_EXPORT typedef struct vol_geom_frame_directory_entry_t {
 /** Meta-data about the whole Vologram sequence. Load this once with `vol_geom_create_file_info()` before using the Vologram. */
 VOL_GEOM_EXPORT typedef struct vol_geom_info_t {
   vol_geom_file_hdr_t hdr;
+  /// Pointer to the audio chunk, if one exists, otherwise NULL.
+  uint8_t* audio_chunk_ptr;
+  /// Size of the chunk in bytes.
+  uint32_t audio_chunk_sz;
   /// Vologram's directory of blob contents. NOTE(Anton) - this could really be stored the binary file spec right after the header similar to IFF.
   vol_geom_frame_directory_entry_t* frames_directory_ptr;
   /// Pointer to frame header structs for each frame.
@@ -177,8 +181,8 @@ typedef enum vol_geom_log_type_t {
 } vol_geom_log_type_t;
 
 /** To silence log output or pipe log messages into a user function.
- * @param user_function_ptr 
-*/
+ * @param user_function_ptr
+ */
 VOL_GEOM_EXPORT void vol_geom_set_log_callback( void ( *user_function_ptr )( vol_geom_log_type_t log_type, const char* message_str ) );
 
 VOL_GEOM_EXPORT void vol_geom_reset_log_callback( void );

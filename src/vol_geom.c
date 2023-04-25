@@ -405,6 +405,7 @@ bool vol_geom_read_hdr_from_mem( const uint8_t* data_ptr, uint32_t data_sz, vol_
     memcpy( &hdr_ptr->fps, &data_ptr[offset], sizeof( float ) );
     offset += (vol_geom_size_t)sizeof( float );
     memcpy( &hdr_ptr->audio, &data_ptr[offset], sizeof( uint32_t ) );
+    printf( "DB: audio is %u\n", hdr_ptr->audio );
     offset += (vol_geom_size_t)sizeof( uint32_t );
     memcpy( &hdr_ptr->audio_start, &data_ptr[offset], sizeof( uint32_t ) );
     offset += (vol_geom_size_t)sizeof( uint32_t );
@@ -453,12 +454,33 @@ rhff_fail:
   return false;
 }
 
+bool vol_geom_read_audio_from_file( const char* vols_filename, vol_geom_info_t* info_ptr ) {
+  FILE* f_ptr = NULL;
+  if ( !vols_filename || !info_ptr || info_ptr->hdr.version < 13 ) { goto vgraff_fail; }
+
+  f_ptr = fopen( vols_filename, "rb" );
+  if ( !f_ptr ) { goto vgraff_fail; }
+  info_ptr->audio_chunk_sz = info_ptr->hdr.frame_body_start - info_ptr->audio_chunk_sz;
+  printf( "DB: audio chunk sz = %u\n", info_ptr->audio_chunk_sz );
+  if ( 0 != fseeko( f_ptr, info_ptr->hdr.audio_start, SEEK_SET ) ) { goto vgraff_fail; }
+  info_ptr->audio_chunk_ptr = malloc( info_ptr->audio_chunk_sz );
+  if ( !info_ptr->audio_chunk_ptr ) { goto vgraff_fail; }
+  if ( 1 != fread( info_ptr->audio_chunk_ptr, info_ptr->audio_chunk_sz, 1, f_ptr ) ) { goto vgraff_fail; }
+  fclose( f_ptr );
+  return true;
+vgraff_fail:
+  if ( f_ptr ) { fclose( f_ptr ); }
+  return false;
+}
+
 bool vol_geom_create_file_info_from_file( const char* vols_filename, vol_geom_info_t* info_ptr ) {
   if ( !vols_filename || !info_ptr || !_is_file( vols_filename ) ) { return false; }
 
   vol_geom_size_t hdr_sz = 0;
   if ( !vol_geom_read_hdr_from_file( vols_filename, &info_ptr->hdr, &hdr_sz ) ) { goto cfiff_fail; }
   _vol_loggerf( VOL_GEOM_LOG_TYPE_INFO, "Vologram header v%i.%i\n", info_ptr->hdr.version / 10, info_ptr->hdr.version % 10 );
+
+  if ( info_ptr->hdr.audio && !vol_geom_read_audio_from_file( vols_filename, info_ptr ) ) { goto cfiff_fail; }
 
   // v1.3 introduced a header offset field for this. Preceding versions are immediately after the header.
   info_ptr->sequence_offset = info_ptr->hdr.frame_body_start ? info_ptr->hdr.frame_body_start : hdr_sz;
