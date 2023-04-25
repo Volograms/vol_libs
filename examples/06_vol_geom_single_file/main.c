@@ -14,7 +14,6 @@ main.o apg_maths.o gfx.o vol_geom.o vol_basis.o glad.o basisu_transcoder.o \
 */
 
 // TODO audio - new demo?
-// TODO 1.3 support.
 // TODO - sort out vol_basis and TODOs here about malloc
 // TODO - UASTC support and
 // TODO - switching compressed formats on the fly.
@@ -55,12 +54,12 @@ static bool _update_mesh_with_frame( gfx_mesh_t* mesh_ptr, int frame_number, con
   // NOTE(Anton) the 'short' ints used here are a brittle part of the spec - be careful!
   float* points_ptr    = (float*)&vols_frame_data.block_data_ptr[vols_frame_data.vertices_offset];
   float* uvs_ptr       = (float*)&vols_frame_data.block_data_ptr[vols_frame_data.uvs_offset];
-  uint8_t indices_type = 1; // indices_type      - Data type of indices - 0=unsigned byte, 1=unsigned short, 2=unsigned int.
+  uint8_t indices_type = 1; // indices_type - Data type of indices - 0=unsigned byte, 1=unsigned short, 2=unsigned int.
   int n_vertices       = vols_frame_data.vertices_sz / ( sizeof( float ) * 3 );
   if ( vol_geom_is_keyframe( vols_info_ptr, frame_number ) ) {
     float* normals_ptr       = (float*)&vols_frame_data.block_data_ptr[vols_frame_data.normals_offset];
     short* indices_short_ptr = (short*)&vols_frame_data.block_data_ptr[vols_frame_data.indices_offset];
-    void* indices_ptr        = indices_short_ptr;          // if indices are uint32s we'd point to that here instead e.g. based on number of vertices.
+    void* indices_ptr        = indices_short_ptr;          //
     size_t indices_buffer_sz = vols_frame_data.indices_sz; //
     gfx_update_mesh_from_mem( mesh_ptr, points_ptr, 3, uvs_ptr, 2, normals_ptr, 3, indices_ptr, indices_buffer_sz, indices_type, n_vertices, true );
   } else {
@@ -123,6 +122,11 @@ int main( int argc, char** argv ) {
   gfx_mesh_t mesh = gfx_create_mesh_from_mem( NULL, 3, NULL, 2, NULL, 3, NULL, 0, 1, 0, true );
   if ( !_update_mesh_with_frame( &mesh, 0, filename_vols, &vols_info, &compressed_texture ) ) { return 1; }
 
+  uint32_t audio_type   = vols_info.hdr.audio;
+  uint32_t audio_offset = vols_info.hdr.audio_start;
+  uint32_t audio_sz     = vols_info.hdr.frame_body_start - audio_offset;
+  uint8_t* audio_ptr    = vols_info.sequence_blob_byte_ptr[audio_offset];
+
   double prev_s       = gfx_get_time_s();
   double frame_s      = 0.0;
   int curr_frame      = 0;
@@ -158,8 +162,6 @@ int main( int argc, char** argv ) {
       if ( desired_is_key ) { loaded_keyframe = desired_frame; }
     }
 
-    // create camera view and perspective matrices
-    // look at cube corner rather than front-on, and hover a bit above so we get a 3D impression.
     mat4 P = perspective( 66.6f, aspect, 0.1f, 100.0f );
     mat4 M = scale_mat4( ( vec3 ){ -1, 1, 1 } );
     mat4 V = look_at( ( vec3 ){ 0, 1, 2 }, ( vec3 ){ 0, 1, 0 }, ( vec3 ){ 0, 1, 0 } );
