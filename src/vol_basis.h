@@ -1,6 +1,19 @@
-/***
- * TODO
- * add a web wrapper with emscripten_keepalive macros and point casts to int32 etc
+/**  @file vol_basis.h
+ * Volograms Basis Universal Wrapper API
+ *
+ * vol_basis | .basis Transcoding Wrapper.
+ * --------- | ---------------------
+ * Version   | 0.1
+ * Authors   | Anton Gerdelan     <anton@volograms.com>
+ *           | Patrick Geoghegan  <patrick@volograms.com>
+ * Copyright | 2023, Volograms (http://volograms.com/)
+ * Language  | C++ (C compatibility header).
+ * Files     | 2
+ * Licence   | The MIT License. See LICENSE.md for details.
+ *
+ * History
+ * -------
+ * - 0.1 (2023/04/26) - First version.
  */
 
 #pragma once

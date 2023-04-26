@@ -1,3 +1,16 @@
+/** @file vol_basis.cpp
+ * Volograms Basis Universal Wrapper API
+ *
+ * vol_basis | .basis Transcoding Wrapper.
+ * --------- | ---------------------
+ * Version   | 0.1
+ * Authors   | See matching header file.
+ * Copyright | 2023, Volograms (http://volograms.com/)
+ * Language  | C++
+ * Files     | 2
+ * Licence   | The MIT License. See LICENSE.md for details.
+ */
+
 #include "vol_basis.h"
 #include "basis_universal/transcoder/basisu_transcoder.h"
 #include <stdint.h>
