@@ -1,27 +1,12 @@
 /** @file main.c Example using vol_geom with a .vols file comprising header, sequence, and Basis Universal textures.
- * Compile:
-g++ -fno-strict-aliasing -DBASISD_SUPPORT_KTX2=0 \
--o basisu_transcoder.o -c ../../thirdparty/basis_universal/transcoder/basisu_transcoder.cpp -I ../../src/ -I ../../thirdparty/
-gcc -o glad.o -c ../../thirdparty/glad/src/glad.c  -I ../../thirdparty/glad/include/
-g++ -g -o vol_basis.o -c ../../src/vol_basis.cpp -I ../../src/ -I ../../thirdparty/
-gcc -g -o vol_geom.o -c ../../src/vol_geom.c
-gcc -g -o gfx.o -c ../../thirdparty/apg/gfx.c -I ../../thirdparty/glad/include/
-gcc -g -o apg_maths.o -c ../../thirdparty/apg/apg_maths.c
-gcc -g -o main.o -c main.c -I ../../thirdparty/apg/ -I ../../thirdparty/glad/include/ -I ../../src/
-g++ -g -Wall -Werror -pedantic -o vol_geom_combined.bin \
-main.o apg_maths.o gfx.o vol_geom.o vol_basis.o glad.o basisu_transcoder.o \
--lglfw -lm
-*/
-
-// TODO audio - new demo?
-// TODO - sort out vol_basis and TODOs here about malloc
-// TODO - UASTC support and
-// TODO - switching compressed formats on the fly.
-// TODO also make sure I didn't break the old split file.
-// TODO think longer term about deprecating 'file info' struct and just doing:
-// TODO fuzzing.
-//    vol_geom_read_hdr_from_file()
-//    vol_geom_read_frame_from_mem() for streaming.
+ * Authors:   Anton Gerdelan <anton@volograms.com>
+ * Copyright: 2023, Volograms (http://volograms.com/)
+ * Language:  C99
+ * Licence:   The MIT License. See LICENSE.md for details.
+ *
+ * You can load a vologram like this:
+ * ./vol_geom_single_file.bin FILE.vols
+ */
 
 #include "gfx.h"
 #include "apg_maths.h"
@@ -41,7 +26,7 @@ main.o apg_maths.o gfx.o vol_geom.o vol_basis.o glad.o basisu_transcoder.o \
 static uint8_t* output_blocks_ptr;
 
 static void _update_compressed_texture( int level_index, uint8_t* output_blocks_ptr, gfx_texture_t* texture_ptr ) {
-  GLenum internal_format = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT; // NOTE DXt5 is for cTFBC3_RGBA!!!
+  GLenum internal_format = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT; // NOTE DXt5 is for cTFBC3_RGBA.
   glBindTexture( GL_TEXTURE_2D, texture_ptr->handle_gl );
   glCompressedTexImage2D( GL_TEXTURE_2D, level_index, internal_format, texture_ptr->w, texture_ptr->h, 0, texture_ptr->w * texture_ptr->h, output_blocks_ptr );
   glBindTexture( GL_TEXTURE_2D, 0 );
@@ -82,19 +67,17 @@ static bool _update_mesh_with_frame( gfx_mesh_t* mesh_ptr, int frame_number, con
 }
 
 int main( int argc, char** argv ) {
-  // TODO(Anton) there is already a block in vol_basis we could use?
+  const char* filename_vols = argv[1];
+  if ( argc < 2 ) {
+    filename_vols = "../samples/combined.vols";
+    printf( "Usage: %s MYFILE.vols\n. Using default: %s", argv[0], filename_vols );
+  }
+
   output_blocks_ptr = (uint8_t*)malloc( OUTPUT_DIMS * OUTPUT_DIMS );
   if ( !vol_basis_init() ) {
     fprintf( stderr, "ERROR vol_basis_init() failed\n" );
     return 1;
   }
-  printf( "Vol basis init.\n" );
-
-  if ( argc < 2 ) {
-    printf( "Usage: %s MYFILE.vols\n", argv[0] );
-    return 0;
-  }
-  const char* filename_vols = argv[1];
   printf( "Loading combined header&sequence file `%s`\n", filename_vols );
 
   // Populate the meta-data struct from a single .vols file.
@@ -189,7 +172,6 @@ int main( int argc, char** argv ) {
   gfx_stop();
 
   if ( !vol_geom_free_file_info( &vols_info ) ) { fprintf( stderr, "ERROR: freeing vol info\n" ); }
-  if ( !vol_basis_free() ) { fprintf( stderr, "ERROR: vol_basis_free\n" ); }
 
   if ( output_blocks_ptr ) { free( output_blocks_ptr ); }
 

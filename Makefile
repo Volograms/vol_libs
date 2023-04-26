@@ -62,7 +62,7 @@ example_06:
 	$(CC) $(FLAGS) $(DEBUG) $(SANS) -o gfx.o -c thirdparty/apg/gfx.c -I thirdparty/glad/include/
 	$(CC) $(FLAGS) $(DEBUG) $(SANS) -o apg_maths.o -c thirdparty/apg/apg_maths.c
 	$(CC) $(FLAGS) $(DEBUG) $(SANS) -o main.o -c examples/06_vol_geom_single_file/main.c -I thirdparty/apg/ -I thirdparty/glad/include/ -I src/
-	$(CPP) $(FLAGS) $(DEBUG) $(SANS) -o examples/vol_geom_combined$(BIN_EXT) main.o apg_maths.o gfx.o vol_geom.o vol_basis.o glad.o basisu_transcoder.o -lglfw -lm
+	$(CPP) $(FLAGS) $(DEBUG) $(SANS) -o examples/vol_geom_single_file$(BIN_EXT) main.o apg_maths.o gfx.o vol_geom.o vol_basis.o glad.o basisu_transcoder.o -lglfw -lm
 
 example_programs: example_06
 	$(POSTBLD_AV)

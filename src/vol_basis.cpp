@@ -4,14 +4,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static int _dims_presize = 2048;
-static uint8_t* _output_blocks_ptr; // TODO(Anton) -- unused??!
-
 bool vol_basis_init( void ) {
   basist::basisu_transcoder_init();
-  uint32_t output_blocks_buf_size_in_blocks_or_pixels = _dims_presize * _dims_presize;
-  _output_blocks_ptr                                  = (uint8_t*)malloc( 2048 * 2048 );
-  if ( !_output_blocks_ptr ) { return false; }
   return true;
 }
 
@@ -54,11 +48,5 @@ bool vol_basis_transcode( //
   *w_ptr = level_info.m_width;
   *h_ptr = level_info.m_height;
 
-  return true;
-}
-
-bool vol_basis_free( void ) {
-  if ( _output_blocks_ptr ) { free( _output_blocks_ptr ); }
-  _output_blocks_ptr = NULL;
   return true;
 }
