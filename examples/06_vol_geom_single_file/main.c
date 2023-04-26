@@ -6,6 +6,9 @@
  *
  * You can load a vologram like this:
  * ./vol_geom_single_file.bin FILE.vols
+ * If no file is specified a default file will load.
+ * 
+ * This demo does not play sound, but can output the sound chunk to a file.
  */
 
 #include "gfx.h"
