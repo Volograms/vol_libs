@@ -42,7 +42,6 @@ static bool _update_mesh_with_frame( gfx_mesh_t* mesh_ptr, int frame_number, con
     fprintf( stderr, "ERROR: reading frame 0 from vol sequence file\n" );
     return false;
   }
-  // NOTE(Anton) the 'short' ints used here are a brittle part of the spec - be careful!
   float* points_ptr    = (float*)&vols_frame_data.block_data_ptr[vols_frame_data.vertices_offset];
   float* uvs_ptr       = (float*)&vols_frame_data.block_data_ptr[vols_frame_data.uvs_offset];
   uint8_t indices_type = 1; // indices_type - Data type of indices - 0=unsigned byte, 1=unsigned short, 2=unsigned int.
