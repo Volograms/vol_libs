@@ -82,7 +82,7 @@ VOL_GEOM_EXPORT typedef struct vol_geom_file_hdr_t {
   uint32_t texture_height;          // Changed from int16_t to uint32_t in v1.3.
   float fps;                        // Added in v1.3. Most volograms are 30.0, but allows 29.97 and similar.
   uint32_t audio;                   // Added in v1.3. { 0: no audio, 1: opus }.
-  uint32_t audio_start;             // Added in v1.3. Start of audio data as byte offset from start of file. Should be 44 in v1.3.
+  uint32_t audio_start;             // Added in v1.3. Start of audio chunk (containing size+data) as byte offset from start of file. Should be 44 in v1.3.
   uint32_t frame_body_start;        // Added in v1.3. Byte offset from start of file. Without audio = 48, otherwise 48 + audio file size;
   uint16_t texture_format;          // Removed in v1.3. Follows UnityEngine.TextureFormat enum.
   float translation[3];             // Removed in v1.3. Added in v1.2.
@@ -118,10 +118,10 @@ VOL_GEOM_EXPORT typedef struct vol_geom_frame_directory_entry_t {
 /** Meta-data about the whole Vologram sequence. Load this once with `vol_geom_create_file_info()` before using the Vologram. */
 VOL_GEOM_EXPORT typedef struct vol_geom_info_t {
   vol_geom_file_hdr_t hdr;
-  /// Pointer to the audio chunk, if one exists, otherwise NULL.
-  uint8_t* audio_chunk_ptr;
-  /// Size of the chunk in bytes.
-  uint32_t audio_chunk_sz;
+  /// Size of the audio data in bytes. This value is from the start of the audio chunk, before the data.
+  uint32_t audio_data_sz;
+  /// Pointer to the audio data, if it exists, otherwise NULL.
+  uint8_t* audio_data_ptr;
   /// Vologram's directory of blob contents. NOTE(Anton) - this could really be stored the binary file spec right after the header similar to IFF.
   vol_geom_frame_directory_entry_t* frames_directory_ptr;
   /// Pointer to frame header structs for each frame.

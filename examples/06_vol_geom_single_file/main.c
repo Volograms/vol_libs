@@ -25,10 +25,6 @@ main.o apg_maths.o gfx.o vol_geom.o vol_basis.o glad.o basisu_transcoder.o \
 
 #include "gfx.h"
 #include "apg_maths.h"
-#include "portaudio.h"
-// #define STB_VORBIS_HEADER_ONLY
-#include "stb/stb_vorbis.c"
-#include <portaudio.h>
 #include "vol_basis.h"
 #include "vol_geom.h"
 #include "glad/glad.h"
@@ -37,14 +33,12 @@ main.o apg_maths.o gfx.o vol_geom.o vol_basis.o glad.o basisu_transcoder.o \
 #include <stdlib.h>
 #include <string.h>
 
-// Scratch memory to use for transcoding compressed textures.
+/// If uncommented then this example writes the Opus audio chunk out to `audio.ogg`. Note that this is not an ogg vorbis file.
+#define WRITE_AUDIO_FILE
+
+/// Scratch memory to use for transcoding compressed textures.
 #define OUTPUT_DIMS 2048
 static uint8_t* output_blocks_ptr;
-
-typedef struct audio_source_t {
-  stb_vorbis* ogg_stream_ptr;
-  stb_vorbis_info ogg_info;
-} audio_source_t;
 
 static void _update_compressed_texture( int level_index, uint8_t* output_blocks_ptr, gfx_texture_t* texture_ptr ) {
   GLenum internal_format = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT; // NOTE DXt5 is for cTFBC3_RGBA!!!
@@ -87,25 +81,7 @@ static bool _update_mesh_with_frame( gfx_mesh_t* mesh_ptr, int frame_number, con
   return true;
 }
 
-static int _pa_cb( const void* input_buffer_ptr, void* output_buffer_ptr, unsigned long frames_per_buffer, const PaStreamCallbackTimeInfo* time_info_ptr,
-  PaStreamCallbackFlags status_flags, void* user_data_ptr ) {
-  audio_source_t* audio_src_ptr = (audio_source_t*)user_data_ptr;
-  float* outf_ptr               = (float*)output_buffer_ptr;
-
-  if ( (unsigned long)stb_vorbis_get_samples_float_interleaved( audio_src_ptr->ogg_stream_ptr, audio_src_ptr->ogg_info.channels, outf_ptr, frames_per_buffer ) < frames_per_buffer ) {
-    return paComplete; // TODO -- this is a shorthand to indicate all frames buffered. check my other example.
-  }
-  return 0;
-}
-
 int main( int argc, char** argv ) {
-  audio_source_t audio_source = ( audio_source_t ){ .ogg_stream_ptr = NULL };
-  if ( paNoError != Pa_Initialize() ) {
-    fprintf( stderr, "PA failed to init\n" );
-    return 1;
-  }
-  PaStream* stream = NULL;
-
   // TODO(Anton) there is already a block in vol_basis we could use?
   output_blocks_ptr = (uint8_t*)malloc( OUTPUT_DIMS * OUTPUT_DIMS );
   if ( !vol_basis_init() ) {
@@ -153,30 +129,11 @@ int main( int argc, char** argv ) {
   }
 
   if ( vols_info.hdr.audio == 1 ) { // 0=no audio, 1=ogg vorbis/opus
-#define WRITE_AUDIO_FILE
 #ifdef WRITE_AUDIO_FILE
     FILE* f_ptr = fopen( "audio.ogg", "wb" );
-    fwrite( vols_info.audio_chunk_ptr, vols_info.audio_chunk_sz, 1, f_ptr );
+    fwrite( vols_info.audio_data_ptr, vols_info.audio_data_sz, 1, f_ptr );
     fclose( f_ptr );
 #endif
-    // Returns -1 on error e.g. not an OGG file.
-    short* output_ptr           = NULL;
-    int error                   = 0;
-    audio_source.ogg_stream_ptr = stb_vorbis_open_filename( "audio.ogg", &error, NULL );
-    // audio_source.ogg_stream_ptr = stb_vorbis_open_memory( vols_info.audio_chunk_ptr, vols_info.audio_chunk_sz, &error, NULL );
-    if ( !audio_source.ogg_stream_ptr ) {
-      fprintf( stderr, "audio_source.ogg_stream_ptr NULL. error %i\n", error );
-      return 1;
-    }
-    audio_source.ogg_info = stb_vorbis_get_info( audio_source.ogg_stream_ptr );
-
-    Pa_OpenDefaultStream( &stream,
-      0,                              // no input channels (mic/record etc)
-      audio_source.ogg_info.channels, // mono/stereo
-      paFloat32,                      // 8-bit, 16-bit int or 32-bit float
-      audio_source.ogg_info.sample_rate,
-      paFramesPerBufferUnspecified, // frames per buffer to request from callback (can use paFramesPerBufferUnspecified)
-      _pa_cb, &audio_source );
   }
 
   double prev_s       = gfx_get_time_s();
@@ -184,7 +141,6 @@ int main( int argc, char** argv ) {
   int curr_frame      = 0;
   int loaded_keyframe = 0;
 
-  Pa_StartStream( stream );
   // Pa_Sleep( audio_source.duration_s * 1000 );
   while ( !gfx_should_window_close() ) {
     int fb_w = 0, fb_h = 0, win_w = 0, win_h = 0;
@@ -233,14 +189,9 @@ int main( int argc, char** argv ) {
   gfx_stop();
 
   if ( !vol_geom_free_file_info( &vols_info ) ) { fprintf( stderr, "ERROR: freeing vol info\n" ); }
-
   if ( !vol_basis_free() ) { fprintf( stderr, "ERROR: vol_basis_free\n" ); }
 
   if ( output_blocks_ptr ) { free( output_blocks_ptr ); }
-
-  Pa_StopStream( stream );
-  Pa_CloseStream( stream );
-  Pa_Terminate();
 
   printf( "Normal exit.\n" );
   return 0;

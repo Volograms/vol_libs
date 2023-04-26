@@ -459,11 +459,11 @@ bool vol_geom_read_audio_from_file( const char* vols_filename, vol_geom_info_t* 
 
   f_ptr = fopen( vols_filename, "rb" );
   if ( !f_ptr ) { goto vgraff_fail; }
-  info_ptr->audio_chunk_sz = info_ptr->hdr.frame_body_start - info_ptr->audio_chunk_sz;
   if ( 0 != fseeko( f_ptr, info_ptr->hdr.audio_start, SEEK_SET ) ) { goto vgraff_fail; }
-  info_ptr->audio_chunk_ptr = malloc( info_ptr->audio_chunk_sz );
-  if ( !info_ptr->audio_chunk_ptr ) { goto vgraff_fail; }
-  if ( 1 != fread( info_ptr->audio_chunk_ptr, info_ptr->audio_chunk_sz, 1, f_ptr ) ) { goto vgraff_fail; }
+  if ( 1 != fread( &info_ptr->audio_data_sz, sizeof( uint32_t ), 1, f_ptr ) ) { goto vgraff_fail; }
+  info_ptr->audio_data_ptr = malloc( info_ptr->audio_data_sz );
+  if ( !info_ptr->audio_data_ptr ) { goto vgraff_fail; }
+  if ( 1 != fread( info_ptr->audio_data_ptr, info_ptr->audio_data_sz, 1, f_ptr ) ) { goto vgraff_fail; }
   fclose( f_ptr );
   return true;
 vgraff_fail:
@@ -557,23 +557,12 @@ cfi_fail:
 bool vol_geom_free_file_info( vol_geom_info_t* info_ptr ) {
   if ( !info_ptr ) { return false; }
 
-  if ( info_ptr->sequence_blob_byte_ptr ) {
-    _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Freeing sequence_blob_byte_ptr\n" );
-    free( info_ptr->sequence_blob_byte_ptr );
-  }
-
-  if ( info_ptr->preallocated_frame_blob_ptr ) {
-    _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Freeing preallocated_frame_blob_ptr\n" );
-    free( info_ptr->preallocated_frame_blob_ptr );
-  }
-  if ( info_ptr->frame_headers_ptr ) {
-    _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Freeing frame_headers_ptr\n" );
-    free( info_ptr->frame_headers_ptr );
-  }
-  if ( info_ptr->frames_directory_ptr ) {
-    _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Freeing frames_directory_ptr\n" );
-    free( info_ptr->frames_directory_ptr );
-  }
+  _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Freeing allocated vol_geom info_ptr memory.\n" );
+  if ( info_ptr->audio_data_ptr ) { free( info_ptr->audio_data_ptr ); }
+  if ( info_ptr->sequence_blob_byte_ptr ) { free( info_ptr->sequence_blob_byte_ptr ); }
+  if ( info_ptr->preallocated_frame_blob_ptr ) { free( info_ptr->preallocated_frame_blob_ptr ); }
+  if ( info_ptr->frame_headers_ptr ) { free( info_ptr->frame_headers_ptr ); }
+  if ( info_ptr->frames_directory_ptr ) { free( info_ptr->frames_directory_ptr ); }
   *info_ptr = ( vol_geom_info_t ){ .hdr.frame_count = 0 };
 
   return true;
