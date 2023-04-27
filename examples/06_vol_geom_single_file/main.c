@@ -7,7 +7,7 @@
  * You can load a vologram like this:
  * ./vol_geom_single_file.bin FILE.vols
  * If no file is specified a default file will load.
- * 
+ *
  * This demo does not play sound, but can output the sound chunk to a file.
  */
 
@@ -21,7 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-/// If uncommented then this example writes the Opus audio chunk out to `audio.ogg`. Note that this is not an ogg vorbis file.
+/// If uncommented then this example writes the audio chunk out to a playable file.
 #define WRITE_AUDIO_FILE
 
 /// Scratch memory to use for transcoding compressed textures.
@@ -113,9 +113,9 @@ int main( int argc, char** argv ) {
     return 1;
   }
 
-  if ( vols_info.hdr.audio == 1 ) { // 0=no audio, 1=ogg vorbis/opus
+  if ( vols_info.hdr.audio ) {
 #ifdef WRITE_AUDIO_FILE
-    FILE* f_ptr = fopen( "audio.ogg", "wb" );
+    FILE* f_ptr = fopen( "audiofile", "wb" );
     fwrite( vols_info.audio_data_ptr, vols_info.audio_data_sz, 1, f_ptr );
     fclose( f_ptr );
 #endif

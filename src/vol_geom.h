@@ -81,7 +81,7 @@ VOL_GEOM_EXPORT typedef struct vol_geom_file_hdr_t {
   uint32_t texture_width;           // Changed from int16_t to uint32_t in v1.3.
   uint32_t texture_height;          // Changed from int16_t to uint32_t in v1.3.
   float fps;                        // Added in v1.3. Most volograms are 30.0, but allows 29.97 and similar.
-  uint32_t audio;                   // Added in v1.3. { 0: no audio, 1: opus }.
+  uint32_t audio;                   // Added in v1.3. ( 0: no audio ).
   uint32_t audio_start;             // Added in v1.3. Start of audio chunk (containing size+data) as byte offset from start of file. Should be 44 in v1.3.
   uint32_t frame_body_start;        // Added in v1.3. Byte offset from start of file. Without audio = 48, otherwise 48 + audio file size;
   uint16_t texture_format;          // Removed in v1.3. Follows UnityEngine.TextureFormat enum.
