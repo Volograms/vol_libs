@@ -5,7 +5,7 @@
 # make -e SANS="" -e CC=gcc -e "FLAGS=-std=c99 -m64 -Wfatal-errors -Wextra -Wall"
 
 CC          = clang -std=gnu99
-CPP         = clang++
+CPP         = clang++ -std=c++11
 # -Werror is useful when upgrading the API as it upgrades deprecation warnings to errors.
 # NB -std=gnu99 includes time spec struct used for timing in test code.
 # -D_FILE_OFFSET_BITS=64 forces stat() to use 64-bit file sizes, even on 32-bit systems.
