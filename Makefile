@@ -25,7 +25,8 @@ POSTBLD_AV  =
 CLEAN_CMD   = rm -f examples/*.bin examples/frame*.ppm examples/frame*.pgm tests/*.bin tools/*.bin
 
 ifeq ($(OS),Windows_NT)
-	CC         = GCC
+	CC         = GCC -std=gnu99
+	CPP         = G++ -std=c++11
 	SANS       =
 	FLAGS      = -m64 -Wfatal-errors -Wextra -Wall
 	FLAGS     += -D _CRT_SECURE_NO_WARNINGS
