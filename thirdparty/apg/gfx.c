@@ -18,13 +18,13 @@ Author:  Anton Gerdelan <antonofnote at gmail> @capnramses
 #define GFX_MAX_SHADER_STR 10000
 
 GLFWwindow* gfx_window_ptr; // extern in apg_glcontext.h
-gfx_shader_t gfx_default_shader, gfx_quad_texture_shader;
+gfx_shader_t gfx_default_shader, gfx_default_textured_shader, gfx_quad_texture_shader;
 gfx_mesh_t gfx_ss_quad_mesh;
 
 static GLFWmonitor* gfx_monitor_ptr;
 static int g_win_width = 1920, g_win_height = 1080;
 
-static void _init_ss_quad() {
+static void _init_ss_quad( void ) {
   float ss_quad_pos[] = { -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0, -1.0 };
   gfx_ss_quad_mesh    = gfx_create_mesh_from_mem( //
     ss_quad_pos, 2,                            // vp
@@ -89,6 +89,32 @@ bool gfx_start( const char* window_title, int w, int h, bool fullscreen ) {
   const GLubyte* version  = glGetString( GL_VERSION );
   printf( "Renderer: %s\n", renderer );
   printf( "OpenGL version supported %s\n", version );
+  { // gfx_default_textured_shader
+    const char* vertex_shader =
+      "#version 410 core\n"
+      "in vec3 a_vp;\n"
+      "in vec2 a_vt;\n"
+      "uniform mat4 u_P, u_V, u_M;\n"
+      "out vec2 v_st;\n"
+      "void main () {\n"
+      "  v_st = a_vt;\n"
+      "  v_st.t = 1.0 - v_st.t;\n"
+      "  gl_Position = u_P * u_V * u_M * vec4( a_vp, 1.0 );\n"
+      "}\n";
+    const char* fragment_shader =
+      "#version 410 core\n"
+      "in vec2 v_st;\n"
+      "uniform sampler2D u_tex;\n"
+      "out vec4 o_frag_colour;\n"
+      "void main () {\n"
+      "  vec4 texel = texture( u_tex, v_st );\n"
+      "  texel.rgb = pow( texel.rgb, vec3( 2.2 ) );\n"
+      "  o_frag_colour = texel;\n"
+      "  o_frag_colour.rgb = pow( o_frag_colour.rgb, vec3( 1.0 / 2.2 ) );\n"
+      "}\n";
+    gfx_default_textured_shader = gfx_create_shader_program_from_strings( vertex_shader, fragment_shader );
+    if ( !gfx_default_textured_shader.loaded ) { return false; }
+  } // gfx_default_textured_shader
   {
     const char* vertex_shader =
       "#version 410 core\n"
@@ -126,7 +152,8 @@ bool gfx_start( const char* window_title, int w, int h, bool fullscreen ) {
   return true;
 }
 
-void gfx_stop() {
+void gfx_stop( void ) {
+  if ( gfx_default_textured_shader.loaded ) { gfx_delete_shader_program( &gfx_default_textured_shader ); }
   if ( gfx_quad_texture_shader.loaded ) { gfx_delete_shader_program( &gfx_quad_texture_shader ); }
   glfwTerminate();
 }
@@ -140,7 +167,7 @@ void gfx_depth_testing( bool enable ) {
   }
 }
 
-bool gfx_should_window_close() {
+bool gfx_should_window_close( void ) {
   assert( gfx_window_ptr );
   return glfwWindowShouldClose( gfx_window_ptr );
 }
@@ -168,13 +195,13 @@ void gfx_window_set_dims( int width, int height ) {
 
 void gfx_window_set_title( const char* title_str ) { glfwSetWindowTitle( gfx_window_ptr, title_str ); }
 
-void gfx_swap_buffer() {
+void gfx_swap_buffer( void ) {
   assert( gfx_window_ptr );
 
   glfwSwapBuffers( gfx_window_ptr );
 }
 
-void gfx_poll_events() {
+void gfx_poll_events( void ) {
   assert( gfx_window_ptr );
 
   glfwPollEvents();
@@ -577,11 +604,11 @@ void gfx_draw_textured_quad( gfx_texture_t texture, vec2 scale, vec2 pos, vec2 t
   glDisable( GL_BLEND );
 }
 
-void gfx_wireframe_mode() { glPolygonMode( GL_FRONT_AND_BACK, GL_LINE ); }
+void gfx_wireframe_mode( void ) { glPolygonMode( GL_FRONT_AND_BACK, GL_LINE ); }
 
-void gfx_polygon_mode() { glPolygonMode( GL_FRONT_AND_BACK, GL_FILL ); }
+void gfx_polygon_mode( void ) { glPolygonMode( GL_FRONT_AND_BACK, GL_FILL ); }
 
-double gfx_get_time_s() { return glfwGetTime(); }
+double gfx_get_time_s( void ) { return glfwGetTime(); }
 
 bool input_is_key_held( int keycode ) {
   assert( gfx_window_ptr && keycode >= 32 && keycode <= GLFW_KEY_LAST );

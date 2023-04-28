@@ -4,11 +4,12 @@
 # to build with GCC instead (eg on a server):
 # make -e SANS="" -e CC=gcc -e "FLAGS=-std=c99 -m64 -Wfatal-errors -Wextra -Wall"
 
-CC          = clang
+CC          = clang -std=gnu99
+CPP         = clang++ -std=c++11
 # -Werror is useful when upgrading the API as it upgrades deprecation warnings to errors.
 # NB -std=gnu99 includes time spec struct used for timing in test code.
 # -D_FILE_OFFSET_BITS=64 forces stat() to use 64-bit file sizes, even on 32-bit systems.
-FLAGS       = -std=gnu99 -m64 -Wfatal-errors -pedantic -Wextra -Wall -D_FILE_OFFSET_BITS=64
+FLAGS       = -m64 -Wfatal-errors -pedantic -Wextra -Wall -D_FILE_OFFSET_BITS=64
 DEBUG       = -g -DVOL_AV_DEBUG
 #SANS        = -fsanitize=address -fsanitize=undefined 
 INC_DIR     = -I src/ -I thirdparty/ -I thirdparty/apg/ -I thirdparty/glad/include/
@@ -24,9 +25,10 @@ POSTBLD_AV  =
 CLEAN_CMD   = rm -f examples/*.bin examples/frame*.ppm examples/frame*.pgm tests/*.bin tools/*.bin
 
 ifeq ($(OS),Windows_NT)
-	CC         = GCC
+	CC         = GCC -std=gnu99
+	CPP         = G++ -std=c++11
 	SANS       =
-	FLAGS      = -std=c99 -m64 -Wfatal-errors -Wextra -Wall
+	FLAGS      = -m64 -Wfatal-errors -Wextra -Wall
 	FLAGS     += -D _CRT_SECURE_NO_WARNINGS
   BIN_EXT    = .exe
 	INC_DIR   += -I thirdparty/ffmpeg/include/ -I thirdparty/GLFW/include/
@@ -53,7 +55,17 @@ endif
 
 all: example_programs test_programs tool_programs
 
-example_programs:
+example_06:
+	$(CPP) -fno-strict-aliasing -DBASISD_SUPPORT_KTX2=0 -o basisu_transcoder.o -c thirdparty/basis_universal/transcoder/basisu_transcoder.cpp -I src/ -I thirdparty/
+	$(CC) $(FLAGS) $(DEBUG) $(SANS) -o glad.o -c thirdparty/glad/src/glad.c  -I thirdparty/glad/include/
+	$(CPP) $(FLAGS) $(DEBUG) $(SANS) -o vol_basis.o -c src/vol_basis.cpp -I src/ -I thirdparty/
+	$(CC) $(FLAGS) $(DEBUG) $(SANS) -o vol_geom.o -c src/vol_geom.c
+	$(CC) $(FLAGS) $(DEBUG) $(SANS) -o gfx.o -c thirdparty/apg/gfx.c -I thirdparty/glad/include/
+	$(CC) $(FLAGS) $(DEBUG) $(SANS) -o apg_maths.o -c thirdparty/apg/apg_maths.c
+	$(CC) $(FLAGS) $(DEBUG) $(SANS) -o main.o -c examples/06_vol_geom_single_file/main.c -I thirdparty/apg/ -I thirdparty/glad/include/ -I src/
+	$(CPP) $(FLAGS) $(DEBUG) $(SANS) -o examples/vol_geom_single_file$(BIN_EXT) main.o apg_maths.o gfx.o vol_geom.o vol_basis.o glad.o basisu_transcoder.o -lglfw -lm
+
+example_programs: example_06
 	$(POSTBLD_AV)
 	$(POSTBLD_GL)
 	$(CC) $(FLAGS) $(DEBUG) $(SANS) -o examples/get_images$(BIN_EXT) examples/00_get_images/main.c $(SRC_AV) $(INC_DIR) $(STA_LIB_AV) $(LIB_DIR) $(DYN_LIB_AV)

@@ -46,18 +46,18 @@ typedef struct gfx_shader_t {
 } gfx_shader_t;
 
 bool gfx_start( const char* window_title, int w, int h, bool fullscreen );
-void gfx_stop();
+void gfx_stop( void );
 
 void gfx_depth_testing( bool enable );
-bool gfx_should_window_close();
+bool gfx_should_window_close( void );
 void gfx_framebuffer_dims( int* width, int* height );
 void gfx_window_dims( int* width, int* height );
 void gfx_window_set_dims( int width, int height );
 void gfx_window_set_title( const char* title_str );
 void gfx_viewport( int x, int y, int w, int h );
 void gfx_clear_colour_and_depth_buffers( float r, float g, float b, float a );
-void gfx_swap_buffer();
-void gfx_poll_events();
+void gfx_swap_buffer( void );
+void gfx_poll_events( void );
 void gfx_backface_culling( bool enable );
 void gfx_winding_cw( bool enable );
 
@@ -84,7 +84,9 @@ void gfx_update_mesh_from_mem( gfx_mesh_t* mesh,                              //
 void gfx_delete_mesh( gfx_mesh_t* mesh );
 
 gfx_shader_t gfx_create_shader_program_from_files( const char* vert_shader_filename, const char* frag_shader_filename );
+
 gfx_shader_t gfx_create_shader_program_from_strings( const char* vert_shader_str, const char* frag_shader_str );
+
 void gfx_delete_shader_program( gfx_shader_t* shader );
 
 typedef struct gfx_texture_properties_t {
@@ -98,24 +100,32 @@ typedef struct gfx_texture_t {
 } gfx_texture_t;
 
 gfx_texture_t gfx_create_texture_from_mem( const uint8_t* img_buffer, int w, int h, int n_channels, gfx_texture_properties_t properties );
+
 void gfx_delete_texture( gfx_texture_t* texture );
+
 // PARAMS - if properties haven't changed you can use texture->is_depth etc.
 void gfx_update_texture( gfx_texture_t* texture, const uint8_t* img_buffer, int w, int h, int n_channels );
+
 void gfx_update_texture_sub_image( gfx_texture_t* texture, const uint8_t* img_buffer, int x_offs, int y_offs, int w, int h );
 
 typedef enum gfx_primitive_type_t { GFX_PT_TRIANGLES = 0, GFX_PT_TRIANGLE_STRIP, GFX_PT_POINTS } gfx_primitive_type_t;
 
 /* Draw a mesh, in a given primitive mode, with a shader, using virtual camera and local->world matrices, and optional array of textures */
 void gfx_draw_mesh( gfx_mesh_t mesh, gfx_primitive_type_t pt, gfx_shader_t shader, float* P, float* V, float* M, gfx_texture_t* textures, int n_textures );
+
 void gfx_draw_textured_quad( gfx_texture_t texture, vec2 scale, vec2 pos, vec2 texcoord_scale, vec4 tint_rgba );
 
 void gfx_uniform1f( gfx_shader_t shader, int location, float f );
 
-void gfx_wireframe_mode();
-void gfx_polygon_mode();
+void gfx_wireframe_mode( void );
 
-double gfx_get_time_s();
+void gfx_polygon_mode( void );
+
+double gfx_get_time_s( void );
+
 bool input_is_key_held( int keycode );
+
+extern gfx_shader_t gfx_default_textured_shader; /** A default shader, as gfx_quad_texture_shader but using u_P, u_V, u_M instead of scale, pos etc. */
 
 #ifdef __cplusplus
 }

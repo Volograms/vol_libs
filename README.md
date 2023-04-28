@@ -5,12 +5,12 @@ The libraries here are designed to be used in native plugins for Unity, Unreal a
 See individual libraries headers for version history and current features.
 
 | Library  | Version | Files | Description                                         | Fuzzed With                          |
-|----------|---------|-------|-----------------------------------------------------|--------------------------------------|
+| -------- | ------- | ----- | --------------------------------------------------- | ------------------------------------ |
 | vol_av   | 0.9     | 2     | Extracts images and audio from videos using FFmpeg. | [AFL](https://github.com/google/AFL) |
 | vol_geom | 0.10    | 2     | Extracts mesh data from header and sequence files.  | [AFL](https://github.com/google/AFL) |
 
 | Tool    | Version | Libraries Used | Description                                                 |
-|---------|---------|----------------|-------------------------------------------------------------|
+| ------- | ------- | -------------- | ----------------------------------------------------------- |
 | obj2vol | 0.1     | n/a            | Converts a Wavefront .obj model to a single-frame vologram. |
 
 
@@ -59,15 +59,15 @@ cd examples/
 `./vol_geom_av_opengl.bin PATH_TO_MY/header.vols PATH_TO_MY/sequence_0.vols PATH_TO_MY/texture_2048_h264.mp4`
 ```
 
-| Example             | Description                                                                                                                                                                                                   | Parameters                                                                    |
-|---------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------|
-| get_images          | Example code showing how to use vol_av to fetch textures from the video.                                                                                                                                      | `./get_images.bin ../samples/counter.webm`                                    |
-| dump_images         | As `get_images` but dumps images to files.                                                                                                                                                                    | `./dump_images.bin ../samples/counter.webm`                                   |
-| vol_geom_opengl     | Example using vol_geom to load mesh frames from a vologram and render in OpenGL without a texture. Loads a cube by default,  or supply a path to a vologram header and sequence file.                         | `./vol_geom_opengl.bin ../samples/cone_hdr.vol ../samples/cone_seq.vol`       |
-| vol_geom_av_opengl  | Combines both vol_geom and vol_av and renders a textured vologram sequence in OpenGL. Displays the first frame of a video on a quad by default, but supply paths to a header, sequence, and video file to display a vologram. Advance one frame with `spacebar`, play/pause with `p`. |       |
-| vol_geom_wasm_webgl | Plays a vologram in a webpage, with WebGL, using vol_geom compiled to web assembly.                                                                                                                                        | Host an HTTP server from the project's root directory, and connect with a browser. |
-| vol_geom_wasm_threejs | Plays a vologram in a webpage, with [Three.js](https://threejs.org/), using vol_geom compiled to web assembly.                                                                                                                                        | Host an HTTP server from the project's root directory, and connect with a browser. |
-
+| Example               | Description                                                                                                                                                                                                                                                                           | Parameters                                                                         |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| get_images            | Example code showing how to use vol_av to fetch textures from the video.                                                                                                                                                                                                              | `./get_images.bin ../samples/counter.webm`                                         |
+| dump_images           | As `get_images` but dumps images to files.                                                                                                                                                                                                                                            | `./dump_images.bin ../samples/counter.webm`                                        |
+| vol_geom_opengl       | Example using vol_geom to load mesh frames from a vologram and render in OpenGL without a texture. Loads a cube by default,  or supply a path to a vologram header and sequence file.                                                                                                 | `./vol_geom_opengl.bin ../samples/cone_hdr.vol ../samples/cone_seq.vol`            |
+| vol_geom_av_opengl    | Combines both vol_geom and vol_av and renders a textured vologram sequence in OpenGL. Displays the first frame of a video on a quad by default, but supply paths to a header, sequence, and video file to display a vologram. Advance one frame with `spacebar`, play/pause with `p`. |                                                                                    |
+| vol_geom_wasm_webgl   | Plays a vologram in a webpage, with WebGL, using vol_geom compiled to web assembly.                                                                                                                                                                                                   | Host an HTTP server from the project's root directory, and connect with a browser. |
+| vol_geom_wasm_threejs | Plays a vologram in a webpage, with [Three.js](https://threejs.org/), using vol_geom compiled to web assembly.                                                                                                                                                                        | Host an HTTP server from the project's root directory, and connect with a browser. |
+| vol_geom_single_file  | Use vol_geom to play a vologram where the header, sequence, and texture are all in one .vols file.                                                                                                                                                                                    | `./vol_geom_single_file.bin samples/combined.vols`                                 |
 
 ![vol_geom_av_opengl used to load a Vologram captured with Volu and animate it in OpenGL](example_jan.png)
 
@@ -120,6 +120,21 @@ PR Descriptions should include this template:
 Copyright 2021-2023, Volograms. The MIT License. See the LICENSE file for details.
 
 ### Dependencies
+
+* This software uses the unaltered transcoder from [Basis Universal](https://binomialllc.github.io/basis_universal/) by [Binomial](http://www.binomial.info/). The transcoder, in turn, uses some code under zlib and BSD (Zstandard). The supported texture formats are [open Khronos Group standards](https://www.khronos.org/registry/DataFormat/specs/1.1/dataformat.1.1.html).
+
+>    Licensed under the Apache License, Version 2.0 (the "License");
+>    you may not use this file except in compliance with the License.
+>    You may obtain a copy of the License at
+> 
+>        http://www.apache.org/licenses/LICENSE-2.0
+> 
+>    Unless required by applicable law or agreed to in writing, software
+>    distributed under the License is distributed on an "AS IS" BASIS,
+>    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+>    See the License for the specific language governing permissions and
+>    limitations under the License.
+
 
 * This software uses unaltered code of <a href=http://ffmpeg.org>FFmpeg</a> licensed under the <a href=http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html>LGPLv2.1</a> and its source code can be found at [FFmpeg](https://github.com/FFmpeg/FFmpeg).
 
