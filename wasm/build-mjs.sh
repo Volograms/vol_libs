@@ -19,19 +19,25 @@ trap 'abort' 0
 set -e
 
 echo "emcc..."
-emcc -O3 \
---pre-js ./pre.js \
--sEXPORTED_RUNTIME_METHODS=ccall,cwrap,FS \
+CC=gcc
+CPP="g++ -std=c++11"
+
+emcc -O3 -fno-strict-aliasing -DBASISD_SUPPORT_KTX2=0 \
+-s "EXPORTED_RUNTIME_METHODS=['ccall','cwrap','FS']" \
+-s SINGLE_FILE \
+-s ALLOW_MEMORY_GROWTH \
+-s EXPORT_NAME="Module" \
+-o vol_basis.mjs \
+--pre-js "pre.js" \
 -g \
+../src/vol_basis.cpp \
 wasm_vol_geom.c \
 ../src/vol_geom.c \
--sENVIRONMENT='web' \
--sSINGLE_FILE \
--sFORCE_FILESYSTEM \
--sASYNCIFY \
--sALLOW_MEMORY_GROWTH \
+../thirdparty/basis_universal/transcoder/basisu_transcoder.cpp \
+-I ./ \
 -I ../src/ \
--o vol_web.mjs
+-I ../thirdparty/ \
+-I ../thirdparty/basis_universal/transcoder
 echo "emcc done"
 
 trap : 0

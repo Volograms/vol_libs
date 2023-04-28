@@ -128,6 +128,27 @@ Initialise and expose vologram related wasm functions (for convenience, but reco
 
 ### After `initVologramFunctions`
 
+#### `Module.basis_get_data(): [Number]`
+
+Returns the transcoded texture data as a byte array (calls `basis_get_transcoded_ptr`, `texture_width` and `texture_height`)
+
+#### `Module.basis_get_transcoded_ptr(): Number`
+
+Returns the pointer to the transcoded texture data.
+
+#### `Module.basis_get_transcoded_sz(): Number`
+
+Returns the size in bytes of the transcoded texture data.
+
+#### `Module.basis_transcode(format: Number, dataPtr: Number, dataSize: Number): Boolean`
+
+Perform basis transcode on texture data. Returns `true` is successful and `false` otherwise.
+
+Parameters:
+* `format: Number` - Basis format
+* `dataPtr: Number` - Pointer to texture data buffer
+* `dataSize: Number` - Size, in bytes, of texture data
+
 #### `Module.create_file_info(hdr: String, seq: String): Boolean`
 
 Open and initialse a vologram. Returns `true` if successful and `false` otherwise.
@@ -135,6 +156,10 @@ Open and initialse a vologram. Returns `true` if successful and `false` otherwis
 Parameters:
 * `hdr: String` - Path of vologram header file
 * `seq: String` - Path of vologram sequence file
+
+#### `Module.find_basis_fmt(gl: RenderingContext, hasAlpha: Boolean = true): [Number, Number]`
+
+Calculates the supported GL format and basis format of the rendering context and returns them as an array of 2 numbers like so: \[ GL, Basis \]
 
 #### `Module.find_previous_keyframe(frame_idx: Number): Number`
 
@@ -150,6 +175,22 @@ Returns the number of frames in the vologram
 #### `Module.frame_data_ptr(): Array`
 
 Returns pointer to loaded frame data 
+
+#### `Module.frame_get_ind(): [Number]`
+
+Returns the indices data as a byte array (calls `frame_indices_copied` and `frame_i_sz`)
+
+#### `Module.frame_get_norms(): [Number]`
+
+Returns the normals data as a byte array (calls `frame_normals_copied` and `frame_normals_sz`)
+
+#### `Module.frame_get_uvs(): [Number]`
+
+Returns the texture coordinate data as a byte array (calls `frame_uvs_copied` and `frame_uvs_sz`)
+
+#### `Module.frame_get_verts(): [Number]`
+
+Returns the vertices data as a byte array (calls `frame_vp_copied` and `frame_vertices_sz`)
 
 #### `Module.frame_indices_copied(): Array`
 
@@ -203,6 +244,10 @@ Dispose of vologram info. The vologram cannot be played after this function is c
 
 Returns `true` if the loaded vologram has normals, `false` otherwise.
 
+#### `Module.has_texture(): Boolean`
+
+Returns `true` if the loaded vologram has an internal texture, `false` otherwise.
+
 #### `Module.is_keyframe(frame_idx: Number): Boolean` 
 
 Returns `true` if the vologram frame numbered `frame_idx` is a key frame, or `false` otherwise. 
@@ -225,9 +270,37 @@ Reads a frame of the vologram. Returns `true` if successful and `false` otherwis
 Parameters:
 * `frame_idx: Number` - Frame index to read 
 
+#### `Module.run_basis_transcode(size: Number): Boolean`
+
+Performs the same function as `basis_transcode` but the pointer and size of the data is calculated based on vologram frame data
+
+Parameters:
+* `format: Number` - Basis format
+
+#### `Module.texture_height(): Number`
+
+Returns the height of the vologram texture 
+
+#### `Module.texture_width(): Number`
+
+Returns the width of the vologram texture 
+
 ***
 
 ### Without `initVologramFunctions`
+
+#### Unavailable Functions
+
+The following functions **cannot** be called unless `initVologramFunctions` has been called beforehand:
+
+* `basis_get_data()`
+* `find_basis_fmt()`
+* `frame_get_ind()`
+* `frame_get_norms()`
+* `frame_get_uvs()`
+* `frame_get_verts()`
+
+#### Calling Available Functions
 
 If you have not called `initVologramFunctions` you can still call the volograms wasm function using emscripten's `ccall`. To do this you need to pass in the name of the c function you want to call, the return type as a string, a string array of the parameter types and an array containing the parameters.
 
@@ -244,6 +317,9 @@ The following table shows the correct parameters for ccall-ing the vologram func
 
 | Func | C name | Ret type | Param Types |
 | :-- | :-- | :-- | :-- |
+| `basis_get_transcoded_ptr` | `"basis_get_transcoded_ptr"` | `"number"` | | 
+| `basis_get_transcoded_sz` | `"basis_get_transcoded_sz"` | `"number"` | | 
+| `basis_transcode` | `"basis_transcode"` | `"boolean"` | `["number", "number", "number"]` | 
 | `create_file_info` | `"create_file_info"` | `"boolean"` | `["string", "string"]` | 
 | `find_previous_keyframe` | `"find_previous_keyframe"` | `"number"` | `["number"]` |
 | `frame_count` | `"frame_count"` | `"number"` |  |
@@ -261,11 +337,15 @@ The following table shows the correct parameters for ccall-ing the vologram func
 | `frame_vp_offset` | `"frame_vp_offset"` | `"number"` |  |
 | `free_file_info` | `"free_file_info"` | `"boolean"` |  |
 | `has_normals` | `"has_normals"` | `"boolean"` |  |
+| `has_texture` | `"has_texture"` | `"boolean"` |  |
 | `is_keyframe` | `"is_keyframe"` | `"boolean"` | `["number"]` |
 | `loaded_frame_number` | `"loaded_frame_number"` | `"number"` |  |
 | `max_blob_sz` | `"max_blob_sz"` | `"number"` |  |
 | `read_frame` | `"read_frame"` | `"boolean"` | `["number"]` |
- 
+| `run_basis_transcode` | `"run_basis_transcode"` | `"boolean"` | `["number"]` |
+| `texture_width`| `"texture_width"` | `"number"` | |
+| `texture_height`| `"texture_height"` | `"number"` | |
+
 ***
 
 ## Building Your Own Modules
