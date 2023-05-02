@@ -12,6 +12,7 @@
  */
 
 #include "vol_geom.h"
+#include "vol_basis.h"
 #include <emscripten.h>
 #include <string.h>
 #include <stdbool.h>
@@ -168,6 +169,55 @@ uint16_t* frame_indices_copied( void ) {
   uint16_t* u16_ptr = (uint16_t*)&_frame_data.block_data_ptr[_frame_data.indices_offset];
   memcpy( indices_ptr, u16_ptr, _frame_data.indices_sz );
   return indices_ptr;
+}
+
+static const int _dims_presize                       = 2048;
+static uint32_t _blocks_buf_size_in_blocks_or_pixels = _dims_presize * _dims_presize;
+static uint8_t* _output_blocks_ptr;
+
+EMSCRIPTEN_KEEPALIVE
+bool basis_init( void ) {
+  _output_blocks_ptr = malloc( _dims_presize * _dims_presize );
+  if ( !_output_blocks_ptr ) {
+    fprintf( stderr, "ERROR: basis_init malloc failed\n" );
+    return false;
+  }
+  bool res = vol_basis_init();
+  if ( !res ) {
+    fprintf( stderr, "ERROR: basis_init - vol_basis_init failed\n" );
+    return false;
+  }
+  return true;
+}
+
+EMSCRIPTEN_KEEPALIVE
+bool basis_transcode( int format, void* data_ptr, uint32_t data_sz ) {
+  int w = 0, h = 0;
+  bool ret = vol_basis_transcode( format, data_ptr, data_sz, _output_blocks_ptr, _blocks_buf_size_in_blocks_or_pixels, &w, &h );
+  return ret;
+}
+
+EMSCRIPTEN_KEEPALIVE
+uint8_t* basis_get_transcoded_ptr( void ) { return _output_blocks_ptr; }
+
+EMSCRIPTEN_KEEPALIVE
+uint32_t basis_get_transcoded_sz( void ) { return _blocks_buf_size_in_blocks_or_pixels; }
+
+EMSCRIPTEN_KEEPALIVE
+bool run_basis_transcode( int format ) {
+  int w = 0, h = 0;
+  uint8_t* data_ptr = &_frame_data.block_data_ptr[_frame_data.texture_offset];
+  int32_t data_sz = _frame_data.texture_sz;
+  bool ret = vol_basis_transcode( format, data_ptr, data_sz, _output_blocks_ptr, _blocks_buf_size_in_blocks_or_pixels, &w, &h );
+  return ret;
+}
+
+EMSCRIPTEN_KEEPALIVE
+bool basis_free( void ) {
+  if ( !_output_blocks_ptr ) { return false; }
+  free( _output_blocks_ptr );
+  _output_blocks_ptr = NULL;
+  return true;
 }
 
 #ifdef __cplusplus
