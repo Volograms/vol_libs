@@ -1,4 +1,3 @@
-// This is an example of pre-js
 Module.initVologramFunctions = (containerObject) => {
 	var usingExternalObject = false;
 	let insertObject = Module;
@@ -9,6 +8,9 @@ Module.initVologramFunctions = (containerObject) => {
 
 	insertObject["has_normals"] = Module.cwrap("has_normals", "boolean");
 	insertObject["has_texture"] = Module.cwrap("has_texture", "boolean");
+	insertObject["has_audio"] = Module.cwrap("has_audio", "boolean");
+	insertObject["texture_compression"] = Module.cwrap("texture_compression", "number");
+	insertObject["texture_container_format"] = Module.cwrap("texture_container_format", "number");
 	insertObject["texture_width"] = Module.cwrap("texture_width", "number");
 	insertObject["texture_height"] = Module.cwrap("texture_height", "number");
 	insertObject["create_file_info"] = Module.cwrap(
@@ -16,6 +18,11 @@ Module.initVologramFunctions = (containerObject) => {
 		"boolean",
 		["string", "string"]
 	);
+	insertObject["create_single_file_info"] = Module.cwrap(
+        "create_single_file_info", 
+        "boolean", 
+        ["string"]
+    );
 	insertObject["free_file_info"] = Module.cwrap("free_file_info", "boolean");
 	insertObject["frame_count"] = Module.cwrap("frame_count", "number");
 	insertObject["loaded_frame_number"] = Module.cwrap(
@@ -68,7 +75,7 @@ Module.initVologramFunctions = (containerObject) => {
 		"array"
 	);
 
-    insertObject["basis_transcode"] = Module.cwrap(
+	insertObject["basis_transcode"] = Module.cwrap(
 		"basis_transcode",
 		"boolean",
 		["number", "number", "number"]
@@ -87,6 +94,10 @@ Module.initVologramFunctions = (containerObject) => {
 		"boolean",
 		["number"]
 	);
+
+	insertObject["audio_data_ptr"] = Module.cwrap("audio_data_ptr", "array");
+
+	insertObject["audio_data_sz"] = Module.cwrap("audio_data_sz", "number");
 
 	insertObject["frame_get_verts"] = () => {
 		const vp_copied = Module.ccall("frame_vp_copied", "array");
@@ -230,7 +241,13 @@ Module.initVologramFunctions = (containerObject) => {
 		return [glFmt, basisFmt];
 	};
 
+	insertObject["get_audio_data"] = () => {
+		let ptr = Module.ccall("audio_data_ptr", "array");
+		let sz = Module.ccall("audio_data_sz", "number");
+		return new Uint8Array(Module.HEAP8.buffer, ptr, sz);
+	};
+
 	if (usingExternalObject) {
 		insertObject.HEAP8 = Module.HEAP8;
 	}
-}
+};

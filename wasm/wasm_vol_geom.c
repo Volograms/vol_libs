@@ -39,16 +39,32 @@ EMSCRIPTEN_KEEPALIVE
 bool has_texture( void ) { return _info.hdr.textured; }
 
 EMSCRIPTEN_KEEPALIVE
+bool has_audio( void ) { return _info.hdr.audio; }
+
+EMSCRIPTEN_KEEPALIVE
 int32_t texture_width( void ) { return (int32_t)_info.hdr.texture_width; }
 
 EMSCRIPTEN_KEEPALIVE
 int32_t texture_height( void ) { return (int32_t)_info.hdr.texture_height; }
+
+EMSCRIPTEN_KEEPALIVE 
+int32_t texture_compression( void ) { return (int32_t)_info.hdr.texture_compression; }
+
+EMSCRIPTEN_KEEPALIVE 
+int32_t texture_container_format( void ) { return (int32_t)_info.hdr.texture_container_format; }
 
 EMSCRIPTEN_KEEPALIVE
 bool create_file_info( const char* hdr_filename, const char* seq_filename ) {
   _seq_filename[0] = '\0';
   strncat( _seq_filename, seq_filename, 255 );
   return vol_geom_create_file_info( hdr_filename, seq_filename, &_info, true );
+}
+
+EMSCRIPTEN_KEEPALIVE
+bool create_single_file_info( const char* vol_filename ) {
+  _seq_filename[0] = '\0';
+  strncat( _seq_filename, vol_filename, 255 );
+  return vol_geom_create_file_info_from_file( vol_filename, &_info );
 }
 
 EMSCRIPTEN_KEEPALIVE
@@ -219,6 +235,12 @@ bool basis_free( void ) {
   _output_blocks_ptr = NULL;
   return true;
 }
+
+EMSCRIPTEN_KEEPALIVE
+uint8_t* audio_data_ptr( void ) { return _info.audio_data_ptr; }
+
+EMSCRIPTEN_KEEPALIVE
+uint32_t audio_data_sz( void ) { return _info.audio_data_sz; }
 
 #ifdef __cplusplus
 }
