@@ -12,7 +12,7 @@ CPP         = clang++ -std=c++11
 FLAGS       = -m64 -Wfatal-errors -pedantic -Wextra -Wall -D_FILE_OFFSET_BITS=64
 DEBUG       = -g -DVOL_AV_DEBUG
 #SANS        = -fsanitize=address -fsanitize=undefined 
-INC_DIR     = -I src/ -I thirdparty/ -I thirdparty/apg/ -I thirdparty/glad/include/
+INC_DIR     = -I src/ -I thirdparty/ -I thirdparty/apg/ -I thirdparty/glad/include/ -I thirdparty/miniaudio/
 SRC_AV      = src/vol_av.c
 SRC_GEOM    = src/vol_geom.c
 STA_LIB_AV  = 
@@ -56,14 +56,15 @@ endif
 all: example_programs test_programs tool_programs
 
 example_06:
-	$(CPP) -fno-strict-aliasing -DBASISD_SUPPORT_KTX2=0 -o basisu_transcoder.o -c thirdparty/basis_universal/transcoder/basisu_transcoder.cpp -I src/ -I thirdparty/
-	$(CC) $(FLAGS) $(DEBUG) $(SANS) -o glad.o -c thirdparty/glad/src/glad.c  -I thirdparty/glad/include/
-	$(CPP) $(FLAGS) $(DEBUG) $(SANS) -o vol_basis.o -c src/vol_basis.cpp -I src/ -I thirdparty/
+	$(POSTBLD_GL)
+	$(CPP) -fno-strict-aliasing -DBASISD_SUPPORT_KTX2=0 -o basisu_transcoder.o -c thirdparty/basis_universal/transcoder/basisu_transcoder.cpp $(INC_DIR)
+	$(CC) $(FLAGS) $(DEBUG) $(SANS) -o glad.o -c thirdparty/glad/src/glad.c  $(INC_DIR)
+	$(CPP) $(FLAGS) $(DEBUG) $(SANS) -o vol_basis.o -c src/vol_basis.cpp $(INC_DIR)
 	$(CC) $(FLAGS) $(DEBUG) $(SANS) -o vol_geom.o -c src/vol_geom.c
-	$(CC) $(FLAGS) $(DEBUG) $(SANS) -o gfx.o -c thirdparty/apg/gfx.c -I thirdparty/glad/include/
+	$(CC) $(FLAGS) $(DEBUG) $(SANS) -o gfx.o -c thirdparty/apg/gfx.c $(INC_DIR)
 	$(CC) $(FLAGS) $(DEBUG) $(SANS) -o apg_maths.o -c thirdparty/apg/apg_maths.c
-	$(CC) $(FLAGS) $(DEBUG) $(SANS) -o main.o -c examples/06_vol_geom_single_file/main.c -I thirdparty/apg/ -I thirdparty/glad/include/ -I src/
-	$(CPP) $(FLAGS) $(DEBUG) $(SANS) -o examples/vol_geom_single_file$(BIN_EXT) main.o apg_maths.o gfx.o vol_geom.o vol_basis.o glad.o basisu_transcoder.o -lglfw -lm
+	$(CC) $(FLAGS) $(DEBUG) $(SANS) -o main.o -c examples/06_vol_geom_single_file/main.c $(INC_DIR)
+	$(CPP) $(FLAGS) $(DEBUG) $(SANS) -o examples/vol_geom_single_file$(BIN_EXT) main.o apg_maths.o gfx.o vol_geom.o vol_basis.o glad.o basisu_transcoder.o $(STA_LIB_GL) $(DYN_LIB_GL)
 
 example_programs: example_06
 	$(POSTBLD_AV)
