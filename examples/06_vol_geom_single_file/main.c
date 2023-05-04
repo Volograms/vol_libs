@@ -7,8 +7,6 @@
  * You can load a vologram like this:
  * ./vol_geom_single_file.bin FILE.vols
  * If no file is specified a default file will load.
- *
- * This demo does not play sound, but can output the sound chunk to a file.
  */
 
 #include "gfx.h"
@@ -16,6 +14,8 @@
 #include "vol_basis.h"
 #include "vol_geom.h"
 #include "glad/glad.h"
+#define MINIAUDIO_IMPLEMENTATION
+#include "miniaudio.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -75,6 +75,7 @@ int main( int argc, char** argv ) {
     printf( "Usage: %s MYFILE.vols\n. Using default: %s", argv[0], filename_vols );
   }
 
+  printf( "Init vol_basis...\n" );
   output_blocks_ptr = (uint8_t*)malloc( OUTPUT_DIMS * OUTPUT_DIMS );
   if ( !vol_basis_init() ) {
     fprintf( stderr, "ERROR vol_basis_init() failed\n" );
@@ -113,18 +114,36 @@ int main( int argc, char** argv ) {
     return 1;
   }
 
+  ma_result result;
+  ma_engine engine;
+  ma_sound sound;
   if ( vols_info.hdr.audio ) {
 #ifdef WRITE_AUDIO_FILE
     FILE* f_ptr = fopen( "audiofile", "wb" );
     fwrite( vols_info.audio_data_ptr, vols_info.audio_data_sz, 1, f_ptr );
     fclose( f_ptr );
 #endif
+    printf( "Init audio engine...\n" );
+    result = ma_engine_init( NULL, &engine );
+    if ( result != MA_SUCCESS ) {
+      printf( "Failed to initialize audio engine." );
+      return -1;
+    }
+    printf( "Init sound...\n" );
+    result = ma_sound_init_from_data_source( &engine, vols_info.audio_data_ptr, 0, NULL, &sound );
+    if ( result != MA_SUCCESS ) {
+      printf( "Failed to init sound\n." );
+      return 1;
+    }
+    ma_sound_start( &sound );
   }
 
-  double prev_s       = gfx_get_time_s();
-  double frame_s      = 0.0;
-  int curr_frame      = 0;
-  int loaded_keyframe = 0;
+  printf( "rendering start...\n" );
+
+  double prev_s            = gfx_get_time_s();
+  double frame_s           = 0.0;
+  uint32_t curr_frame      = 0;
+  uint32_t loaded_keyframe = 0;
 
   // Pa_Sleep( audio_source.duration_s * 1000 );
   while ( !gfx_should_window_close() ) {
@@ -143,12 +162,17 @@ int main( int argc, char** argv ) {
     double spf        = 1.0 / fps;
     int jump_n_frames = (int)( frame_s / spf );
     frame_s -= jump_n_frames * spf;
-    int desired_frame = curr_frame + jump_n_frames;
-    desired_frame %= vols_info.hdr.frame_count;
+    uint32_t desired_frame = curr_frame + jump_n_frames;
+    // Loop desired_frame %= vols_info.hdr.frame_count;
+    if ( desired_frame > vols_info.hdr.frame_count ) {
+      desired_frame = 0;
+
+      if ( vols_info.hdr.audio ) { ma_sound_seek_to_pcm_frame( &sound, 0 ); }
+    }
     // Update mesh for new frame.
     if ( desired_frame != curr_frame ) {
-      bool desired_is_key  = vol_geom_is_keyframe( &vols_info, desired_frame );
-      int desired_keyframe = vol_geom_find_previous_keyframe( &vols_info, desired_frame );
+      bool desired_is_key       = vol_geom_is_keyframe( &vols_info, desired_frame );
+      uint32_t desired_keyframe = vol_geom_find_previous_keyframe( &vols_info, desired_frame );
       if ( desired_keyframe != loaded_keyframe && desired_keyframe != desired_frame ) {
         if ( !_update_mesh_with_frame( &mesh, desired_keyframe, filename_vols, &vols_info, NULL ) ) { return 1; } // NULL so we don't upload a texture.
         loaded_keyframe = desired_keyframe;
@@ -172,6 +196,9 @@ int main( int argc, char** argv ) {
 
   gfx_delete_mesh( &mesh );
   gfx_stop();
+
+  if ( vols_info.hdr.audio ) { ma_sound_uninit( &sound ); }
+  ma_engine_uninit( &engine );
 
   if ( !vol_geom_free_file_info( &vols_info ) ) { fprintf( stderr, "ERROR: freeing vol info\n" ); }
 
