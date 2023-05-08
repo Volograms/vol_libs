@@ -159,7 +159,7 @@ Parameters:
 
 #### `Module.create_file_info(hdr: String, seq: String): Boolean`
 
-Open and initialses a vologram from separate header and sequence files. Returns `true` if successful and `false` otherwise.
+Opens and initialses a vologram from separate header and sequence files. Returns `true` if successful and `false` otherwise.
 
 Parameters:
 * `hdr: String` - Path of vologram header file
@@ -167,7 +167,7 @@ Parameters:
 * 
 #### `Module.create_single_file_info(file: String): Boolean`
 
-Open and initialses a vologram from a single file. Returns `true` if successful and `false` otherwise.
+Opens and initialses a vologram from a single file. Returns `true` if successful and `false` otherwise.
 
 Parameters:
 * `file: String` - Path of vologram file
