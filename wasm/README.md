@@ -128,6 +128,14 @@ Initialise and expose vologram related wasm functions (for convenience, but reco
 
 ### After `initVologramFunctions`
 
+#### `Module.audio_data_ptr(): Array`
+
+Returns the pointer to the audio data buffer
+
+#### `Module.audio_data_sz(): Number`
+
+Returns the size in bytes of the audio data buffer
+
 #### `Module.basis_get_data(): [Number]`
 
 Returns the transcoded texture data as a byte array (calls `basis_get_transcoded_ptr`, `texture_width` and `texture_height`)
@@ -151,11 +159,18 @@ Parameters:
 
 #### `Module.create_file_info(hdr: String, seq: String): Boolean`
 
-Open and initialse a vologram. Returns `true` if successful and `false` otherwise.
+Opens and initialses a vologram from separate header and sequence files. Returns `true` if successful and `false` otherwise.
 
 Parameters:
 * `hdr: String` - Path of vologram header file
 * `seq: String` - Path of vologram sequence file
+* 
+#### `Module.create_single_file_info(file: String): Boolean`
+
+Opens and initialses a vologram from a single file. Returns `true` if successful and `false` otherwise.
+
+Parameters:
+* `file: String` - Path of vologram file
 
 #### `Module.find_basis_fmt(gl: RenderingContext, hasAlpha: Boolean = true): [Number, Number]`
 
@@ -240,6 +255,10 @@ Returns the frame vertices data offset
 
 Dispose of vologram info. The vologram cannot be played after this function is called. Returns `true` if successful and `false` otherwise.
 
+#### `Module.get_audio_data(): [Number]`
+
+Returns the audio data as a byte array, calls `audio_data_ptr` and `audio_data_sz`.
+
 #### `Module.has_normals(): Boolean`
 
 Returns `true` if the loaded vologram has normals, `false` otherwise.
@@ -277,6 +296,14 @@ Performs the same function as `basis_transcode` but the pointer and size of the 
 Parameters:
 * `format: Number` - Basis format
 
+#### `Module.texture_compression(): Number`
+
+Returns the compression type of the vologram texture
+
+#### `Module.texture_container_format(): Number`
+
+Returns the container type of the vologram texture
+
 #### `Module.texture_height(): Number`
 
 Returns the height of the vologram texture 
@@ -299,6 +326,7 @@ The following functions **cannot** be called unless `initVologramFunctions` has 
 * `frame_get_norms()`
 * `frame_get_uvs()`
 * `frame_get_verts()`
+* `get_audio_data()`
 
 #### Calling Available Functions
 
@@ -317,10 +345,13 @@ The following table shows the correct parameters for ccall-ing the vologram func
 
 | Func | C name | Ret type | Param Types |
 | :-- | :-- | :-- | :-- |
+| `audio_data_ptr` | `"audio_data_ptr"` | `"number"` | | 
+| `audio_data_sz` | `"audio_data_sz"` | `"number"` | | 
 | `basis_get_transcoded_ptr` | `"basis_get_transcoded_ptr"` | `"number"` | | 
 | `basis_get_transcoded_sz` | `"basis_get_transcoded_sz"` | `"number"` | | 
 | `basis_transcode` | `"basis_transcode"` | `"boolean"` | `["number", "number", "number"]` | 
 | `create_file_info` | `"create_file_info"` | `"boolean"` | `["string", "string"]` | 
+| `create_single_file_info` | `"create_single_file_info"` | `"boolean"` | `["string"]` | 
 | `find_previous_keyframe` | `"find_previous_keyframe"` | `"number"` | `["number"]` |
 | `frame_count` | `"frame_count"` | `"number"` |  |
 | `frame_data_ptr` | `"frame_data_ptr"` | `"array"` |  |
@@ -343,8 +374,10 @@ The following table shows the correct parameters for ccall-ing the vologram func
 | `max_blob_sz` | `"max_blob_sz"` | `"number"` |  |
 | `read_frame` | `"read_frame"` | `"boolean"` | `["number"]` |
 | `run_basis_transcode` | `"run_basis_transcode"` | `"boolean"` | `["number"]` |
-| `texture_width`| `"texture_width"` | `"number"` | |
-| `texture_height`| `"texture_height"` | `"number"` | |
+| `texture_compression` | `"texture_compression"` | `"number"` | |
+| `texture_container_format` | `"texture_container_format"` | `"number"` | |
+| `texture_width` | `"texture_width"` | `"number"` | |
+| `texture_height` | `"texture_height"` | `"number"` | |
 
 ***
 
