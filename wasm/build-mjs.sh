@@ -26,8 +26,9 @@ emcc -O3 -fno-strict-aliasing -DBASISD_SUPPORT_KTX2=0 \
 -s "EXPORTED_RUNTIME_METHODS=['ccall','cwrap','FS']" \
 -s SINGLE_FILE \
 -s ALLOW_MEMORY_GROWTH \
--s EXPORT_NAME="Module" \
--o vol_basis.mjs \
+-s MODULARIZE=1 \
+-s EXPORT_NAME="VolWeb" \
+-o vol_web.mjs \
 --pre-js "pre.js" \
 -g \
 ../src/vol_basis.cpp \
