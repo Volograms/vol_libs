@@ -14,8 +14,10 @@
 #include "vol_basis.h"
 #include "vol_geom.h"
 #include "glad/glad.h"
+/*
 #define MINIAUDIO_IMPLEMENTATION
 #include "miniaudio.h"
+*/
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -68,6 +70,115 @@ static bool _update_mesh_with_frame( gfx_mesh_t* mesh_ptr, int frame_number, con
   return true;
 }
 
+static bool _update_mesh_new_frame( gfx_mesh_t* mesh_ptr, gfx_texture_t* compressed_texture_ptr, uint32_t desired_frame, uint32_t* curr_frame_ptr,
+  uint32_t loaded_keyframe, vol_geom_info_t* vols_info_ptr, const char* filename_vols ) {
+  if ( desired_frame != *curr_frame_ptr ) {
+    bool desired_is_key       = vol_geom_is_keyframe( vols_info_ptr, desired_frame );
+    uint32_t desired_keyframe = vol_geom_find_previous_keyframe( vols_info_ptr, desired_frame );
+    if ( desired_keyframe != loaded_keyframe && desired_keyframe != desired_frame ) {
+      if ( !_update_mesh_with_frame( mesh_ptr, desired_keyframe, filename_vols, vols_info_ptr, NULL ) ) { return false; } // NULL so we don't upload a texture.
+      loaded_keyframe = desired_keyframe;
+    }
+    if ( !_update_mesh_with_frame( mesh_ptr, desired_frame, filename_vols, vols_info_ptr, compressed_texture_ptr ) ) { return false; }
+    *curr_frame_ptr = desired_frame;
+    if ( desired_is_key ) { loaded_keyframe = desired_frame; }
+  }
+  return true;
+}
+
+typedef struct vologram_t {
+  char filename_vols[1024];
+  vol_geom_info_t vols_info;
+  gfx_texture_t texture;
+  gfx_mesh_t mesh;
+  double fps;
+  double frame_s;
+  uint32_t curr_frame;
+  uint32_t loaded_keyframe;
+  vec3 pos_wor;
+  bool loaded;
+} vologram_t;
+
+static vologram_t _create_vologram( const char* filename, vec3 pos_wor, uint32_t starting_frame ) {
+  vologram_t v = ( vologram_t ){ .loaded = false, .pos_wor = pos_wor, .curr_frame = starting_frame, .loaded_keyframe = -1 };
+  strcpy( v.filename_vols, filename );
+
+  // Populate the meta-data struct from a single .vols file.
+  if ( !vol_geom_create_file_info_from_file( v.filename_vols, &v.vols_info ) ) {
+    fprintf( stderr, "ERROR vol_geom_create_file_info_from_file.\n" );
+    return v;
+  }
+  v.fps      = v.vols_info.hdr.fps ? v.vols_info.hdr.fps : 30.0;
+  double spf = 1.0 / v.fps;
+  v.frame_s  = spf * (double)starting_frame;
+  {
+    GLuint tex_cmpr1 = 0;
+    glGenTextures( 1, &tex_cmpr1 );
+    GLenum internal_format = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
+    glBindTexture( GL_TEXTURE_2D, tex_cmpr1 );
+    glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
+    glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
+    glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
+    glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST );
+    glCompressedTexImage2D( GL_TEXTURE_2D, 0, internal_format, OUTPUT_DIMS, OUTPUT_DIMS, 0, OUTPUT_DIMS * OUTPUT_DIMS, NULL );
+    glBindTexture( GL_TEXTURE_2D, 0 );
+    v.texture.w = v.texture.h = OUTPUT_DIMS;
+    v.texture.handle_gl       = tex_cmpr1;
+    v.texture.n_channels      = 4;
+    memset( &v.texture.properties, 0, sizeof( gfx_texture_properties_t ) );
+  }
+  v.mesh = gfx_create_mesh_from_mem( NULL, 3, NULL, 2, NULL, 3, NULL, 0, 1, 0, true );
+  if ( !_update_mesh_with_frame( &v.mesh, v.curr_frame, v.filename_vols, &v.vols_info, &v.texture ) ) {
+    fprintf( stderr, "update mesh with frame failed\n" );
+    return v;
+  }
+
+  /*
+  ma_result result;
+  ma_engine engine;
+  ma_sound sound;*/
+  if ( v.vols_info.hdr.audio ) {
+#ifdef WRITE_AUDIO_FILE
+    FILE* f_ptr = fopen( "audiofile", "wb" );
+    fwrite( v.vols_info.audio_data_ptr, v.vols_info.audio_data_sz, 1, f_ptr );
+    fclose( f_ptr );
+#endif
+    printf( "Init sound...\n" );
+    /* result = ma_sound_init_from_data_source( &engine, vols_info.audio_data_ptr, 0, NULL, &sound );
+     if ( result != MA_SUCCESS ) {
+       printf( "Failed to init sound\n." );
+       return 1;
+     }
+     ma_sound_start( &sound );*/
+  }
+
+  v.loaded = true;
+  return v;
+}
+
+static void _update_vologram( double elapsed_s, vologram_t* v_ptr ) {
+  v_ptr->frame_s += elapsed_s;
+  double spf        = 1.0 / v_ptr->fps;
+  int jump_n_frames = (int)( v_ptr->frame_s / spf );
+  v_ptr->frame_s -= jump_n_frames * spf;
+  uint32_t desired_frame = v_ptr->curr_frame + jump_n_frames;
+  if ( desired_frame >= v_ptr->vols_info.hdr.frame_count ) {
+    desired_frame = 0;
+    // if ( vols_info.hdr.audio ) { ma_sound_seek_to_pcm_frame( &sound, 0 ); }
+  }
+  if ( desired_frame == v_ptr->curr_frame ) { return; }
+  _update_mesh_new_frame( &v_ptr->mesh, &v_ptr->texture, desired_frame, &v_ptr->curr_frame, v_ptr->loaded_keyframe, &v_ptr->vols_info, v_ptr->filename_vols );
+}
+
+static void _draw_vologram( mat4 P, mat4 V, vologram_t* v_ptr ) {
+  mat4 T = translate_mat4( v_ptr->pos_wor );
+  mat4 S = scale_mat4( ( vec3 ){ .x = -1.0f, .y = 1.0f, .z = 1.0f } );
+  mat4 M = mult_mat4_mat4( T, S );
+  gfx_winding_cw( true );
+  gfx_draw_mesh( v_ptr->mesh, GFX_PT_TRIANGLES, gfx_default_textured_shader, P.m, V.m, M.m, &v_ptr->texture, 1 );
+  gfx_winding_cw( false );
+}
+
 int main( int argc, char** argv ) {
   const char* filename_vols = argv[1];
   if ( argc < 2 ) {
@@ -81,69 +192,47 @@ int main( int argc, char** argv ) {
     fprintf( stderr, "ERROR vol_basis_init() failed\n" );
     return 1;
   }
-  printf( "Loading combined header&sequence file `%s`\n", filename_vols );
-
-  // Populate the meta-data struct from a single .vols file.
-  vol_geom_info_t vols_info = ( vol_geom_info_t ){ .biggest_frame_blob_sz = 0 };
-  if ( !vol_geom_create_file_info_from_file( filename_vols, &vols_info ) ) {
-    fprintf( stderr, "ERROR vol_geom_create_file_info_from_file.\n" );
-    return 1;
-  }
 
   gfx_start( "vol_geom Single Vols File OpenGL Example\n", 512, 512, false );
-  gfx_texture_t compressed_texture;
-  {
-    GLuint tex_cmpr1 = 0;
-    glGenTextures( 1, &tex_cmpr1 );
-    GLenum internal_format = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
-    glBindTexture( GL_TEXTURE_2D, tex_cmpr1 );
-    glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
-    glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
-    glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
-    glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST );
-    glCompressedTexImage2D( GL_TEXTURE_2D, 0, internal_format, OUTPUT_DIMS, OUTPUT_DIMS, 0, OUTPUT_DIMS * OUTPUT_DIMS, NULL );
-    glBindTexture( GL_TEXTURE_2D, 0 );
-    compressed_texture.w = compressed_texture.h = OUTPUT_DIMS;
-    compressed_texture.handle_gl                = tex_cmpr1;
-    compressed_texture.n_channels               = 4;
-    memset( &compressed_texture.properties, 0, sizeof( gfx_texture_properties_t ) );
-  }
-  gfx_mesh_t mesh = gfx_create_mesh_from_mem( NULL, 3, NULL, 2, NULL, 3, NULL, 0, 1, 0, true );
-  if ( !_update_mesh_with_frame( &mesh, 0, filename_vols, &vols_info, &compressed_texture ) ) {
-    fprintf( stderr, "update mesh with frame failed\n" );
-    return 1;
-  }
 
-  ma_result result;
-  ma_engine engine;
-  ma_sound sound;
-  if ( vols_info.hdr.audio ) {
-#ifdef WRITE_AUDIO_FILE
-    FILE* f_ptr = fopen( "audiofile", "wb" );
-    fwrite( vols_info.audio_data_ptr, vols_info.audio_data_sz, 1, f_ptr );
-    fclose( f_ptr );
-#endif
+  /*
     printf( "Init audio engine...\n" );
-    result = ma_engine_init( NULL, &engine );
-    if ( result != MA_SUCCESS ) {
-      printf( "Failed to initialize audio engine." );
-      return -1;
-    }
-    printf( "Init sound...\n" );
-    result = ma_sound_init_from_data_source( &engine, vols_info.audio_data_ptr, 0, NULL, &sound );
-    if ( result != MA_SUCCESS ) {
-      printf( "Failed to init sound\n." );
+      result = ma_engine_init( NULL, &engine );
+      if ( result != MA_SUCCESS ) {
+        printf( "Failed to initialize audio engine." );
+        return -1;
+      }*/
+
+  printf( "Loading combined header&sequence file `%s`\n", filename_vols );
+
+  int n_volograms = 5;
+  vologram_t volograms[5];
+  uint32_t start_frames[5] = { 0, 30, 60, 90, 120 };
+  vec3 positions[5]     = {
+    ( vec3 ){ 0.0f, 0.0f, 0.0f },  //
+    ( vec3 ){ -1.0f, 0.0f, 0.0f }, //
+    ( vec3 ){ 1.0f, 0.0f, 0.0f },  //
+    ( vec3 ){ -2.0f, 0.0f, 0.0f }, //
+    ( vec3 ){ 2.0f, 0.0f, 0.0f }   //
+  };
+  vec4 tints[5] = {
+    ( vec4 ){ 1, 1, 1, 1 }, //
+    ( vec4 ){ 1, 0, 0, 0 }, //
+    ( vec4 ){ 0.1, 1, 0.1, 1 }, //
+    ( vec4 ){ 0.1, 0.1, 1, 1 }, //
+    ( vec4 ){ 1, 0, 1, 1 }  //
+  };
+  for ( int i = 0; i < n_volograms; i++ ) {
+    volograms[i] = _create_vologram( filename_vols, positions[i], start_frames[i] );
+    if ( !volograms[i].loaded ) {
+      fprintf( stderr, "ERROR creating vologram %i from file `%s`\n", i, filename_vols );
       return 1;
     }
-    ma_sound_start( &sound );
   }
 
   printf( "rendering start...\n" );
 
-  double prev_s            = gfx_get_time_s();
-  double frame_s           = 0.0;
-  uint32_t curr_frame      = 0;
-  uint32_t loaded_keyframe = 0;
+  double prev_s = gfx_get_time_s();
 
   // Pa_Sleep( audio_source.duration_s * 1000 );
   while ( !gfx_should_window_close() ) {
@@ -157,50 +246,26 @@ int main( int argc, char** argv ) {
     double curr_s    = gfx_get_time_s();
     double elapsed_s = curr_s - prev_s;
     prev_s           = curr_s;
-    frame_s += elapsed_s;
-    double fps        = vols_info.hdr.fps ? vols_info.hdr.fps : 30.0;
-    double spf        = 1.0 / fps;
-    int jump_n_frames = (int)( frame_s / spf );
-    frame_s -= jump_n_frames * spf;
-    uint32_t desired_frame = curr_frame + jump_n_frames;
-    // Loop desired_frame %= vols_info.hdr.frame_count;
-    if ( desired_frame > vols_info.hdr.frame_count ) {
-      desired_frame = 0;
 
-      if ( vols_info.hdr.audio ) { ma_sound_seek_to_pcm_frame( &sound, 0 ); }
-    }
-    // Update mesh for new frame.
-    if ( desired_frame != curr_frame ) {
-      bool desired_is_key       = vol_geom_is_keyframe( &vols_info, desired_frame );
-      uint32_t desired_keyframe = vol_geom_find_previous_keyframe( &vols_info, desired_frame );
-      if ( desired_keyframe != loaded_keyframe && desired_keyframe != desired_frame ) {
-        if ( !_update_mesh_with_frame( &mesh, desired_keyframe, filename_vols, &vols_info, NULL ) ) { return 1; } // NULL so we don't upload a texture.
-        loaded_keyframe = desired_keyframe;
-      }
-      if ( !_update_mesh_with_frame( &mesh, desired_frame, filename_vols, &vols_info, &compressed_texture ) ) { return 1; }
-      curr_frame = desired_frame;
-      if ( desired_is_key ) { loaded_keyframe = desired_frame; }
-    }
+    for ( int i = 0; i < n_volograms; i++ ) { _update_vologram( elapsed_s, &volograms[i] ); }
 
     mat4 P = perspective( 66.6f, aspect, 0.1f, 100.0f );
-    mat4 M = scale_mat4( ( vec3 ){ -1, 1, 1 } );
     mat4 V = look_at( ( vec3 ){ 0, 1, 2 }, ( vec3 ){ 0, 1, 0 }, ( vec3 ){ 0, 1, 0 } );
+
     gfx_clear_colour_and_depth_buffers( 0.5f, 0.5f, 0.5f, 1.0f );
 
-    gfx_winding_cw( true );
-    gfx_draw_mesh( mesh, GFX_PT_TRIANGLES, gfx_default_textured_shader, P.m, V.m, M.m, &compressed_texture, 1 );
-    gfx_winding_cw( false );
+    for ( int i = 0; i < n_volograms; i++ ) {
+      gfx_uniform4fv( gfx_default_textured_shader, gfx_default_textured_shader.u_tint, 1, &tints[i].x );
+      _draw_vologram( P, V, &volograms[i] );
+    }
 
     gfx_swap_buffer();
   }
 
-  gfx_delete_mesh( &mesh );
   gfx_stop();
 
-  if ( vols_info.hdr.audio ) { ma_sound_uninit( &sound ); }
-  ma_engine_uninit( &engine );
-
-  if ( !vol_geom_free_file_info( &vols_info ) ) { fprintf( stderr, "ERROR: freeing vol info\n" ); }
+  //  if ( vols_info.hdr.audio ) { ma_sound_uninit( &sound ); }
+  // ma_engine_uninit( &engine );
 
   if ( output_blocks_ptr ) { free( output_blocks_ptr ); }
 
