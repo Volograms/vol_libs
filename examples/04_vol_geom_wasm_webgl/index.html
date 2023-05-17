@@ -77,12 +77,12 @@ To Run:
 			gl_FragColor.rgba = vec4( texel_rgb, 1.0 );
 		}
 		</script>
-<script src="https://cdn.jsdelivr.net/gh/Volograms/vol_libs@main/wasm/vol_web.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/Volograms/vol_libs@8th-wall/wasm/vol_web.js"></script>
 <script src="./apg_maths.js"></script>
 <script>
 	// This 2 lines just make this example consistent
 	// with others
-	const initModule = Module;
+	const initModule = VolWeb;
 	Module = new Object();
 
 	var canvas;
@@ -91,6 +91,7 @@ To Run:
 	vologram.header_url = "../example_vologram/calif/header.vols";
 	vologram.sequence_url = "../example_vologram/calif/sequence_0.vols";
 	vologram.video_url = "../example_vologram/calif/output_720.mp4";
+	vologram.single_url = "https://public-vms-volograms-storage.s3.eu-west-1.amazonaws.com/testing/rafa-founder-1615225793836_ld_1024_ETC1S_BASIS_mp3.vols";
 	vologram.fps = 30.0;           // Change this value if not using 30 frames-per-second video.
 	var init_done = false;         // If the basic shaders/objects are set up. A vologram can be downloaded & prepared after this is true.
 
@@ -292,8 +293,17 @@ To Run:
 	}
 
 	function init_vologram() {
-		if (!vologram.header_ready || !vologram.sequence_ready || vologram.ready) { return; } // Wait until both files are downloaded.
-		var ret = Module.create_file_info('header.vols', 'sequence_0.vols');
+		if (!vologram.single_ready) {
+			if (!vologram.header_ready || !vologram.sequence_ready || vologram.ready) { return; } // Wait until both files are downloaded.
+		}
+		var ret = false;
+		if (vologram.single_url) {
+			ret = Module.create_single_file_info('header.vols');
+		}
+		else {
+			ret = Module.create_file_info('header.vols', 'sequence_0.vols');
+		}
+		
 		console.log('create_file_info=' + ret);
 		if (!ret) {
 			console.error("failed to load vologram");
@@ -333,9 +343,41 @@ To Run:
 	}
 
 	// Function to download files and start playback. Video playback needs to start with a click.
-	function load_clicked() {
+	async function load_clicked() {
 		const FS = Module.FS;
 		if (init_done) {
+			if (vologram.single_url) {
+				console.log(vologram.single_url);
+				let singleFileRequest = new Request("https://public-vms-volograms-storage.s3.eu-west-1.amazonaws.com/testing/rafa-founder-1615225793836_ld_1024_ETC1S_BASIS_mp3.vols", {
+        			mode: "cors",
+        			method: "GET",
+        			cache: "default",
+        			headers: {
+          				"Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
+        			}
+      			});
+				await fetch(singleFileRequest)
+				.then((response) => {
+					if (!response.ok) {
+						console.error('fetch not ok');
+						return;
+					}
+					return response.blob();
+				})
+				.then(async (blob) => {
+					console.log(blob)
+					const byte_array = new Uint8Array(await blob.arrayBuffer());
+					console.log("file fetched = " + singleFileRequest.url + " bytes = " + byte_array.length);
+					// NOTE! if filename has a path in it this function will fail if we don't mkdir first
+					var stream = FS.open("header.vols", 'w');
+					FS.write(stream, byte_array, 0, byte_array.length, 0);
+					FS.close(stream);
+					console.log("file stored in vfs as = " + "header.vols");
+					vologram.single_ready = true;
+					init_vologram(); // Attempt init. Since files are downloaded asynchronously we don't know if sequence was downloaded first.
+				});
+			}
+			else {
 			{ // Header file
 				console.log("filename=" + vologram.header_url);
 				var xmlhttp = new XMLHttpRequest();
@@ -377,6 +419,7 @@ To Run:
 				};
 				seq.send(null);
 			} // endblock sequence file.
+			}
 			document.getElementById("load_vols_files_button").hidden = true; // Prevent buffer mem leak.
 		} // endif init_done
 	} // endfunction load_clicked()

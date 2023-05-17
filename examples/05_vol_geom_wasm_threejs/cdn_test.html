@@ -44,7 +44,7 @@ To Run:
 {
     "imports": {
         "WebVolLib": 
-            "https://cdn.jsdelivr.net/gh/Volograms/vol_libs@main/wasm/vol_web.mjs",
+            "https://cdn.jsdelivr.net/gh/Volograms/vol_libs@8th-wall/wasm/vol_web.js",
         "Vol3js": 
             "https://cdn.jsdelivr.net/gh/Volograms/vol_libs@main/wasm/players/three_js_player.mjs",
         "three":
@@ -55,7 +55,7 @@ To Run:
 <script type="module">
     // Currently working with modules, but non-module versions are available
     
-    import initModule from "WebVolLib";
+    //import initModule from "WebVolLib";
     import * as Vol3js from 'Vol3js';
     import * as THREE from 'three';
 
@@ -65,6 +65,7 @@ To Run:
 	canvas.height = window.innerHeight - 50;
 
     // Define vologram files paths
+    let vologram = {};
     vologram.header_url = "../example_vologram/calif/header.vols";
 	vologram.sequence_url = "../example_vologram/calif/sequence_0.vols";
 	vologram.video_url = "../example_vologram/calif/output_720.mp4";
@@ -99,7 +100,7 @@ To Run:
      initModule: wasm init function for initialising interface to c code
      video_element: video html element 
     */
-    Vol3js.create( scene, renderer, header_url, sequence_url, video_url, initModule, video_element );
+    Vol3js.create( scene, renderer, vologram.header_url, vologram.sequence_url, vologram.video_url, initModule, video_element );
 
     // three js render function 
     function render() {
