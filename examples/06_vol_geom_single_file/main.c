@@ -9,21 +9,35 @@
  * If no file is specified a default file will load.
  */
 
+/*
+TODO
+
+0. audio
+1. try different vologram files at once
+2. remove unneeded data copies if v1.3+
+3. fix the relative paths for inputs
+4. third party -> readme
+*/
+
 #include "gfx.h"
 #include "apg_maths.h"
 #include "vol_basis.h"
 #include "vol_geom.h"
 #include "glad/glad.h"
+#define MINIAUDIO_IMPLEMENTATION
+#include "miniaudio/miniaudio.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 /// 1-5.
-static int n_volograms = 5;
+static int n_volograms = 1;
 
 /// If uncommented then this example writes the audio chunk out to a playable file.
 #define WRITE_AUDIO_FILE
+ma_engine engine;
+ma_sound sounds[5];
 
 /// Scratch memory to use for transcoding compressed textures.
 #define OUTPUT_DIMS 2048
@@ -35,6 +49,7 @@ typedef struct vologram_t {
   vol_geom_info_t vols_info; // Meta-data loaded from the VOLS file.
   gfx_texture_t texture;     // OpenGL texture details.
   gfx_mesh_t mesh;           // OpenGL geometry buffers.
+  ma_sound* sound_ptr;
   double fps;                // Frames-per-second to play the animation.
   double frame_s;            // Playback time elapsed since the current frame started, in seconds.
   uint32_t curr_frame;       // Index of the current vologram animation frame. Starting from 0.
@@ -108,8 +123,8 @@ static bool _update_mesh_new_frame( gfx_mesh_t* mesh_ptr, gfx_texture_t* compres
 /** Load and initialise an unique vologram.
  *  On success the returned vologram struct will have its loaded flag set to true.
  */
-static vologram_t _create_vologram( const char* filename, vec3 pos_wor, uint32_t starting_frame ) {
-  vologram_t v = ( vologram_t ){ .loaded = false, .pos_wor = pos_wor, .curr_frame = starting_frame, .loaded_keyframe = -1 };
+static vologram_t _create_vologram( const char* filename, vec3 pos_wor, uint32_t starting_frame, ma_sound* sound_ptr ) {
+  vologram_t v = ( vologram_t ){ .loaded = false, .sound_ptr = sound_ptr, .pos_wor = pos_wor, .curr_frame = starting_frame, .loaded_keyframe = -1 };
   strcpy( v.filename_vols, filename );
 
   // Populate the meta-data struct from a single .vols file.
@@ -148,6 +163,12 @@ static vologram_t _create_vologram( const char* filename, vec3 pos_wor, uint32_t
     fwrite( v.vols_info.audio_data_ptr, v.vols_info.audio_data_sz, 1, f_ptr );
     fclose( f_ptr );
 #endif
+    // ma_engine_play_sound( &engine, "audiofile", NULL );
+    ma_sound_init_from_file( &engine, "audiofile", 0, NULL, NULL, v.sound_ptr );
+    // ma_sound_init_from_data_source( &engine, v.vols_info.audio_data_ptr, 0, NULL, v.sound_ptr );
+    double pcm = v.frame_s * (double)ma_engine_get_sample_rate( ma_sound_get_engine(v.sound_ptr) );
+    ma_sound_seek_to_pcm_frame( v.sound_ptr, pcm ); // Rewind to start.
+    ma_sound_start( v.sound_ptr );
   }
 
   v.loaded = true;
@@ -162,7 +183,9 @@ static void _update_vologram( double elapsed_s, vologram_t* v_ptr ) {
   uint32_t desired_frame = v_ptr->curr_frame + jump_n_frames;
   if ( desired_frame >= v_ptr->vols_info.hdr.frame_count ) {
     desired_frame = 0;
-    // if ( vols_info.hdr.audio ) { ma_sound_seek_to_pcm_frame( &sound, 0 ); }
+    ma_sound_stop( v_ptr->sound_ptr );
+    ma_sound_seek_to_pcm_frame( v_ptr->sound_ptr, 0 ); // Rewind to start.
+    ma_sound_start( v_ptr->sound_ptr );
   }
   if ( desired_frame == v_ptr->curr_frame ) { return; }
   _update_mesh_new_frame( &v_ptr->mesh, &v_ptr->texture, desired_frame, &v_ptr->curr_frame, v_ptr->loaded_keyframe, &v_ptr->vols_info, v_ptr->filename_vols );
@@ -177,14 +200,22 @@ static void _draw_vologram( mat4 P, mat4 V, vologram_t* v_ptr ) {
   gfx_winding_cw( false );
 }
 
+static bool _audio_start( void ) {
+  ma_result result = ma_engine_init( NULL, &engine );
+  if ( result != MA_SUCCESS ) { return false; }
+  return true;
+}
+
 int main( int argc, char** argv ) {
   const char* filename_vols = argv[1];
   if ( argc < 2 ) {
     filename_vols = "../samples/combined.vols";
-    printf( "Usage: %s MYFILE.vols\n. Using default: %s", argv[0], filename_vols );
+    printf( "Usage: %s MYFILE.vols [#VOLOGRAMS]\n. Using default: %s", argv[0], filename_vols );
   }
+  if ( argc > 2 ) { n_volograms = atoi( argv[2] ); }
 
   gfx_start( "vol_geom Single Vols File OpenGL Example\n", 512, 512, false );
+  if ( !_audio_start() ) { return 1; }
 
   printf( "Init vol_basis...\n" );
   output_blocks_ptr = (uint8_t*)malloc( OUTPUT_DIMS * OUTPUT_DIMS );
@@ -212,7 +243,7 @@ int main( int argc, char** argv ) {
     ( vec4 ){ 1, 0, 1, 1 }      //
   };
   for ( int i = 0; i < n_volograms; i++ ) {
-    volograms[i] = _create_vologram( filename_vols, positions[i], start_frames[i] );
+    volograms[i] = _create_vologram( filename_vols, positions[i], start_frames[i], &sounds[i] );
     if ( !volograms[i].loaded ) {
       fprintf( stderr, "ERROR creating vologram %i from file `%s`\n", i, filename_vols );
       return 1;
@@ -221,9 +252,8 @@ int main( int argc, char** argv ) {
 
   printf( "rendering start...\n" );
 
-  double prev_s = gfx_get_time_s();
-
-  // Pa_Sleep( audio_source.duration_s * 1000 );
+  double prev_s          = gfx_get_time_s();
+  double window_update_s = 0.0;
   while ( !gfx_should_window_close() ) {
     int fb_w = 0, fb_h = 0, win_w = 0, win_h = 0;
     gfx_poll_events();
@@ -235,6 +265,15 @@ int main( int argc, char** argv ) {
     double curr_s    = gfx_get_time_s();
     double elapsed_s = curr_s - prev_s;
     prev_s           = curr_s;
+
+    window_update_s += elapsed_s;
+    if ( window_update_s >= 0.5 ) {
+      window_update_s -= 0.5;
+      double gfx_fps = 1.0 / elapsed_s;
+      char str[256];
+      sprintf( str, "Demo %.0f", gfx_fps );
+      gfx_window_set_title( str );
+    }
 
     for ( int i = 0; i < n_volograms; i++ ) { _update_vologram( elapsed_s, &volograms[i] ); }
 
@@ -252,6 +291,7 @@ int main( int argc, char** argv ) {
   }
 
   gfx_stop();
+  ma_engine_uninit( &engine );
 
   if ( output_blocks_ptr ) { free( output_blocks_ptr ); }
 
