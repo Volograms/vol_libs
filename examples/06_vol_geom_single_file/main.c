@@ -29,8 +29,6 @@ TODO
 /// 1-5.
 static int n_volograms = 1;
 
-/// If uncommented then this example writes the audio chunk out to a playable file.
-#define WRITE_AUDIO_FILE
 ma_engine engine[5]; // Each playing sound seems to need its own 'engine' in miniaudio.
 ma_sound sounds[5];  // Made these global to simplify memory/pointer setup.
 
@@ -155,14 +153,12 @@ static vologram_t _create_vologram( const char* filename, vec3 pos_wor, uint32_t
   }
 
   if ( v.vols_info.hdr.audio ) {
-#ifdef WRITE_AUDIO_FILE
+    // Note(Anton) This is a hack because miniaudio's file API is way simpler than the from-data decoder API.
     FILE* f_ptr = fopen( "audiofile", "wb" );
     fwrite( v.vols_info.audio_data_ptr, v.vols_info.audio_data_sz, 1, f_ptr );
     fclose( f_ptr );
-#endif
-    // ma_engine_play_sound( &engine, "audiofile", NULL );
+
     ma_sound_init_from_file( engine_ptr, "audiofile", 0, NULL, NULL, v.sound_ptr );
-    // ma_sound_init_from_data_source( engine_ptr, v.vols_info.audio_data_ptr, 0, NULL, v.sound_ptr );
     double pcm = v.frame_s * (double)ma_engine_get_sample_rate( ma_sound_get_engine( v.sound_ptr ) );
     ma_sound_seek_to_pcm_frame( v.sound_ptr, pcm ); // Rewind to start.
     ma_sound_start( v.sound_ptr );
