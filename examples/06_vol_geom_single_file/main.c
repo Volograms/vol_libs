@@ -14,14 +14,13 @@
 #include "vol_basis.h"
 #include "vol_geom.h"
 #include "glad/glad.h"
-/*
-#define MINIAUDIO_IMPLEMENTATION
-#include "miniaudio.h"
-*/
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+/// 1-5.
+static int n_volograms = 5;
 
 /// If uncommented then this example writes the audio chunk out to a playable file.
 #define WRITE_AUDIO_FILE
@@ -30,6 +29,20 @@
 #define OUTPUT_DIMS 2048
 static uint8_t* output_blocks_ptr;
 
+/// Convenience struct to hold all the variables for playing an unique vologram file.
+typedef struct vologram_t {
+  char filename_vols[1024];  // e.g. "combined.vols"
+  vol_geom_info_t vols_info; // Meta-data loaded from the VOLS file.
+  gfx_texture_t texture;     // OpenGL texture details.
+  gfx_mesh_t mesh;           // OpenGL geometry buffers.
+  double fps;                // Frames-per-second to play the animation.
+  double frame_s;            // Playback time elapsed since the current frame started, in seconds.
+  uint32_t curr_frame;       // Index of the current vologram animation frame. Starting from 0.
+  uint32_t loaded_keyframe;  // Index of the most recently loaded keyframe. Starting from 0.
+  vec3 pos_wor;              // "World" position of the vologram in the 3D scene.
+  bool loaded;               // True if the vologram was loaded and initialised successfully.
+} vologram_t;
+
 static void _update_compressed_texture( int level_index, uint8_t* output_blocks_ptr, gfx_texture_t* texture_ptr ) {
   GLenum internal_format = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT; // NOTE DXt5 is for cTFBC3_RGBA.
   glBindTexture( GL_TEXTURE_2D, texture_ptr->handle_gl );
@@ -37,8 +50,10 @@ static void _update_compressed_texture( int level_index, uint8_t* output_blocks_
   glBindTexture( GL_TEXTURE_2D, 0 );
 }
 
-static bool _update_mesh_with_frame( gfx_mesh_t* mesh_ptr, int frame_number, const char* filename, vol_geom_info_t* vols_info_ptr, gfx_texture_t* texture_ptr ) {
-  // Read the first frame to use as the base mesh.
+/** Update the OpenGL geometry and texture with the given vologram frame number.
+ *  This function does not check if the corresponding keyframe was loaded first.
+ */
+static bool _update_mesh_with_frame( gfx_mesh_t* mesh_ptr, uint32_t frame_number, const char* filename, vol_geom_info_t* vols_info_ptr, gfx_texture_t* texture_ptr ) {
   vol_geom_frame_data_t vols_frame_data = ( vol_geom_frame_data_t ){ .block_data_ptr = NULL };
   if ( !vol_geom_read_frame( filename, vols_info_ptr, frame_number, &vols_frame_data ) ) {
     fprintf( stderr, "ERROR: reading frame 0 from vol sequence file\n" );
@@ -46,16 +61,17 @@ static bool _update_mesh_with_frame( gfx_mesh_t* mesh_ptr, int frame_number, con
   }
   float* points_ptr    = (float*)&vols_frame_data.block_data_ptr[vols_frame_data.vertices_offset];
   float* uvs_ptr       = (float*)&vols_frame_data.block_data_ptr[vols_frame_data.uvs_offset];
-  uint8_t indices_type = 1; // indices_type - Data type of indices - 0=unsigned byte, 1=unsigned short, 2=unsigned int.
+  uint8_t indices_type = 1; // indices_type - Data type of indices - { 0=unsigned byte, 1=unsigned short, 2=unsigned int }.
   int n_vertices       = vols_frame_data.vertices_sz / ( sizeof( float ) * 3 );
-  if ( vol_geom_is_keyframe( vols_info_ptr, frame_number ) ) {
+  bool is_key          = vol_geom_is_keyframe( vols_info_ptr, frame_number );
+  if ( is_key ) {
     float* normals_ptr       = (float*)&vols_frame_data.block_data_ptr[vols_frame_data.normals_offset];
     short* indices_short_ptr = (short*)&vols_frame_data.block_data_ptr[vols_frame_data.indices_offset];
     void* indices_ptr        = indices_short_ptr;          //
     size_t indices_buffer_sz = vols_frame_data.indices_sz; //
     gfx_update_mesh_from_mem( mesh_ptr, points_ptr, 3, uvs_ptr, 2, normals_ptr, 3, indices_ptr, indices_buffer_sz, indices_type, n_vertices, true );
   } else {
-    gfx_update_mesh_from_mem( mesh_ptr, points_ptr, 3, uvs_ptr, 2, NULL, 3, NULL, 0, indices_type, n_vertices, true );
+    gfx_update_mesh_from_mem( mesh_ptr, points_ptr, 3, NULL, 2, NULL, 3, NULL, 0, indices_type, n_vertices, true );
   }
 
   if ( texture_ptr && vols_info_ptr->hdr.textured ) {
@@ -70,6 +86,9 @@ static bool _update_mesh_with_frame( gfx_mesh_t* mesh_ptr, int frame_number, con
   return true;
 }
 
+/** Update the OpenGL geometry and texture with the desired vologram frame number.
+ *  This function also checks if the corresponding keyframe was loaded, and if not, loads that in first.
+ */
 static bool _update_mesh_new_frame( gfx_mesh_t* mesh_ptr, gfx_texture_t* compressed_texture_ptr, uint32_t desired_frame, uint32_t* curr_frame_ptr,
   uint32_t loaded_keyframe, vol_geom_info_t* vols_info_ptr, const char* filename_vols ) {
   if ( desired_frame != *curr_frame_ptr ) {
@@ -86,19 +105,9 @@ static bool _update_mesh_new_frame( gfx_mesh_t* mesh_ptr, gfx_texture_t* compres
   return true;
 }
 
-typedef struct vologram_t {
-  char filename_vols[1024];
-  vol_geom_info_t vols_info;
-  gfx_texture_t texture;
-  gfx_mesh_t mesh;
-  double fps;
-  double frame_s;
-  uint32_t curr_frame;
-  uint32_t loaded_keyframe;
-  vec3 pos_wor;
-  bool loaded;
-} vologram_t;
-
+/** Load and initialise an unique vologram.
+ *  On success the returned vologram struct will have its loaded flag set to true.
+ */
 static vologram_t _create_vologram( const char* filename, vec3 pos_wor, uint32_t starting_frame ) {
   vologram_t v = ( vologram_t ){ .loaded = false, .pos_wor = pos_wor, .curr_frame = starting_frame, .loaded_keyframe = -1 };
   strcpy( v.filename_vols, filename );
@@ -133,23 +142,12 @@ static vologram_t _create_vologram( const char* filename, vec3 pos_wor, uint32_t
     return v;
   }
 
-  /*
-  ma_result result;
-  ma_engine engine;
-  ma_sound sound;*/
   if ( v.vols_info.hdr.audio ) {
 #ifdef WRITE_AUDIO_FILE
     FILE* f_ptr = fopen( "audiofile", "wb" );
     fwrite( v.vols_info.audio_data_ptr, v.vols_info.audio_data_sz, 1, f_ptr );
     fclose( f_ptr );
 #endif
-    printf( "Init sound...\n" );
-    /* result = ma_sound_init_from_data_source( &engine, vols_info.audio_data_ptr, 0, NULL, &sound );
-     if ( result != MA_SUCCESS ) {
-       printf( "Failed to init sound\n." );
-       return 1;
-     }
-     ma_sound_start( &sound );*/
   }
 
   v.loaded = true;
@@ -186,6 +184,8 @@ int main( int argc, char** argv ) {
     printf( "Usage: %s MYFILE.vols\n. Using default: %s", argv[0], filename_vols );
   }
 
+  gfx_start( "vol_geom Single Vols File OpenGL Example\n", 512, 512, false );
+
   printf( "Init vol_basis...\n" );
   output_blocks_ptr = (uint8_t*)malloc( OUTPUT_DIMS * OUTPUT_DIMS );
   if ( !vol_basis_init() ) {
@@ -193,22 +193,11 @@ int main( int argc, char** argv ) {
     return 1;
   }
 
-  gfx_start( "vol_geom Single Vols File OpenGL Example\n", 512, 512, false );
-
-  /*
-    printf( "Init audio engine...\n" );
-      result = ma_engine_init( NULL, &engine );
-      if ( result != MA_SUCCESS ) {
-        printf( "Failed to initialize audio engine." );
-        return -1;
-      }*/
-
   printf( "Loading combined header&sequence file `%s`\n", filename_vols );
 
-  int n_volograms = 5;
   vologram_t volograms[5];
   uint32_t start_frames[5] = { 0, 30, 60, 90, 120 };
-  vec3 positions[5]     = {
+  vec3 positions[5]        = {
     ( vec3 ){ 0.0f, 0.0f, 0.0f },  //
     ( vec3 ){ -1.0f, 0.0f, 0.0f }, //
     ( vec3 ){ 1.0f, 0.0f, 0.0f },  //
@@ -216,11 +205,11 @@ int main( int argc, char** argv ) {
     ( vec3 ){ 2.0f, 0.0f, 0.0f }   //
   };
   vec4 tints[5] = {
-    ( vec4 ){ 1, 1, 1, 1 }, //
-    ( vec4 ){ 1, 0, 0, 0 }, //
+    ( vec4 ){ 1, 1, 1, 1 },     //
+    ( vec4 ){ 1, 0, 0, 0 },     //
     ( vec4 ){ 0.1, 1, 0.1, 1 }, //
     ( vec4 ){ 0.1, 0.1, 1, 1 }, //
-    ( vec4 ){ 1, 0, 1, 1 }  //
+    ( vec4 ){ 1, 0, 1, 1 }      //
   };
   for ( int i = 0; i < n_volograms; i++ ) {
     volograms[i] = _create_vologram( filename_vols, positions[i], start_frames[i] );
@@ -263,9 +252,6 @@ int main( int argc, char** argv ) {
   }
 
   gfx_stop();
-
-  //  if ( vols_info.hdr.audio ) { ma_sound_uninit( &sound ); }
-  // ma_engine_uninit( &engine );
 
   if ( output_blocks_ptr ) { free( output_blocks_ptr ); }
 
