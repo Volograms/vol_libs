@@ -105,11 +105,12 @@ bool gfx_start( const char* window_title, int w, int h, bool fullscreen ) {
       "#version 410 core\n"
       "in vec2 v_st;\n"
       "uniform sampler2D u_tex;\n"
+      "uniform vec4 u_tint;\n"
       "out vec4 o_frag_colour;\n"
       "void main () {\n"
       "  vec4 texel = texture( u_tex, v_st );\n"
       "  texel.rgb = pow( texel.rgb, vec3( 2.2 ) );\n"
-      "  o_frag_colour = texel;\n"
+      "  o_frag_colour = texel * u_tint;\n"
       "  o_frag_colour.rgb = pow( o_frag_colour.rgb, vec3( 1.0 / 2.2 ) );\n"
       "}\n";
     gfx_default_textured_shader = gfx_create_shader_program_from_strings( vertex_shader, fragment_shader );
@@ -544,6 +545,8 @@ void gfx_delete_texture( gfx_texture_t* texture ) {
 }
 
 void gfx_uniform1f( gfx_shader_t shader, int location, float f ) { glProgramUniform1f( shader.program_gl, location, f ); }
+void gfx_uniform4f( gfx_shader_t shader, int location, float x, float y, float z, float w ) { glProgramUniform4f( shader.program_gl, location, x, y, z, w ); }
+void gfx_uniform4fv( gfx_shader_t shader, int location, int count, float* v ) { glProgramUniform4fv( shader.program_gl, location, count, v ); }
 
 void gfx_draw_mesh( gfx_mesh_t mesh, gfx_primitive_type_t pt, gfx_shader_t shader, float* P, float* V, float* M, gfx_texture_t* textures, int n_textures ) {
   if ( 0 == mesh.points_vbo || 0 == mesh.n_vertices ) { return; }

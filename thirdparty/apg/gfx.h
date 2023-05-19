@@ -117,6 +117,10 @@ void gfx_draw_textured_quad( gfx_texture_t texture, vec2 scale, vec2 pos, vec2 t
 
 void gfx_uniform1f( gfx_shader_t shader, int location, float f );
 
+void gfx_uniform4f( gfx_shader_t shader, int location, float x, float y, float z, float w );
+
+void gfx_uniform4fv( gfx_shader_t shader, int location, int count, float* v );
+
 void gfx_wireframe_mode( void );
 
 void gfx_polygon_mode( void );
