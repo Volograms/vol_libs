@@ -137,6 +137,7 @@ class VologramPlayer {
 			this.#frameToLoad = 0;
 			this.#playbackStartTime = performance.now() / 1000;
 		}
+		this.vologram.lastUpdateTime = time;
 		return true;
 	};
 
