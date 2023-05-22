@@ -167,9 +167,12 @@ class VologramPlayer {
 	};
 
 	play = () => {
-		if (this.vologram.attachedVideo) this.vologram.attachedVideo.play();
-		else {
+		if (this.vologram.attachedVideo) {
+			this.vologram.attachedVideo.currentTime = 0;
+			this.vologram.attachedVideo.play();
+		} else {
 			this.#playbackStartTime = performance.now() / 1000;
+			this.#timerPaused = false;
 			requestAnimationFrame(this.#frameRequestCallback);
 		}
 	};
@@ -178,6 +181,15 @@ class VologramPlayer {
 		if (this.vologram.attachedVideo) this.vologram.attachedVideo.pause();
 		else {
 			this.#timerPaused = true;
+		}
+	};
+
+	resume = () => {
+		if (this.vologram.attachedVideo) {
+			this.vologram.attachedVideo.play();
+		} else {
+			this.#timerPaused = false;
+			requestAnimationFrame(this.#frameRequestCallback);
 		}
 	};
 
