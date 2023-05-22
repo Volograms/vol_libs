@@ -186,6 +186,16 @@ class VologramPlayer {
 		else return !this.#timerPaused;
 	};
 
+	mute = (setValue) => {
+		if (setValue) {
+			if (this.vologram.attachedVideo) this.vologram.attachedVideo.muted = setValue;
+			// TODO: Audio Element
+		} else {
+			if (this.vologram.attachedVideo) return this.vologram.attachedVideo.muted;
+			// TODO: Audio Element
+		}
+	};
+
 	/** @type {(videoElement: HTMLVideoElement) => void} */
 	attachVideo = (videoElement) => {
 		this.vologram.attachedVideo = videoElement;
