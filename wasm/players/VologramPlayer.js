@@ -1,7 +1,7 @@
 class VologramPlayer {
 	#wasm;
 	/** @type {number} */ #frameToLoad;
-	/** @type {number} */ #timer;
+	/** @type {boolean} */ #timerPaused;
 	/** @type {number} */ #playbackStartTime;
 	vologram = {};
 
@@ -10,6 +10,8 @@ class VologramPlayer {
 		onframeready: [],
 		/** @type {Array<() => void>} */
 		onclose: [],
+		/** @type {Array<() => void} */
+		onloop: [],
 	};
 
 	#loadMesh = (frameIdx) => {
@@ -136,6 +138,7 @@ class VologramPlayer {
 		if (this.#frameToLoad >= this.vologram.header.frameCount) {
 			this.#frameToLoad = 0;
 			this.#playbackStartTime = performance.now() / 1000;
+			this.#events.onloop.forEach((fn) => fn());
 		}
 		this.vologram.lastUpdateTime = time;
 		return true;
@@ -152,11 +155,15 @@ class VologramPlayer {
 
 	/** @type {FrameRequestCallback} */
 	#frameRequestCallback = (now) => {
-		if (this.vologram.header.ready && this.#shouldAdvanceFrame(now / 1000 - this.#playbackStartTime)) {
+		if (
+			!this.#timerPaused &&
+			this.vologram.header.ready &&
+			this.#shouldAdvanceFrame(now / 1000 - this.#playbackStartTime)
+		) {
 			this.#updateMeshFrameAllowingSkip(this.#frameToLoad);
 			this.#events.onframeready.forEach((fn) => fn(this.vologram));
 		}
-		requestAnimationFrame(this.#frameRequestCallback);
+		if (!this.#timerPaused) requestAnimationFrame(this.#frameRequestCallback);
 	};
 
 	play = () => {
@@ -165,6 +172,18 @@ class VologramPlayer {
 			this.#playbackStartTime = performance.now() / 1000;
 			requestAnimationFrame(this.#frameRequestCallback);
 		}
+	};
+
+	pause = () => {
+		if (this.vologram.attachedVideo) this.vologram.attachedVideo.pause();
+		else {
+			this.#timerPaused = true;
+		}
+	};
+
+	isPlaying = () => {
+		if (this.vologram.attachedVideo) return !this.vologram.attachedVideo.paused && !this.vologram.attachedVideo.ended;
+		else return !this.#timerPaused;
 	};
 
 	/** @type {(videoElement: HTMLVideoElement) => void} */
