@@ -30,7 +30,7 @@ To Run:
 		<!-- playsinline stops mobile browsers fullscreen-ing the video (iOS 10+)-->
 		<video controls id="texture_video_el" type="video/mp4;" width="256" height="256" loop playsinline></video>
 	</body>
-	<script async src="https://unpkg.com/es-module-shims@1.3.6/dist/es-module-shims.js"></script>
+	<!--script async src="https://unpkg.com/es-module-shims@1.3.6/dist/es-module-shims.js"></script-->
 
 	<!-- 
     To import from the vol player from github use the following cdn template:
@@ -52,6 +52,7 @@ To Run:
 		let header_url = "../example_vologram/calif/header.vols";
 		let sequence_url = "../example_vologram/calif/sequence_0.vols";
 		let video_url = "../example_vologram/calif/output_720.mp4";
+		let single_file_url = "../../samples/combined.vols";
 
 		// Initialise three js rendering objects
 		const scene = new THREE.Scene();
@@ -77,8 +78,10 @@ To Run:
 		var load_button = document.getElementById("load_vols_files_button");
 		var stop_button = document.getElementById("stop_vols_files_button");
 
-		vologramPlayer.open(header_url, sequence_url, video_url, true).then(() => {
-			vologramPlayer.attachVideo(video_element);
+		//vologramPlayer.open(header_url, sequence_url, video_url, console.log).then(() => {
+		vologramPlayer.openSingleFile(single_file_url, console.log).then(() => {
+			console.log("READY TO GO");
+			if (!vologramPlayer.vologram.header.singleFile) vologramPlayer.attachVideo(video_element);
 			load_button.onclick = vologramPlayer.play;
 			stop_button.onclick = vologramPlayer.close;
 			let threeJsPlayer = new VologramThreeJsExtension(renderer, vologramPlayer);

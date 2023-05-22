@@ -32,21 +32,31 @@ var VolWeb = (() => {
 
 		// --pre-jses are emitted after the Module integration code, so that they can
 		// refer to Module (if they choose; they can also define Module)
-		Module.fetch_file = async (dest, fileUrl) => {
-			return fetch(fileUrl)
-				.then((response) => response.blob())
-				.then((blob) => blob.arrayBuffer())
-				.then((arrayBuffer) => {
-					const byteArray = new Uint8Array(arrayBuffer);
+		Module.fetch_file = (dest, fileUrl, onProgress) => {
+			return new Promise((resolve, reject) => {
+				const xhr = new XMLHttpRequest();
+				xhr.open("GET", fileUrl, true);
+				xhr.responseType = "arraybuffer";
+				xhr.onprogress = (e) => {
+					if (onProgress) {
+						onProgress(e.loaded / e.total);
+					}
+				};
+				xhr.onload = () => {
+					if (!xhr.response) {
+						reject(new Error("No response received"));
+						return;
+					}
+					const byteArray = new Uint8Array(xhr.response);
 					var stream = Module.FS.open(dest, "w");
 					Module.FS.write(stream, byteArray, 0, byteArray.length, 0);
 					Module.FS.close(stream);
-					return true;
-				})
-				.catch((reason) => {
-					console.error(reason);
-					return false;
-				});
+					resolve({ status: xhr.status, responseUrl: xhr.responseURL });
+				};
+				xhr.onerror = () => reject(new Error("File upload failed"));
+				xhr.onabort = () => reject(new Error("File upload aborted"));
+				xhr.send(null);
+			});
 		};
 
 		Module.initVologramFunctions = (containerObject) => {
@@ -130,6 +140,12 @@ var VolWeb = (() => {
 				return new Uint8Array(Module.HEAP8.buffer, ptr, w * h);
 			};
 
+			insertObject["get_audio_data"] = () => {
+				let ptr = Module.ccall("audio_data_ptr", "array");
+				let sz = Module.ccall("audio_data_sz", "number");
+				return new Uint8Array(Module.HEAP8.buffer, ptr, sz);
+			};
+
 			insertObject["find_basis_fmt"] = (gl, hasAlpha = true) => {
 				// Matches enum values in basisu_transcoder.h.
 				const BASIS_FORMATS = {
@@ -208,14 +224,8 @@ var VolWeb = (() => {
 					basisFmt = BASIS_FORMATS.BC7;
 					format_text = "COMPRESSED_RGBA_BPTC_UNORM_EXT (BC7)";
 				}
-				//console.log("Using basis format " + basisFmt + " (" + format_text + ")");
+				// console.log("Using basis format " + basisFmt + " (" + format_text + ")");
 				return [glFmt, basisFmt];
-			};
-
-			insertObject["get_audio_data"] = () => {
-				let ptr = Module.ccall("audio_data_ptr", "array");
-				let sz = Module.ccall("audio_data_sz", "number");
-				return new Uint8Array(Module.HEAP8.buffer, ptr, sz);
 			};
 
 			if (usingExternalObject) {

@@ -1,6 +1,8 @@
 class VologramPlayer {
 	#wasm;
 	/** @type {number} */ #frameToLoad;
+	/** @type {number} */ #timer;
+	/** @type {number} */ #playbackStartTime;
 	vologram = {};
 
 	#events = {
@@ -58,7 +60,7 @@ class VologramPlayer {
 
 	#initVologram = () => {
 		var ret = false;
-		if (this.vologram.singleFileMode) {
+		if (this.vologram.header.singleFile) {
 			ret = this.vologram.create_single_file_info("vologram.vols");
 		} else {
 			ret = this.vologram.create_file_info("header.vols", "sequence.vols");
@@ -86,37 +88,44 @@ class VologramPlayer {
 		this.vologram.header.ready = true;
 	};
 
-	#initWasm = async (downloadFiles) => {
-		const onInitFinished = async () => {
-			console.log("Init finished");
-			this.#wasm.initVologramFunctions(this.vologram);
-			// TODO: Add function in pre.js
-			this.#wasm.ccall("basis_init", "boolean");
-			this.#initVologram();
-		};
+	#progressCheck = (p) => {
+		if (Math.floor(p * 100) % 10 === 0) {
+			console.log(p * 100 + "%");
+		}
+	};
 
-		this.#wasm = {
-			onRuntimeInitialized: () => {
-				console.log("Vologram wasm module initialised");
-				if (downloadFiles) {
-					if (this.vologram.header.singleFile) {
-						this.#wasm.fetch_file("vologram.vols", this.vologram.fileUrl).then(() => {
-							onInitFinished();
-						});
-					} else {
-						console.log("Downloading hdr and seq files");
-						this.#wasm.fetch_file("header.vols", this.vologram.headerUrl).then(() => {
-							this.#wasm.fetch_file("sequence.vols", this.vologram.sequenceUrl).then(() => {
-								onInitFinished();
-							});
-						});
-					}
-				} else {
-					onInitFinished();
-				}
-			},
-		};
-		return VolWeb(this.#wasm);
+	#initWasmSingleFile = async (onProgress) => {
+		return VolWeb()
+			.then((wasmInstance) => {
+				this.#wasm = wasmInstance;
+				this.#wasm.ccall("basis_init", "boolean");
+				this.#wasm.initVologramFunctions(this.vologram);
+				return this.#wasm.fetch_file("vologram.vols", this.vologram.fileUrl, onProgress);
+			})
+			.then((response) => {
+				console.log(response);
+				this.#initVologram();
+				return true;
+			});
+	};
+
+	#initWasm = async () => {
+		return VolWeb()
+			.then((wasmInstance) => {
+				this.#wasm = wasmInstance;
+				this.#wasm.ccall("basis_init", "boolean");
+				this.#wasm.initVologramFunctions(this.vologram);
+				return this.#wasm.fetch_file("header.vols", this.vologram.headerUrl, onProgress);
+			})
+			.then((response) => {
+				console.log(response);
+				return this.#wasm.fetch_file("sequence.vols", this.vologram.sequenceUrl);
+			})
+			.then((response) => {
+				console.log(response);
+				this.#initVologram();
+				return true;
+			});
 	};
 
 	#shouldAdvanceFrame = (time) => {
@@ -126,6 +135,7 @@ class VologramPlayer {
 		}
 		if (this.#frameToLoad >= this.vologram.header.frameCount) {
 			this.#frameToLoad = 0;
+			this.#playbackStartTime = performance.now() / 1000;
 		}
 		return true;
 	};
@@ -139,8 +149,21 @@ class VologramPlayer {
 		this.vologram.attachedVideo?.requestVideoFrameCallback(this.#videoFrameCallback);
 	};
 
+	/** @type {FrameRequestCallback} */
+	#frameRequestCallback = (now) => {
+		if (this.vologram.header.ready && this.#shouldAdvanceFrame(now / 1000 - this.#playbackStartTime)) {
+			this.#updateMeshFrameAllowingSkip(this.#frameToLoad);
+			this.#events.onframeready.forEach((fn) => fn(this.vologram));
+		}
+		requestAnimationFrame(this.#frameRequestCallback);
+	};
+
 	play = () => {
 		if (this.vologram.attachedVideo) this.vologram.attachedVideo.play();
+		else {
+			this.#playbackStartTime = performance.now() / 1000;
+			requestAnimationFrame(this.#frameRequestCallback);
+		}
 	};
 
 	/** @type {(videoElement: HTMLVideoElement) => void} */
@@ -150,7 +173,7 @@ class VologramPlayer {
 		videoElement.requestVideoFrameCallback(this.#videoFrameCallback);
 	};
 
-	open = async (headerUrl, sequenceUrl, textureUrl, downloadFiles = true) => {
+	open = async (headerUrl, sequenceUrl, textureUrl, onProgress) => {
 		this.vologram = {};
 		this.vologram.header = {};
 		this.vologram.frame = {};
@@ -158,22 +181,26 @@ class VologramPlayer {
 		this.vologram.headerUrl = headerUrl;
 		this.vologram.sequenceUrl = sequenceUrl;
 		this.vologram.textureUrl = textureUrl;
-		return this.#initWasm(downloadFiles);
+		return this.#initWasm(onProgress).then((w) => {
+			console.log(w);
+		});
+	};
+
+	openSingleFile = async (fileUrl, onProgress) => {
+		this.vologram = {};
+		this.vologram.header = {};
+		this.vologram.frame = {};
+		this.vologram.header.singleFile = true;
+		this.vologram.fileUrl = fileUrl;
+		return this.#initWasmSingleFile(onProgress).then((w) => {
+			console.log(w);
+		});
 	};
 
 	close = () => {
 		this.vologram.attachedVideo?.pause();
 		this.vologram.attachedVideo = null;
 		this.#events.onclose.forEach((fn) => fn());
-	};
-
-	openSingleFile = async (fileUrl, downloadFiles = true) => {
-		this.vologram = {};
-		this.vologram.header = {};
-		this.vologram.frame = {};
-		this.vologram.header.singleFile = true;
-		this.vologram.header.fileUrl = fileUrl;
-		return this.#initWasm(downloadFiles);
 	};
 
 	addEventListener(event, callback) {

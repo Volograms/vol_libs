@@ -70,3 +70,4 @@ examples/*.webm
 examples/*_ld*/
 wasm/vol_geom.js
 wasm/vol_geom.wasm
+*.vols

@@ -19,58 +19,60 @@ void main () {
 const frag = /*glsl*/ `
 precision mediump float;
 varying vec2 v_st;
-uniform sampler2D map;
+uniform sampler2D tex2d;
 void main () {
-  vec3 texel_rgb = texture2D( map, v_st ).rgb;
+  vec3 texel_rgb = texture2D( tex2d, v_st ).rgb;
   // discard any magenta fragments.
   if ( texel_rgb.r > 0.9 && texel_rgb.g < 0.17 && texel_rgb.b > 0.9 ) { discard; }
-  gl_FragColor = vec4( texel_rgb, 1.0 );
+	gl_FragColor = vec4( texel_rgb, 1.0 );
+  // gl_FragColor = vec4( v_st.x, v_st.y, 1.0, 1.0 );
 }`;
 
 class VologramThreeJsExtension {
-	#vologram = {};
+	#vologram;
 	#glFmt;
 	#basisFmt;
+	#basePlayer;
+	threeObjects;
 
 	#hasBasisTexture = false;
 
-	onUpdateFuncs = [];
-	onLoopFuncs = [];
-
 	#createVologramGeometry = () => {
-		this.#vologram.three.geometry = new THREE.BufferGeometry();
+		this.threeObjects.geometry = new THREE.BufferGeometry();
 	};
 
 	#createVologramTexture = () => {
 		if (this.#vologram.attachedVideo) {
-			this.#vologram.three.texture = new THREE.VideoTexture(this.#vologram.attachedVideo);
+			this.threeObjects.texture = new THREE.VideoTexture(this.#vologram.attachedVideo);
 			return;
 		}
 
-		const texDataSize = this.#vologram.textureWidth * this.#vologram.textureHeight;
+		const texDataSize = this.#vologram.header.textureWidth * this.#vologram.header.textureHeight;
 		const data = new Uint8Array(texDataSize);
-		this.#vologram.three.texture = new THREE.CompressedTexture(
-			[{ data, width: this.#vologram.textureWidth, height: this.#vologram.textureHeight }],
-			this.#vologram.textureWidth,
-			this.#vologram.textureHeight,
+		this.threeObjects.texture = new THREE.CompressedTexture(
+			[{ data: data, width: this.#vologram.header.textureWidth, height: this.#vologram.header.textureHeight }],
+			this.#vologram.header.textureWidth,
+			this.#vologram.header.textureHeight,
 			this.#glFmt,
 			THREE.UnsignedByteType
 		);
-		this.#vologram.three.texture.needsUpdate = true;
+		this.threeObjects.texture.minFilter = THREE.LinearFilter;
+		this.threeObjects.texture.needsUpdate = true;
 	};
 
 	#createVologramMesh = () => {
-		this.#vologram.three.material = new THREE.ShaderMaterial({
+		this.threeObjects.material = new THREE.ShaderMaterial({
 			uniforms: {
-				map: { value: this.#vologram.three.texture },
+				tex2d: { value: this.threeObjects.texture },
 			},
 			vertexShader: this.#hasBasisTexture ? vertBasis : vert,
 			fragmentShader: frag,
 		});
-		this.#vologram.three.mesh = new THREE.Mesh(this.#vologram.three.geometry, this.#vologram.three.material);
-		this.#vologram.three.mesh.frustumCulled = false;
-		this.#vologram.three.mesh.needsUpdate = true;
-		this.#vologram.three.material.needsUpdate = true;
+		this.threeObjects.mesh = new THREE.Mesh(this.threeObjects.geometry, this.threeObjects.material);
+		this.threeObjects.mesh.rotation.y = Math.PI;
+		this.threeObjects.mesh.frustumCulled = false;
+		this.threeObjects.mesh.needsUpdate = true;
+		this.threeObjects.material.needsUpdate = true;
 	};
 
 	#createVologram = () => {
@@ -83,32 +85,20 @@ class VologramThreeJsExtension {
 	#updateTexture = () => {
 		if (!this.#vologram.run_basis_transcode(this.#basisFmt)) return;
 		const texData = this.#vologram.basis_get_data();
-		this.#vologram.three.texture.dispose();
-		this.#vologram.three.texture = new THREE.CompressedTexture(
-			[
-				{
-					data: texData,
-					width: this.#vologram.textureWidth,
-					height: this.#vologram.textureHeight,
-				},
-			],
-			this.#vologram.textureWidth,
-			this.#vologram.textureHeight,
-			this.#glFmt,
-			THREE.UnsignedByteType
-		);
-		this.#vologram.three.texture.needsUpdate = true;
-		this.#vologram.three.material.uniforms.map.value = this.#vologram.three.texture;
-		this.#vologram.three.material.needsUpdate = true;
+		this.threeObjects.texture.mipmaps[0].data.set(texData);
+		this.threeObjects.texture.minFilter = THREE.LinearFilter;
+		this.threeObjects.texture.needsUpdate = true;
+		this.threeObjects.material.uniforms.tex2d.value = this.#vologram.three.texture;
+		this.threeObjects.material.needsUpdate = true;
 	};
 
 	#updateMesh = () => {
-		if (!this.#vologram.three.geometry) {
+		if (!this.threeObjects.geometry) {
 			return false;
 		}
 
 		// Positions - fetch and upload.
-		this.#vologram.three.geometry.setAttribute(
+		this.threeObjects.geometry.setAttribute(
 			"position",
 			new THREE.Float32BufferAttribute(this.#vologram.frame.positions, 3)
 		);
@@ -116,36 +106,32 @@ class VologramThreeJsExtension {
 		if (this.#vologram.three.hasNormals) {
 			// Not all volograms include normals.
 			// Normals - fetch and upload.
-			this.#vologram.three.geometry.setAttribute(
-				"normal",
-				new THREE.Float32BufferAttribute(this.#vologram.frame.normals, 3)
-			);
+			this.threeObjects.geometry.setAttribute("normal", new THREE.Float32BufferAttribute(this.#vologram.frame.normals, 3));
 		}
 
 		// Key-Frames also contain texture coordinate and index data.
 		if (this.#vologram.frame.isKey) {
 			// Texture Coordinates - fetch and upload.
-			this.#vologram.three.geometry.setAttribute(
-				"uv",
-				new THREE.Float32BufferAttribute(this.#vologram.frame.texCoords, 2)
-			);
+			this.threeObjects.geometry.setAttribute("uv", new THREE.Float32BufferAttribute(this.#vologram.frame.texCoords, 2));
 
 			// Indices - fetch and upload.
-			this.#vologram.three.geometry.setIndex(new THREE.Uint16BufferAttribute(this.#vologram.frame.indices, 1));
+			this.threeObjects.geometry.setIndex(new THREE.Uint16BufferAttribute(this.#vologram.frame.indices, 1));
 		}
 
 		// It seems that calculating bounding sphere does not work
 		// and always returns NaN value for the radius
-		if (this.#vologram.three.geometry.boundingSphere === null) {
-			this.#vologram.three.geometry.boundingSphere = new THREE.Sphere();
+		if (this.threeObjects.geometry.boundingSphere === null) {
+			this.threeObjects.geometry.boundingSphere = new THREE.Sphere();
 		}
 		if (
-			this.#vologram.three.geometry.boundingSphere.radius <= 0 ||
-			Number.isNaN(this.#vologram.three.geometry.boundingSphere.radius)
+			this.threeObjects.geometry.boundingSphere.radius <= 0 ||
+			Number.isNaN(this.threeObjects.geometry.boundingSphere.radius)
 		) {
-			this.#vologram.three.geometry.computeBoundingBox();
-			this.#vologram.three.geometry.boundingBox.getBoundingSphere(this.#vologram.three.geometry.boundingSphere);
+			this.threeObjects.geometry.computeBoundingBox();
+			this.threeObjects.geometry.boundingBox.getBoundingSphere(this.threeObjects.geometry.boundingSphere);
 		}
+		this.threeObjects.geometry.needsUpdate = true;
+		this.threeObjects.mesh.needsUpdate = true;
 		return true;
 	};
 
@@ -155,25 +141,30 @@ class VologramThreeJsExtension {
 	};
 
 	#close = () => {
-		if (this.#vologram && this.#vologram.three) {
-			this.#vologram.three.mesh = null;
-			this.#vologram.three.material = null;
-			this.#vologram.three.geometry = null;
-			this.#vologram.three.texture = null;
+		this.#basePlayer.removeEventListener("onframeready", this.#update);
+		this.#basePlayer.removeEventListener("onclose", this.#close);
+		if (this.#vologram && this.threeObjects) {
+			this.threeObjects.mesh = null;
+			this.threeObjects.material = null;
+			this.threeObjects.geometry = null;
+			this.threeObjects.texture.dispose();
+			this.threeObjects.texture = null;
 		}
 	};
 
 	constructor(renderer3js, basePlayer) {
+		this.#basePlayer = basePlayer;
 		this.#vologram = basePlayer.vologram;
 		this.#vologram.three = {};
+		this.threeObjects = this.#vologram.three;
 		if (this.#vologram.header.textureCompression == 1 || this.#vologram.header.textureCompression == 2) {
 			this.#hasBasisTexture = true;
-			const fmts = this.vologram.find_basis_fmt(renderer3js.getContext());
+			const fmts = this.#vologram.find_basis_fmt(renderer3js.getContext());
 			this.#glFmt = fmts[0];
 			this.#basisFmt = fmts[1];
 		}
 		this.#createVologram();
-		basePlayer.addEventListener("onframeready", this.#update);
-		basePlayer.addEventListener("onclose", this.#close);
+		this.#basePlayer.addEventListener("onframeready", this.#update);
+		this.#basePlayer.addEventListener("onclose", this.#close);
 	}
 }
