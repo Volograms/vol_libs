@@ -121,7 +121,7 @@ class VologramPlayer {
 			})
 			.then((response) => {
 				console.log(response);
-				return this.#wasm.fetch_file("sequence.vols", this.vologram.sequenceUrl);
+				return this.#wasm.fetch_file("sequence.vols", this.vologram.sequenceUrl, onProgress);
 			})
 			.then((response) => {
 				console.log(response);
