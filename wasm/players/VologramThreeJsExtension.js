@@ -1,4 +1,4 @@
-const vertBasis = /*glsl*/ `
+const vertBasis = /* glsl */ `
 precision mediump float;
 varying vec2 v_st;
 void main () {
@@ -7,7 +7,7 @@ void main () {
 }
 `;
 
-const vert = /*glsl*/ `
+const vert = /* glsl */ `
 precision mediump float;
 varying vec2 v_st;
 void main () {
@@ -16,7 +16,7 @@ void main () {
 }
 `;
 
-const frag = /*glsl*/ `
+const frag = /* glsl */ `
 precision mediump float;
 varying vec2 v_st;
 uniform sampler2D tex2d;
@@ -24,7 +24,7 @@ void main () {
   vec3 texel_rgb = texture2D( tex2d, v_st ).rgb;
   // discard any magenta fragments.
   if ( texel_rgb.r > 0.9 && texel_rgb.g < 0.17 && texel_rgb.b > 0.9 ) { discard; }
-	gl_FragColor = vec4( texel_rgb, 1.0 );
+  gl_FragColor = vec4( texel_rgb, 1.0 );
   // gl_FragColor = vec4( v_st.x, v_st.y, 1.0, 1.0 );
 }`;
 
@@ -50,7 +50,7 @@ const VologramThreeJsExtension = (renderer3js, basePlayer) => {
 		const texDataSize = _vologram.header.textureWidth * _vologram.header.textureHeight;
 		const data = new Uint8Array(texDataSize);
 		_threeObjects.texture = new THREE.CompressedTexture(
-			[{ data: data, width: _vologram.header.textureWidth, height: _vologram.header.textureHeight }],
+			[{ data, width: _vologram.header.textureWidth, height: _vologram.header.textureHeight }],
 			_vologram.header.textureWidth,
 			_vologram.header.textureHeight,
 			_glFmt,
@@ -69,7 +69,6 @@ const VologramThreeJsExtension = (renderer3js, basePlayer) => {
 			fragmentShader: frag,
 		});
 		_threeObjects.mesh = new THREE.Mesh(_threeObjects.geometry, _threeObjects.material);
-		_threeObjects.mesh.rotation.y = Math.PI;
 		_threeObjects.mesh.frustumCulled = false;
 		_threeObjects.mesh.needsUpdate = true;
 		_threeObjects.material.needsUpdate = true;
@@ -85,15 +84,7 @@ const VologramThreeJsExtension = (renderer3js, basePlayer) => {
 	const _updateTexture = () => {
 		if (!_vologram.run_basis_transcode(_basisFmt)) return;
 		const texData = _vologram.basis_get_data();
-		//this.threeObjects.texture.mipmaps[0].data.set(texData);
-		_threeObjects.texture.dispose();
-		_threeObjects.texture = new THREE.CompressedTexture(
-			[{ data: texData, width: _vologram.header.textureWidth, height: _vologram.header.textureHeight }],
-			_vologram.header.textureWidth,
-			_vologram.header.textureHeight,
-			_glFmt,
-			THREE.UnsignedByteType
-		);
+		_threeObjects.texture.mipmaps[0].data.set(texData);
 		_threeObjects.texture.minFilter = THREE.LinearFilter;
 		_threeObjects.texture.needsUpdate = true;
 		_threeObjects.material.uniforms.tex2d.value = _vologram.three.texture;
@@ -105,7 +96,7 @@ const VologramThreeJsExtension = (renderer3js, basePlayer) => {
 			return false;
 		}
 
-		// Positions - fetch and upload.
+		// Positions - fetch and upload.\
 		_threeObjects.geometry.setAttribute("position", new THREE.Float32BufferAttribute(_vologram.frame.positions, 3));
 
 		if (_vologram.three.hasNormals) {
@@ -114,14 +105,11 @@ const VologramThreeJsExtension = (renderer3js, basePlayer) => {
 			_threeObjects.geometry.setAttribute("normal", new THREE.Float32BufferAttribute(_vologram.frame.normals, 3));
 		}
 
-		// Key-Frames also contain texture coordinate and index data.
-		if (_vologram.frame.isKey) {
-			// Texture Coordinates - fetch and upload.
-			_threeObjects.geometry.setAttribute("uv", new THREE.Float32BufferAttribute(_vologram.frame.texCoords, 2));
+		// Texture Coordinates - fetch and upload.
+		_threeObjects.geometry.setAttribute("uv", new THREE.Float32BufferAttribute(_vologram.frame.texCoords, 2));
 
-			// Indices - fetch and upload.
-			_threeObjects.geometry.setIndex(new THREE.Uint16BufferAttribute(_vologram.frame.indices, 1));
-		}
+		// Indices - fetch and upload.
+		_threeObjects.geometry.setIndex(new THREE.Uint16BufferAttribute(_vologram.frame.indices, 1));
 
 		// It seems that calculating bounding sphere does not work
 		// and always returns NaN value for the radius
@@ -158,7 +146,7 @@ const VologramThreeJsExtension = (renderer3js, basePlayer) => {
 	_vologram = basePlayer.getVologram();
 	_vologram.three = {};
 	_threeObjects = _vologram.three;
-	if (_vologram.header.textureCompression == 1 || _vologram.header.textureCompression == 2) {
+	if (_vologram.header.textureCompression === 1 || _vologram.header.textureCompression === 2) {
 		_hasBasisTexture = true;
 		const fmts = _vologram.find_basis_fmt(renderer3js.getContext());
 		_glFmt = fmts[0];

@@ -92,12 +92,6 @@ export default class VologramPlayer {
 		this.vologram.header.ready = true;
 	};
 
-	#progressCheck = (p) => {
-		if (Math.floor(p * 100) % 10 === 0) {
-			console.log(p * 100 + "%");
-		}
-	};
-
 	#initWasmSingleFile = async (onProgress) => {
 		return VolWeb()
 			.then((wasmInstance) => {
