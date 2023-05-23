@@ -37,19 +37,18 @@ To Run:
     `https://cdn.jsdelivr.net/gh/Volograms/vol_libs@<BRANCH_NAME>/wasm/<FILE_NAME>`
  -->
 	<script src="../../wasm/vol_web.js"></script>
+	<script src="../../wasm/players/VologramPlayer.js"></script>
+	<script src="../../wasm/players/VologramThreeJsExtension.js"></script>
 	<script src="three.js"></script>
 
-	<script type="module">
-		import VologramPlayer from "../../wasm/players/VologramPlayer.js";
-		import VologramThreeJsExtension from "../../wasm/players/VologramThreeJsExtension.js";
-
+	<script>
 		// Initialise canvas for web drawing
 		const canvas = document.getElementById("canvas");
 		canvas.width = window.innerWidth - 50;
 		canvas.height = window.innerHeight - 50;
 
 		// Define vologram files paths
-		let vologramPlayer = new VologramPlayer();
+		let vologramPlayer = VologramPlayer();
 		let header_url = "../example_vologram/calif/header.vols";
 		let sequence_url = "../example_vologram/calif/sequence_0.vols";
 		let video_url = "../example_vologram/calif/output_720.mp4";
@@ -81,15 +80,16 @@ To Run:
 
 		//vologramPlayer.open(header_url, sequence_url, video_url, console.log).then(() => {
 		vologramPlayer.openSingleFile(single_file_url, console.log).then(() => {
-			console.log("READY TO GO");
-			if (!vologramPlayer.vologram.header.singleFile) vologramPlayer.attachVideo(video_element);
+			console.log(vologramPlayer);
+			let vologram = vologramPlayer.getVologram();
+			if (!vologram.header.singleFile) vologramPlayer.attachVideo(video_element);
 			load_button.onclick = vologramPlayer.play;
 			stop_button.onclick = vologramPlayer.close;
 			vologramPlayer.addEventListener("onloop", () => {
 				console.log("loop");
 			});
-			let threeJsPlayer = new VologramThreeJsExtension(renderer, vologramPlayer);
-			scene.add(vologramPlayer.vologram.three.mesh);
+			let threeJsPlayer = VologramThreeJsExtension(renderer, vologramPlayer);
+			scene.add(vologram.three.mesh);
 			renderer.setAnimationLoop(render);
 		});
 	</script>

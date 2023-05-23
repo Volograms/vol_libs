@@ -1,11 +1,11 @@
-export default class VologramPlayer {
-	#wasm;
-	/** @type {number} */ #frameToLoad;
-	/** @type {boolean} */ #timerPaused;
-	/** @type {number} */ #playbackStartTime;
-	vologram = {};
+const VologramPlayer = () => {
+	let _wasm = {};
+	/** @type {number} */ let _frameToLoad;
+	/** @type {boolean} */ let _timerPaused;
+	/** @type {number} */ let _playbackStartTime;
+	let vologram = {};
 
-	#events = {
+	const _events = {
 		/** @type {Array<(vologram: any) => void>} */
 		onframeready: [],
 		/** @type {Array<() => void>} */
@@ -14,58 +14,58 @@ export default class VologramPlayer {
 		onloop: [],
 	};
 
-	#loadMesh = (frameIdx) => {
-		if (this.vologram.lastFrameLoaded == frameIdx) {
-			return;
+	const _loadMesh = (frameIdx) => {
+		if (vologram.lastFrameLoaded == frameIdx) {
+			return false;
 		} // Safety catch to avoid reloading the same frame twice.
 
 		// Ask the vol_geom WASM to read the frame data from the vologram file into `_frame_data`.
-		var ret = this.vologram.read_frame(frameIdx);
+		var ret = vologram.read_frame(frameIdx);
 		if (!ret) {
 			return false;
 		}
-		this.vologram.frame.isKey = this.vologram.is_keyframe(frameIdx);
+		vologram.frame.isKey = vologram.is_keyframe(frameIdx);
 
 		// Positions - fetch and upload.
-		this.vologram.frame.positions = this.vologram.frame_get_verts();
+		vologram.frame.positions = vologram.frame_get_verts();
 
-		if (this.vologram.header.hasNormals) {
+		if (vologram.header.hasNormals) {
 			// Not all volograms include normals.
 			// Normals - fetch and upload.
-			this.vologram.frame.normals = this.vologram.frame_get_norms();
+			vologram.frame.normals = vologram.frame_get_norms();
 		}
 
 		// Key-Frames also contain texture coordinate and index data.
-		if (this.vologram.frame.isKey) {
-			this.vologram.lastKeyframeLoaded = frameIdx;
+		if (vologram.frame.isKey) {
+			vologram.lastKeyframeLoaded = frameIdx;
 			// Texture Coordinates - fetch and upload.
-			this.vologram.frame.texCoords = this.vologram.frame_get_uvs();
+			vologram.frame.texCoords = vologram.frame_get_uvs();
 
 			// Indices - fetch and upload.
-			this.vologram.frame.indices = this.vologram.frame_get_ind();
+			vologram.frame.indices = vologram.frame_get_ind();
 		}
-		this.vologram.lastFrameLoaded = frameIdx;
+		vologram.lastFrameLoaded = frameIdx;
 		return true;
 	};
 
 	// Calls mesh_from_frame() but first loads a keyframe, if required.
-	#updateMeshFrameAllowingSkip = (desiredFrameIndex) => {
-		var keyframeRequired = this.vologram.find_previous_keyframe(desiredFrameIndex);
+	const _updateMeshFrameAllowingSkip = (desiredFrameIndex) => {
+		var keyframeRequired = vologram.find_previous_keyframe(desiredFrameIndex);
 
 		// If running slowly we may skip over a keyframe. Grab that now to avoid stale keyframe desync.
-		if (this.vologram.lastKeyframeLoaded != keyframeRequired) {
-			this.#loadMesh(keyframeRequired);
+		if (vologram.lastKeyframeLoaded != keyframeRequired) {
+			_loadMesh(keyframeRequired);
 		}
 		// Load actual current frame.
-		this.#loadMesh(desiredFrameIndex);
+		_loadMesh(desiredFrameIndex);
 	};
 
-	#initVologram = () => {
+	const _initVologram = () => {
 		var ret = false;
-		if (this.vologram.header.singleFile) {
-			ret = this.vologram.create_single_file_info("vologram.vols");
+		if (vologram.header.singleFile) {
+			ret = vologram.create_single_file_info("vologram.vols");
 		} else {
-			ret = this.vologram.create_file_info("header.vols", "sequence.vols");
+			ret = vologram.create_file_info("header.vols", "sequence.vols");
 		}
 
 		console.log("create_file_info=" + ret);
@@ -74,185 +74,198 @@ export default class VologramPlayer {
 			return;
 		}
 
-		this.vologram.header.hasNormals = this.vologram.has_normals();
-		this.vologram.header.hasTexture = this.vologram.has_texture();
-		this.vologram.header.hasAudio = this.vologram.has_audio();
-		this.vologram.header.textureCompression = this.vologram.texture_compression();
-		this.vologram.header.textureContainerFormat = this.vologram.texture_container_format();
-		this.vologram.header.textureWidth = this.vologram.texture_width();
-		this.vologram.header.textureHeight = this.vologram.texture_height();
-		if (this.vologram.header.textureWidth === 0) this.vologram.header.textureWidth = 2048;
-		if (this.vologram.header.textureHeight === 0) this.vologram.header.textureHeight = 2048;
-		console.log(this.vologram.header.textureWidth, this.vologram.header.textureHeight);
-		this.vologram.header.frameCount = this.vologram.frame_count();
-		this.vologram.header.fps = 30;
-		this.vologram.header.durationS = this.vologram.header.frameCount / this.vologram.header.fps; // 5.0;
-		this.vologram.header.ready = true;
+		vologram.header.hasNormals = vologram.has_normals();
+		vologram.header.hasTexture = vologram.has_texture();
+		vologram.header.hasAudio = vologram.has_audio();
+		vologram.header.textureCompression = vologram.texture_compression();
+		vologram.header.textureContainerFormat = vologram.texture_container_format();
+		vologram.header.textureWidth = vologram.texture_width();
+		vologram.header.textureHeight = vologram.texture_height();
+		if (vologram.header.textureWidth === 0) vologram.header.textureWidth = 2048;
+		if (vologram.header.textureHeight === 0) vologram.header.textureHeight = 2048;
+		console.log(vologram.header.textureWidth, vologram.header.textureHeight);
+		vologram.header.frameCount = vologram.frame_count();
+		vologram.header.fps = 30;
+		vologram.header.durationS = vologram.header.frameCount / vologram.header.fps; // 5.0;
+		vologram.header.ready = true;
+		console.log(vologram);
 	};
 
-	#progressCheck = (p) => {
-		if (Math.floor(p * 100) % 10 === 0) {
-			console.log(p * 100 + "%");
-		}
-	};
-
-	#initWasmSingleFile = async (onProgress) => {
+	const _initWasmSingleFile = async (onProgress) => {
 		return VolWeb()
 			.then((wasmInstance) => {
-				this.#wasm = wasmInstance;
-				this.#wasm.ccall("basis_init", "boolean");
-				this.#wasm.initVologramFunctions(this.vologram);
-				return this.#wasm.fetch_file("vologram.vols", this.vologram.fileUrl, onProgress);
+				_wasm = wasmInstance;
+				_wasm.ccall("basis_init", "boolean");
+				_wasm.initVologramFunctions(vologram);
+				return _wasm.fetch_file("vologram.vols", vologram.fileUrl, onProgress);
 			})
 			.then((response) => {
 				console.log(response);
-				this.#initVologram();
+				_initVologram();
 				return true;
 			});
 	};
 
-	#initWasm = async () => {
+	const _initWasm = async (onProgress) => {
 		return VolWeb()
 			.then((wasmInstance) => {
-				this.#wasm = wasmInstance;
-				this.#wasm.ccall("basis_init", "boolean");
-				this.#wasm.initVologramFunctions(this.vologram);
-				return this.#wasm.fetch_file("header.vols", this.vologram.headerUrl, onProgress);
+				_wasm = wasmInstance;
+				_wasm.ccall("basis_init", "boolean");
+				_wasm.initVologramFunctions(vologram);
+				return _wasm.fetch_file("header.vols", vologram.headerUrl, onProgress);
 			})
 			.then((response) => {
 				console.log(response);
-				return this.#wasm.fetch_file("sequence.vols", this.vologram.sequenceUrl, onProgress);
+				return _wasm.fetch_file("sequence.vols", vologram.sequenceUrl, onProgress);
 			})
 			.then((response) => {
 				console.log(response);
-				this.#initVologram();
+				_initVologram();
 				return true;
 			});
 	};
 
-	#shouldAdvanceFrame = (time) => {
-		this.#frameToLoad = Math.floor(this.vologram.header.fps * time);
-		if (this.#frameToLoad === this.vologram.lastFrameLoaded) {
+	const _shouldAdvanceFrame = (time) => {
+		_frameToLoad = Math.floor(vologram.header.fps * time);
+		if (_frameToLoad === vologram.lastFrameLoaded) {
 			return false;
 		}
-		if (this.#frameToLoad >= this.vologram.header.frameCount) {
-			this.#frameToLoad = 0;
-			this.#playbackStartTime = performance.now() / 1000;
-			this.#events.onloop.forEach((fn) => fn());
+		if (_frameToLoad >= vologram.header.frameCount) {
+			_frameToLoad = 0;
+			_playbackStartTime = performance.now() / 1000;
+			_events.onloop.forEach((fn) => fn());
 		}
-		this.vologram.lastUpdateTime = time;
+		vologram.lastUpdateTime = time;
 		return true;
 	};
 
 	/** @type {VideoFrameRequestCallback} */
-	#videoFrameCallback = (now, metadata) => {
-		if (this.vologram.header.ready && this.#shouldAdvanceFrame(metadata.mediaTime)) {
-			this.#updateMeshFrameAllowingSkip(this.#frameToLoad);
-			this.#events.onframeready.forEach((fn) => fn(this.vologram));
+	const _videoFrameCallback = (now, metadata) => {
+		if (vologram.header.ready && _shouldAdvanceFrame(metadata.mediaTime)) {
+			_updateMeshFrameAllowingSkip(_frameToLoad);
+			_events.onframeready.forEach((fn) => fn(vologram));
 		}
-		this.vologram.attachedVideo?.requestVideoFrameCallback(this.#videoFrameCallback);
+		if (vologram.attachedVideo) {
+			vologram.attachedVideo.requestVideoFrameCallback(_videoFrameCallback);
+		}
 	};
 
 	/** @type {FrameRequestCallback} */
-	#frameRequestCallback = (now) => {
-		if (
-			!this.#timerPaused &&
-			this.vologram.header.ready &&
-			this.#shouldAdvanceFrame(now / 1000 - this.#playbackStartTime)
-		) {
-			this.#updateMeshFrameAllowingSkip(this.#frameToLoad);
-			this.#events.onframeready.forEach((fn) => fn(this.vologram));
+	const _frameRequestCallback = (now) => {
+		if (!_timerPaused && vologram.header.ready && _shouldAdvanceFrame(now / 1000 - _playbackStartTime)) {
+			_updateMeshFrameAllowingSkip(_frameToLoad);
+			_events.onframeready.forEach((fn) => fn(vologram));
 		}
-		if (!this.#timerPaused) requestAnimationFrame(this.#frameRequestCallback);
+		if (!_timerPaused) requestAnimationFrame(_frameRequestCallback);
 	};
 
-	play = () => {
-		if (this.vologram.attachedVideo) {
-			this.vologram.attachedVideo.currentTime = 0;
-			this.vologram.attachedVideo.play();
+	const play = () => {
+		console.log("play");
+		if (vologram.attachedVideo) {
+			vologram.attachedVideo.currentTime = 0;
+			vologram.attachedVideo.play();
 		} else {
-			this.#playbackStartTime = performance.now() / 1000;
-			this.#timerPaused = false;
-			requestAnimationFrame(this.#frameRequestCallback);
+			_playbackStartTime = performance.now() / 1000;
+			_timerPaused = false;
+			requestAnimationFrame(_frameRequestCallback);
 		}
 	};
 
-	pause = () => {
-		if (this.vologram.attachedVideo) this.vologram.attachedVideo.pause();
+	const pause = () => {
+		if (vologram.attachedVideo) vologram.attachedVideo.pause();
 		else {
-			this.#timerPaused = true;
+			_timerPaused = true;
 		}
 	};
 
-	resume = () => {
-		if (this.vologram.attachedVideo) {
-			this.vologram.attachedVideo.play();
+	const resume = () => {
+		if (vologram.attachedVideo) {
+			vologram.attachedVideo.play();
 		} else {
-			this.#timerPaused = false;
-			requestAnimationFrame(this.#frameRequestCallback);
+			_timerPaused = false;
+			requestAnimationFrame(_frameRequestCallback);
 		}
 	};
 
-	isPlaying = () => {
-		if (this.vologram.attachedVideo) return !this.vologram.attachedVideo.paused && !this.vologram.attachedVideo.ended;
-		else return !this.#timerPaused;
+	const isPlaying = () => {
+		if (vologram.attachedVideo) return !vologram.attachedVideo.paused && !vologram.attachedVideo.ended;
+		else return !_timerPaused;
 	};
 
-	mute = (setValue) => {
+	const mute = (setValue) => {
 		if (setValue) {
-			if (this.vologram.attachedVideo) this.vologram.attachedVideo.muted = setValue;
+			if (vologram.attachedVideo) vologram.attachedVideo.muted = setValue;
 			// TODO: Audio Element
+			return setValue;
 		} else {
-			if (this.vologram.attachedVideo) return this.vologram.attachedVideo.muted;
+			if (vologram.attachedVideo) return vologram.attachedVideo.muted;
 			// TODO: Audio Element
 		}
+		return false;
 	};
 
 	/** @type {(videoElement: HTMLVideoElement) => void} */
-	attachVideo = (videoElement) => {
-		this.vologram.attachedVideo = videoElement;
-		videoElement.src = this.vologram.textureUrl;
-		videoElement.requestVideoFrameCallback(this.#videoFrameCallback);
+	const attachVideo = (videoElement) => {
+		vologram.attachedVideo = videoElement;
+		videoElement.src = vologram.textureUrl;
+		videoElement.requestVideoFrameCallback(_videoFrameCallback);
 	};
 
-	open = async (headerUrl, sequenceUrl, textureUrl, onProgress) => {
-		this.vologram = {};
-		this.vologram.header = {};
-		this.vologram.frame = {};
-		this.vologram.header.singleFile = false;
-		this.vologram.headerUrl = headerUrl;
-		this.vologram.sequenceUrl = sequenceUrl;
-		this.vologram.textureUrl = textureUrl;
-		return this.#initWasm(onProgress).then((w) => {
+	const open = async (headerUrl, sequenceUrl, textureUrl, onProgress) => {
+		vologram = {};
+		vologram.header = {};
+		vologram.frame = {};
+		vologram.header.singleFile = false;
+		vologram.headerUrl = headerUrl;
+		vologram.sequenceUrl = sequenceUrl;
+		vologram.textureUrl = textureUrl;
+		return _initWasm(onProgress).then((w) => {
 			console.log(w);
 		});
 	};
 
-	openSingleFile = async (fileUrl, onProgress) => {
-		this.vologram = {};
-		this.vologram.header = {};
-		this.vologram.frame = {};
-		this.vologram.header.singleFile = true;
-		this.vologram.fileUrl = fileUrl;
-		return this.#initWasmSingleFile(onProgress).then((w) => {
+	const openSingleFile = async (fileUrl, onProgress) => {
+		vologram = {};
+		vologram.header = {};
+		vologram.frame = {};
+		vologram.header.singleFile = true;
+		vologram.fileUrl = fileUrl;
+		return _initWasmSingleFile(onProgress).then((w) => {
 			console.log(w);
 		});
 	};
 
-	close = () => {
-		this.#timerPaused = true;
-		this.vologram.attachedVideo?.pause();
-		this.vologram.attachedVideo = null;
-		this.#events.onclose.forEach((fn) => fn());
+	const close = () => {
+		_timerPaused = true;
+		vologram.attachedVideo?.pause();
+		vologram.attachedVideo = null;
+		_events.onclose.forEach((fn) => fn());
 	};
 
-	addEventListener(event, callback) {
-		this.#events[event].push(callback);
-	}
+	const addEventListener = (event, callback) => {
+		_events[event].push(callback);
+	};
 
-	removeEventListener(event, callback) {
-		let index = this.#events[event].indexOf(callback);
+	const removeEventListener = (event, callback) => {
+		let index = _events[event].indexOf(callback);
 		if (index < 0) return;
-		this.#events[event].splice(index, 1);
-	}
-}
+		_events[event].splice(index, 1);
+	};
+
+	const getVologram = () => vologram;
+
+	return {
+		getVologram,
+		play,
+		pause,
+		resume,
+		isPlaying,
+		mute,
+		attachVideo,
+		open,
+		openSingleFile,
+		close,
+		addEventListener,
+		removeEventListener,
+	};
+};
