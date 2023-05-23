@@ -37,11 +37,12 @@ To Run:
     `https://cdn.jsdelivr.net/gh/Volograms/vol_libs@<BRANCH_NAME>/wasm/<FILE_NAME>`
  -->
 	<script src="../../wasm/vol_web.js"></script>
-	<script src="../../wasm/players/VologramPlayer.js"></script>
-	<script src="../../wasm/players/VologramThreeJsExtension.js"></script>
 	<script src="three.js"></script>
 
-	<script>
+	<script type="module">
+		import VologramPlayer from "../../wasm/players/VologramPlayer.js";
+		import VologramThreeJsExtension from "../../wasm/players/VologramThreeJsExtension.js";
+
 		// Initialise canvas for web drawing
 		const canvas = document.getElementById("canvas");
 		canvas.width = window.innerWidth - 50;

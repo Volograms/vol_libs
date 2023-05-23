@@ -1,4 +1,4 @@
-class VologramPlayer {
+export default class VologramPlayer {
 	#wasm;
 	/** @type {number} */ #frameToLoad;
 	/** @type {boolean} */ #timerPaused;
