@@ -1,3 +1,5 @@
+import * as THREE from "three";
+
 const vertBasis = /*glsl*/ `
 precision mediump float;
 varying vec2 v_st;
@@ -28,7 +30,7 @@ void main () {
   // gl_FragColor = vec4( v_st.x, v_st.y, 1.0, 1.0 );
 }`;
 
-class VologramThreeJsExtension {
+export default class VologramThreeJsExtension {
 	#vologram;
 	#glFmt;
 	#basisFmt;
