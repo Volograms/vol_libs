@@ -85,7 +85,15 @@ class VologramThreeJsExtension {
 	#updateTexture = () => {
 		if (!this.#vologram.run_basis_transcode(this.#basisFmt)) return;
 		const texData = this.#vologram.basis_get_data();
-		this.threeObjects.texture.mipmaps[0].data.set(texData);
+		//this.threeObjects.texture.mipmaps[0].data.set(texData);
+		this.threeObjects.dispose();
+		this.threeObjects.texture = new THREE.CompressedTexture(
+			[{ data: texData, width: this.#vologram.header.textureWidth, height: this.#vologram.header.textureHeight }],
+			this.#vologram.header.textureWidth,
+			this.#vologram.header.textureHeight,
+			this.#glFmt,
+			THREE.UnsignedByteType
+		);
 		this.threeObjects.texture.minFilter = THREE.LinearFilter;
 		this.threeObjects.texture.needsUpdate = true;
 		this.threeObjects.material.uniforms.tex2d.value = this.#vologram.three.texture;

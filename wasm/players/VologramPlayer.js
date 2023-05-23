@@ -240,6 +240,7 @@ class VologramPlayer {
 	};
 
 	close = () => {
+		this.#timerPaused = true;
 		this.vologram.attachedVideo?.pause();
 		this.vologram.attachedVideo = null;
 		this.#events.onclose.forEach((fn) => fn());

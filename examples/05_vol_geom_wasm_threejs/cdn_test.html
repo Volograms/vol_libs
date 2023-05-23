@@ -84,6 +84,9 @@ To Run:
 			if (!vologramPlayer.vologram.header.singleFile) vologramPlayer.attachVideo(video_element);
 			load_button.onclick = vologramPlayer.play;
 			stop_button.onclick = vologramPlayer.close;
+			vologramPlayer.addEventListener("onloop", () => {
+				console.log("loop");
+			});
 			let threeJsPlayer = new VologramThreeJsExtension(renderer, vologramPlayer);
 			scene.add(vologramPlayer.vologram.three.mesh);
 			renderer.setAnimationLoop(render);
