@@ -74,14 +74,9 @@ To Run:
 			gl_FragColor.rgba = vec4( texel_rgb, 1.0 );
 		}
 		</script>
-<script src="../../wasm/vol_web.js"></script>
 <script src="./apg_maths.js"></script>
+<script src="../../wasm/vol_web.js"></script>
 <script>
-	// This 2 lines just make this example consistent
-	// with others
-	const initModule = Module;
-	Module = new Object();
-
 	var canvas;
 	var gl;
 	var vologram = new Object();   // Stores state about the current vologram.
@@ -188,13 +183,14 @@ To Run:
 		requestAnimationFrame(render);
 	}
 
-	Module['onRuntimeInitialized'] = function () {
+	
+	Module['onRuntimeInitialized'] = function() {
 		console.log('WASM for VOL_GEOM started...');
 
 		// VERY IMPORTANT:
-		// Calls cwrap on all the volograms wasm functions
-		// and exposes them in the Module object
-		Module.initVologramFunctions();
+    	// Calls cwrap on all the volograms wasm functions
+    	// and exposes them in the Module object
+    	Module.initVologramFunctions();
 
 		init();
 		if (!init) { return false; }
@@ -205,7 +201,7 @@ To Run:
 		console.log("render starting...");
 		requestAnimationFrame(render);
 	}
-	initModule(Module);
+	//initModule(Module);
 
 	// Copy vol_geom frame `frame_idx` into vologram webgl mesh.
 	// Returns true on success, and false on error loading frame.
@@ -279,7 +275,8 @@ To Run:
 
 	function init_vologram() {
 		if (!vologram.file_ready || vologram.ready) { return; } // Wait until both files are downloaded.
-		var ret = Module.create_single_file_info('singlefile.vols'); // Replaces 'create_file_info()'.
+		//var ret = Module.create_single_file_info('singlefile.vols'); // Replaces 'create_file_info()'.
+		var ret = Module.ccall('create_single_file_info', 'boolean', ['string'], ['singlefile.vols']);
 		console.log('create_single_file_info=' + ret);
 		if (!ret) {
 			console.error("failed to load vologram");
@@ -319,7 +316,7 @@ To Run:
 
 	// Function to download files and start playback. Video playback needs to start with a click.
 	function load_clicked() {
-		const FS = Module.FS;
+		//const FS = Module.FS;
 		if (init_done) {
 			{ // Single file
 				console.log("filename=" + vologram.url);

@@ -24,11 +24,11 @@ CPP="g++ -std=c++11"
 
 emcc -O2 -fno-strict-aliasing -DBASISD_SUPPORT_KTX2=0 \
 -s "EXPORTED_RUNTIME_METHODS=['ccall','cwrap','FS']" \
+-s SINGLE_FILE \
 -s ALLOW_MEMORY_GROWTH \
 -s EXPORT_NAME="Module" \
 -o vol_web.mjs \
 --pre-js "pre.js" \
--g \
 ../src/vol_basis.cpp \
 wasm_vol_geom.c \
 ../src/vol_geom.c \
