@@ -68,5 +68,6 @@ examples/*.bvh
 examples/*.mp4
 examples/*.webm
 examples/*_ld*/
+audiofile
 wasm/vol_geom.js
 wasm/vol_geom.wasm
