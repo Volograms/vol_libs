@@ -7,8 +7,12 @@
  * Language  | C99
  * Files     | 1
  * Licence   | The MIT License. See LICENSE.md for details.
- * Version   | 1.1 Added texture functions to support Basis Universal transcoding.
- *           | 1.0 First version.
+ * Version History
+ * ---------------
+ * 2023 Jun 13 | 1.3 Avoid malloc/memcpy for v1.3 vols files.
+ *             | 1.2 Version fetch function.
+ *             | 1.1 Added texture functions to support Basis Universal transcoding.
+ *             | 1.0 First version.
  */
 
 #include "vol_geom.h"
@@ -33,6 +37,9 @@ EMSCRIPTEN_KEEPALIVE
 unsigned int do_usleep( unsigned int us ) { return usleep( us ); }
 
 EMSCRIPTEN_KEEPALIVE
+int32_t version( void ) { return (int32_t)_info.hdr.version; }
+
+EMSCRIPTEN_KEEPALIVE
 bool has_normals( void ) { return _info.hdr.normals; }
 
 EMSCRIPTEN_KEEPALIVE
@@ -47,10 +54,10 @@ int32_t texture_width( void ) { return (int32_t)_info.hdr.texture_width; }
 EMSCRIPTEN_KEEPALIVE
 int32_t texture_height( void ) { return (int32_t)_info.hdr.texture_height; }
 
-EMSCRIPTEN_KEEPALIVE 
+EMSCRIPTEN_KEEPALIVE
 int32_t texture_compression( void ) { return (int32_t)_info.hdr.texture_compression; }
 
-EMSCRIPTEN_KEEPALIVE 
+EMSCRIPTEN_KEEPALIVE
 int32_t texture_container_format( void ) { return (int32_t)_info.hdr.texture_container_format; }
 
 EMSCRIPTEN_KEEPALIVE
@@ -77,14 +84,10 @@ EMSCRIPTEN_KEEPALIVE
 int32_t loaded_frame_number( void ) { return _info.frame_headers_ptr->frame_number; }
 
 EMSCRIPTEN_KEEPALIVE
-bool read_frame( int frame_idx ) {
-  return vol_geom_read_frame( _seq_filename, &_info, frame_idx, &_frame_data );
-}
+bool read_frame( int frame_idx ) { return vol_geom_read_frame( _seq_filename, &_info, frame_idx, &_frame_data ); }
 
 EMSCRIPTEN_KEEPALIVE
-int32_t max_blob_sz( void ) {
-  return _info.biggest_frame_blob_sz;
-}
+int32_t max_blob_sz( void ) { return _info.biggest_frame_blob_sz; }
 
 EMSCRIPTEN_KEEPALIVE
 bool is_keyframe( int frame_idx ) {
@@ -140,49 +143,61 @@ static uint16_t* indices_ptr;
 static size_t prev_indices_ptr_sz;
 
 EMSCRIPTEN_KEEPALIVE
+/// @brief VOLS files version 1.2 and earlier are not 4-byte aligned.
+/// @return This function returns a pointer a 4-byte aligned array of vertex data.
 float* frame_vp_copied( void ) {
+  float* f32_ptr = (float*)&_frame_data.block_data_ptr[_frame_data.vertices_offset];
+  if ( _info.hdr.version > 12 ) { return f32_ptr; } // No copy necessary.
   if ( _frame_data.vertices_sz > prev_vp_ptr_sz ) {
     vp_ptr         = realloc( vp_ptr, _frame_data.vertices_sz );
     prev_vp_ptr_sz = _frame_data.vertices_sz;
   }
   if ( !vp_ptr ) { return vp_ptr; }
-  float* f32_ptr = (float*)&_frame_data.block_data_ptr[_frame_data.vertices_offset];
   memcpy( vp_ptr, f32_ptr, _frame_data.vertices_sz );
   return vp_ptr;
 }
 
 EMSCRIPTEN_KEEPALIVE
+/// @brief VOLS files version 1.2 and earlier are not 4-byte aligned.
+/// @return This function returns a pointer a 4-byte aligned array of vertex data.
 float* frame_uvs_copied( void ) {
+  float* f32_ptr = (float*)&_frame_data.block_data_ptr[_frame_data.uvs_offset];
+  if ( _info.hdr.version > 12 ) { return f32_ptr; } // No copy necessary.
   if ( _frame_data.uvs_sz > prev_vt_ptr_sz ) {
     vt_ptr         = realloc( vt_ptr, _frame_data.uvs_sz );
     prev_vt_ptr_sz = _frame_data.uvs_sz;
   }
   if ( !vt_ptr ) { return vt_ptr; }
-  float* f32_ptr = (float*)&_frame_data.block_data_ptr[_frame_data.uvs_offset];
   memcpy( vt_ptr, f32_ptr, _frame_data.uvs_sz );
   return vt_ptr;
 }
 
 EMSCRIPTEN_KEEPALIVE
+/// @brief VOLS files version 1.2 and earlier are not 4-byte aligned.
+/// @return This function returns a pointer a 4-byte aligned array of vertex data.
 float* frame_normals_copied( void ) {
+  float* f32_ptr = (float*)&_frame_data.block_data_ptr[_frame_data.normals_offset];
+  if ( _info.hdr.version > 12 ) { return f32_ptr; } // No copy necessary.
   if ( _frame_data.normals_sz > prev_vn_ptr_sz ) {
     vn_ptr         = realloc( vn_ptr, _frame_data.normals_sz );
     prev_vn_ptr_sz = _frame_data.normals_sz;
   }
   if ( !vn_ptr ) { return vn_ptr; }
-  float* f32_ptr = (float*)&_frame_data.block_data_ptr[_frame_data.normals_offset];
   memcpy( vn_ptr, f32_ptr, _frame_data.normals_sz );
   return vn_ptr;
 }
 
 EMSCRIPTEN_KEEPALIVE
+/// @brief VOLS files version 1.2 and earlier are not 4-byte aligned.
+/// @return This function returns a pointer a 4-byte aligned array of index data.
 uint16_t* frame_indices_copied( void ) {
+  uint16_t* u16_ptr = (uint16_t*)&_frame_data.block_data_ptr[_frame_data.indices_offset];
+  if ( _info.hdr.version > 12 ) { return u16_ptr; } // No copy necessary.
   if ( _frame_data.indices_sz > prev_indices_ptr_sz ) {
     indices_ptr         = realloc( indices_ptr, _frame_data.indices_sz );
     prev_indices_ptr_sz = _frame_data.indices_sz;
   }
   if ( !indices_ptr ) { return indices_ptr; }
-  uint16_t* u16_ptr = (uint16_t*)&_frame_data.block_data_ptr[_frame_data.indices_offset];
   memcpy( indices_ptr, u16_ptr, _frame_data.indices_sz );
   return indices_ptr;
 }
@@ -223,8 +238,8 @@ EMSCRIPTEN_KEEPALIVE
 bool run_basis_transcode( int format ) {
   int w = 0, h = 0;
   uint8_t* data_ptr = &_frame_data.block_data_ptr[_frame_data.texture_offset];
-  int32_t data_sz = _frame_data.texture_sz;
-  bool ret = vol_basis_transcode( format, data_ptr, data_sz, _output_blocks_ptr, _blocks_buf_size_in_blocks_or_pixels, &w, &h );
+  int32_t data_sz   = _frame_data.texture_sz;
+  bool ret          = vol_basis_transcode( format, data_ptr, data_sz, _output_blocks_ptr, _blocks_buf_size_in_blocks_or_pixels, &w, &h );
   return ret;
 }
 
