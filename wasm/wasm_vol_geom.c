@@ -147,6 +147,8 @@ EMSCRIPTEN_KEEPALIVE
 /// @return This function returns a pointer a 4-byte aligned array of vertex data.
 float* frame_vp_copied( void ) {
   float* f32_ptr = (float*)&_frame_data.block_data_ptr[_frame_data.vertices_offset];
+  printf("%p\n", &_frame_data.block_data_ptr[_frame_data.vertices_offset]);
+  printf("multiple = %u\n", (uint64_t)f32_ptr % 4 );
   if ( _info.hdr.version > 12 ) { return f32_ptr; } // No copy necessary.
   if ( _frame_data.vertices_sz > prev_vp_ptr_sz ) {
     vp_ptr         = realloc( vp_ptr, _frame_data.vertices_sz );
