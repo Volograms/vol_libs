@@ -4,10 +4,12 @@ The libraries here are designed to be used in native plugins for Unity, Unreal a
 
 See individual libraries headers for version history and current features.
 
-| Library  | Version | Files | Description                                         | Fuzzed With                          |
-| -------- | ------- | ----- | --------------------------------------------------- | ------------------------------------ |
-| vol_av   | 0.9     | 2     | Extracts images and audio from videos using FFmpeg. | [AFL](https://github.com/google/AFL) |
-| vol_geom | 0.10    | 2     | Extracts mesh data from header and sequence files.  | [AFL](https://github.com/google/AFL) |
+| Library   | Version | Files | Description                                                                               | Fuzzed With                          |
+| --------- | ------- | ----- | ----------------------------------------------------------------------------------------- | ------------------------------------ |
+| vol_av    | 0.9     | 2     | Extracts images and audio from videos using FFmpeg.                                       | [AFL](https://github.com/google/AFL) |
+| vol_geom  | 0.10    | 2     | Extracts mesh data from header and sequence files.                                        | [AFL](https://github.com/google/AFL) |
+| vol_basis | 0.1     | 2     | Wrapper over [Basis Universal](https://binomialllc.github.io/basis_universal/) transcode. | [AFL](https://github.com/google/AFL) |
+
 
 | Tool    | Version | Libraries Used | Description                                                 |
 | ------- | ------- | -------------- | ----------------------------------------------------------- |
