@@ -1,0 +1,82 @@
+export type VologramHeader = {
+	singleFile: boolean;
+	hasNormals: boolean;
+	hasTexture: boolean;
+	hasAudio: boolean;
+	textureCompression: number;
+	textureContainerFormat: number;
+	textureWidth: number;
+	textureHeight: number;
+	hasBasisTexture?: boolean;
+	frameCount: number;
+	fps: number;
+	durationS: number;
+	ready: boolean;
+};
+
+export type VologramFrame = {
+	isKey: boolean;
+	positions: Float32Array;
+	normals?: Float32Array;
+	texCoords: Float32Array;
+	indices: Uint16Array;
+	numIndices: number;
+};
+
+export type Pointer = number;
+
+export type Vologram = {
+	headerUrl: string;
+	sequenceUrl: string;
+	textureUrl: string;
+	header: VologramHeader;
+	attachedVideo?: HTMLVideoElement;
+	attachedAudio?: HTMLAudioElement;
+	lastFrameLoaded: number;
+	lastKeyframeLoaded: number;
+	frame: VologramFrame;
+
+	has_normals: () => boolean;
+	has_texture: () => boolean;
+	has_audio: () => boolean;
+	texture_compression: () => number;
+	texture_container_format: () => number;
+	texture_width: () => number;
+	texture_height: () => number;
+	create_file_info: (header: string, sequence: string) => boolean;
+	create_single_file_info: (file: string) => boolean;
+	free_file_info: () => boolean;
+	frame_count: () => number;
+	loaded_frame_number: () => number;
+	read_frame: (frame_idx: number) => boolean;
+	max_blob_sz: () => number;
+	is_keyframe: (frame_idx: number) => boolean;
+	find_previous_keyframe: (frame_idx: number) => number;
+	frame_vertices: () => Pointer;
+	frame_vertices_sz: () => number;
+	frame_vp_offset: () => number;
+	frame_vp_copied: () => Pointer;
+	frame_uvs_sz: () => number;
+	frame_uvs_copied: () => Pointer;
+	frame_normals_sz: () => number;
+	frame_normals_copied: () => Pointer;
+	frame_texture_data_ptr: () => Pointer;
+	frame_texture_sz: () => number;
+	frame_indices: () => Pointer;
+	frame_i_sz: () => number;
+	frame_indices_copied: () => Pointer;
+	frame_data_ptr: () => Pointer;
+	basis_transcode: (format: number, data: Pointer, data_sz: number) => boolean;
+	basis_get_transcoded_ptr: () => Pointer;
+	basis_get_transcoded_sz: () => number;
+	run_basis_transcode: (format: number) => boolean;
+	audio_data_ptr: () => Pointer;
+	audio_data_sz: () => number;
+	frame_get_verts: () => Float32Array;
+	frame_get_norms: () => Float32Array;
+	frame_get_uvs: () => Float32Array;
+	frame_get_ind: () => Uint16Array;
+	basis_get_data: () => Uint8Array;
+	find_basis_fmt: (context: WebGL2RenderingContext, hasAlpha: boolean) => [number];
+	get_audio_data: () => Uint8Array;
+};

@@ -41,7 +41,7 @@ To Run:
  -->
 	<script src="../../wasm/vol_web.js"></script>
 	<script src="../../wasm/players/VologramPlayer.js"></script>
-	<script src="../../wasm/players/ThreeJsPlayerExtension.js"></script>
+	<script src="../../wasm/players/WebGlPlayerExtension.js"></script>
 	<script src="three.js"></script>
 
 	<script>
@@ -49,9 +49,10 @@ To Run:
 		const canvas = document.getElementById("canvas");
 		canvas.width = window.innerWidth - 50;
 		canvas.height = window.innerHeight - 50;
+		const gl = canvas.getContext("webgl2");
 
 		// Define vologram files paths
-		let vologramPlayer = VologramPlayer([ThreeJsPlayerExtension()]);
+		let vologramPlayer = VologramPlayer([WebGlPlayerExtension(gl)]);
 		let header_url = "../example_vologram/calif/header.vols";
 		let sequence_url = "../example_vologram/calif/sequence_0.vols";
 		let video_url = "../example_vologram/calif/output_720.mp4";
@@ -71,8 +72,8 @@ To Run:
 			play_button.disabled = false;
 			stop_button.disabled = false;
 
-			vologramPlayer.extensions.threejs.createScene(canvas);
-			vologramPlayer.extensions.threejs.beginRendering();
+			vologramPlayer.extensions.webgl.useDefaults();
+			vologramPlayer.extensions.webgl.beginRendering();
 
 			play_button.onclick = vologramPlayer.start;
 
@@ -80,9 +81,6 @@ To Run:
 				vologramPlayer.close();
 			};
 
-			const { camera } = vologramPlayer.extensions.threejs.objects;
-			camera.position.set(0.0, 1.2, 5.0);
-			camera.lookAt(0.0, 1.2, 0.0);
 			vologramPlayer.start();
 		};
 
