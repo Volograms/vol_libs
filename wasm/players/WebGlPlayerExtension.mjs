@@ -286,6 +286,21 @@ const WebGlPlayerExtension = (glCtx, options) => {
 			get objects() {
 				return objs;
 			},
+			set setPositionAttribute({ index, name }) {
+				objs.positionShaderAttribute = { index: index, name: name };
+			},
+			set setNormalsAttribute({ index, name }) {
+				objs.normsShaderAttribute = { index: index, name: name };
+			},
+			set setUvsAttribute({ index, name }) {
+				objs.uvsShaderAttribute = { index: index, name: name };
+			},
+			set setTextureTarget(glInt) {
+				objs.textureTarget = glInt;
+			},
+			set setShaderProgram(glInt) {
+				objs.shaderProgram = glInt;
+			},
 			get renderUpdate() {
 				return _renderUpdate;
 			},
