@@ -28,7 +28,10 @@ To Run:
 			<span>Load from single file</span>
 			<input type="checkbox" id="single_file_toggle" />
 		</div>
-		<span id="status_text" style="margin-left: 2px">Is Playing: false</span>
+		<div style="display: flex; flex-direction: row">
+			<span id="playing_status_text" style="margin-right: 5px">Is Playing: false</span>
+			<span id="looping_status_text" style="margin-right: 5px">Is Looping: false</span>
+		</div>
 		<div style="display: flex; flex-direction: row">
 			<input type="button" id="load_vols_files_button" value="load vologram" />
 		</div>
@@ -36,12 +39,15 @@ To Run:
 			<input type="button" id="play_vols_files_button" value="play vologram" />
 			<input type="button" id="stop_vols_files_button" value="stop vologram" />
 			<input type="button" id="restart_vols_files_button" value="restart vologram" />
+			<input type="button" id="toggle_loop_button" value="toggle loop" />
 		</div>
 
 		<canvas id="canvas"></canvas>
 		<!-- playsinline stops mobile browsers fullscreen-ing the video (iOS 10+)-->
-		<video controls id="texture_video_el" type="video/mp4;" width="256" height="256" loop playsinline></video>
-		<audio controls id="audio_el" type="audio/mpeg;" width="256" height="256" loop playsinline></audio>
+		<div style="display: flex; flex-direction: row">
+			<video controls id="texture_video_el" type="video/mp4;" width="256" height="256" loop playsinline></video>
+			<audio controls id="audio_el" type="audio/mpeg;" width="256" height="256" loop playsinline></audio>
+		</div>
 	</body>
 
 	<!-- 
@@ -57,7 +63,7 @@ To Run:
 		// Initialise canvas for web drawing
 		const canvas = document.getElementById("canvas");
 		canvas.width = window.innerWidth - 50;
-		canvas.height = window.innerHeight - 50;
+		canvas.height = window.innerHeight - 400;
 		const gl = canvas.getContext("webgl2");
 
 		// Create three.js scene
@@ -83,16 +89,27 @@ To Run:
 		const stop_button = document.getElementById("stop_vols_files_button");
 		const restart_button = document.getElementById("restart_vols_files_button");
 
-		const status_text = document.getElementById("status_text");
+		const playing_text = document.getElementById("playing_status_text");
+		const looping_text = document.getElementById("looping_status_text");
+		const toggle_loop = document.getElementById("toggle_loop_button");
 
 		play_button.disabled = true;
 		stop_button.disabled = true;
 		restart_button.disabled = true;
+		toggle_loop.disabled = true;
+
+		const updateUi = () => {
+			playing_text.innerText = `Is Playing: ${vologramPlayer.isPlaying()}`;
+			looping_text.innerText = `Is Looping: ${vologramPlayer.loop}`;
+			play_button.value = vologramPlayer.isPlaying() ? "pause vologram" : "play vologram";
+			uiUpdateRequest = requestAnimationFrame(updateUi);
+		};
 
 		const onVologramReady = () => {
 			play_button.disabled = false;
 			stop_button.disabled = false;
 			restart_button.disabled = false;
+			toggle_loop.disabled = false;
 			load_button.disabled = true;
 
 			const animate = () => {
@@ -102,7 +119,8 @@ To Run:
 				} catch (e) {
 					console.error(e);
 				}
-				status_text.innerText = `Is Playing: ${vologramPlayer.isPlaying()}`;
+				playing_text.innerText = `Is Playing: ${vologramPlayer.isPlaying()}`;
+				looping_text.innerText = `Is Looping: ${vologramPlayer.loop}`;
 				play_button.value = vologramPlayer.isPlaying() ? "pause vologram" : "play vologram";
 				renderer.render(scene, camera);
 			};
@@ -116,6 +134,7 @@ To Run:
 				play_button.disabled = true;
 				stop_button.disabled = true;
 				restart_button.disabled = true;
+				toggle_loop.disabled = true;
 				load_button.disabled = false;
 				scene.remove(vologramPlayer.extensions.threejs.objects.mesh);
 				vologramPlayer.close();
@@ -125,9 +144,16 @@ To Run:
 				vologramPlayer.start();
 			};
 
+			toggle_loop.onclick = () => {
+				vologramPlayer.loop = !vologramPlayer.loop;
+			};
+
 			camera.position.set(0.0, 1.2, 5.0);
 			camera.lookAt(0.0, 1.2, 0.0);
 			scene.add(vologramPlayer.extensions.threejs.objects.mesh);
+
+			vologramPlayer.loop = false;
+
 			animate();
 			vologramPlayer.start();
 		};

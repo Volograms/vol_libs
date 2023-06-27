@@ -76,7 +76,6 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 
 	const _createVologramTexture = () => {
 		if (!vologram.header.hasBasisTexture) {
-			console.log(vologram.attachedVideo);
 			objs.texture = new three.VideoTexture(vologram.attachedVideo);
 			return;
 		}

@@ -11,6 +11,7 @@ const VologramPlayer = (extensions) => {
 	/** @type {number} */ let _frameRequestId;
 	/** @type {number} */ let _frameFromTime;
 	/** @type {boolean} */ let _timerPaused;
+	let _timerLooping;
 	/** @type {number} */ let _previousTime;
 	/** @type {number} */ let _timer;
 	/** @type {Vologram} */ let vologram = {};
@@ -199,6 +200,9 @@ const VologramPlayer = (extensions) => {
 	};
 
 	const attachVideo = (videoElement) => {
+		videoElement.addEventListener("ended", () => {
+			_events.onloop.forEach((fn) => fn());
+		});
 		vologram.attachedVideo = videoElement;
 		videoElement.src = vologram.textureUrl;
 		_frameRequestId = videoElement.requestVideoFrameCallback(_updateFrameFromVideo);
@@ -214,7 +218,6 @@ const VologramPlayer = (extensions) => {
 	const attachAudio = (audioElement) => {
 		audioElement.addEventListener("ended", () => {
 			_events.onloop.forEach((fn) => fn());
-			audioElement.play();
 		});
 		vologram.attachedAudio = audioElement;
 		_frameRequestId = requestAnimationFrame(_updateFrameFromAudio);
@@ -289,6 +292,7 @@ const VologramPlayer = (extensions) => {
 		if (_frameRequestId && !vologram.attachedVideo) cancelAnimationFrame(_frameRequestId);
 
 		_timerPaused = true;
+		_timerLooping = false;
 		if (vologram.attachedVideo) {
 			vologram.attachedVideo.cancelVideoFrameCallback(_frameRequestId);
 			vologram.attachedVideo.pause();
@@ -321,12 +325,10 @@ const VologramPlayer = (extensions) => {
 		switch (_playbackMode) {
 			case PB_VIDEO:
 				vologram.attachedVideo.currentTime = 0;
-				vologram.attachedVideo.loop = true;
 				vologram.attachedVideo.play();
 				break;
 			case PB_AUDIO:
 				vologram.attachedAudio.currentTime = 0;
-				vologram.attachedAudio.loop = false;
 				vologram.attachedAudio.play();
 			default:
 				break;
@@ -338,11 +340,9 @@ const VologramPlayer = (extensions) => {
 		switch (_playbackMode) {
 			case PB_VIDEO:
 				vologram.attachedVideo.pause();
-				vologram.attachedVideo.loop = false;
 				break;
 			case PB_AUDIO:
 				vologram.attachedAudio.pause();
-				vologram.attachedAudio.loop = false;
 				break;
 			default:
 				break;
@@ -353,16 +353,15 @@ const VologramPlayer = (extensions) => {
 	const play = () => {
 		switch (_playbackMode) {
 			case PB_VIDEO:
-				vologram.attachedVideo.loop = true;
 				vologram.attachedVideo.play();
 				break;
 			case PB_AUDIO:
-				vologram.attachedAudio.loop = true;
 				vologram.attachedAudio.play();
 				break;
 			default:
 				break;
 		}
+		_timerPaused = false;
 	};
 
 	const isPlaying = () => {
@@ -383,6 +382,18 @@ const VologramPlayer = (extensions) => {
 		return false;
 	};
 
+	const _setLoop = (newValue) => {
+		if (vologram.attachedVideo) vologram.attachedVideo.loop = newValue;
+		if (vologram.attachedAudio) vologram.attachedAudio.loop = newValue;
+		_timerLooping = newValue;
+	};
+
+	const _getLoop = () => {
+		if (vologram.attachedVideo) return vologram.attachedVideo.loop;
+		if (vologram.attachedAudio) return vologram.attachedAudio.loop;
+		return _timerLooping;
+	};
+
 	const getMediaPlayer = () => {
 		if (_playbackMode === PB_AUDIO) return _audioPlayer;
 		if (_playbackMode === PB_VIDEO) return _videoPlayerElem;
@@ -400,6 +411,12 @@ const VologramPlayer = (extensions) => {
 		mute,
 		open,
 		close,
+		get loop() {
+			return _getLoop();
+		},
+		set loop(newValue) {
+			_setLoop(newValue);
+		},
 		registerCallback,
 		unregisterCallback,
 		get extensions() {

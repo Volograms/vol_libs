@@ -29,15 +29,25 @@ To Run:
 			<input type="checkbox" id="single_file_toggle" />
 		</div>
 		<div style="display: flex; flex-direction: row">
+			<span id="playing_status_text" style="margin-right: 5px">Is Playing: false</span>
+			<span id="looping_status_text" style="margin-right: 5px">Is Looping: false</span>
+		</div>
+		<div style="display: flex; flex-direction: row">
 			<input type="button" id="load_vols_files_button" value="load vologram" />
+		</div>
+		<div style="display: flex; flex-direction: row">
 			<input type="button" id="play_vols_files_button" value="play vologram" />
 			<input type="button" id="stop_vols_files_button" value="stop vologram" />
+			<input type="button" id="restart_vols_files_button" value="restart vologram" />
+			<input type="button" id="toggle_loop_button" value="toggle loop" />
 		</div>
 
 		<canvas id="canvas"></canvas>
 		<!-- playsinline stops mobile browsers fullscreen-ing the video (iOS 10+)-->
-		<video controls id="texture_video_el" type="video/mp4;" width="256" height="256" loop playsinline></video>
-		<audio controls id="audio_el" type="audio/mpeg;" width="256" height="256" loop playsinline></audio>
+		<div style="display: flex; flex-direction: row">
+			<video controls id="texture_video_el" type="video/mp4;" width="256" height="256" loop playsinline></video>
+			<audio controls id="audio_el" type="audio/mpeg;" width="256" height="256" loop playsinline></audio>
+		</div>
 	</body>
 
 	<!-- 
@@ -55,6 +65,8 @@ To Run:
 		canvas.width = window.innerWidth - 50;
 		canvas.height = window.innerHeight - 50;
 
+		let uiUpdateRequest;
+
 		// Define vologram files paths
 		const vologramPlayer = VologramPlayer([ThreeJsPlayerExtension()]);
 		const header_url = "../example_vologram/calif/header.vols";
@@ -69,26 +81,62 @@ To Run:
 		const load_button = document.getElementById("load_vols_files_button");
 		const play_button = document.getElementById("play_vols_files_button");
 		const stop_button = document.getElementById("stop_vols_files_button");
+		const restart_button = document.getElementById("restart_vols_files_button");
+
+		const playing_text = document.getElementById("playing_status_text");
+		const looping_text = document.getElementById("looping_status_text");
+		const toggle_loop = document.getElementById("toggle_loop_button");
 
 		play_button.disabled = true;
 		stop_button.disabled = true;
+		restart_button.disabled = true;
+		toggle_loop.disabled = true;
+
+		const updateUi = () => {
+			playing_text.innerText = `Is Playing: ${vologramPlayer.isPlaying()}`;
+			looping_text.innerText = `Is Looping: ${vologramPlayer.loop}`;
+			play_button.value = vologramPlayer.isPlaying() ? "pause vologram" : "play vologram";
+			uiUpdateRequest = requestAnimationFrame(updateUi);
+		};
 
 		const onVologramReady = () => {
 			play_button.disabled = false;
 			stop_button.disabled = false;
+			restart_button.disabled = false;
+			toggle_loop.disabled = false;
+			load_button.disabled = true;
 
 			vologramPlayer.extensions.threejs.createScene(canvas);
 			vologramPlayer.extensions.threejs.beginRendering();
 
-			play_button.onclick = vologramPlayer.start;
+			play_button.onclick = () => {
+				if (vologramPlayer.isPlaying()) vologramPlayer.pause();
+				else vologramPlayer.play();
+			};
 
 			stop_button.onclick = () => {
+				play_button.disabled = true;
+				stop_button.disabled = true;
+				restart_button.disabled = true;
+				toggle_loop.disabled = true;
+				load_button.disabled = false;
+				scene.remove(vologramPlayer.extensions.threejs.objects.mesh);
+				if (uiUpdateRequest) cancelAnimationFrame(uiUpdateRequest);
 				vologramPlayer.close();
+			};
+
+			restart_button.onclick = () => {
+				vologramPlayer.start();
+			};
+
+			toggle_loop.onclick = () => {
+				vologramPlayer.loop = !vologramPlayer.loop;
 			};
 
 			const { camera } = vologramPlayer.extensions.threejs.objects;
 			camera.position.set(0.0, 1.2, 5.0);
 			camera.lookAt(0.0, 1.2, 0.0);
+			uiUpdateRequest = requestAnimationFrame(updateUi);
 			vologramPlayer.start();
 		};
 
