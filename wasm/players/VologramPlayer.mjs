@@ -1,7 +1,7 @@
+import VolWeb from "../vol_web.mjs";
+
 /** @typedef {import('../types/VologramPlayer').VologramPlayerConstructor} VologramPlayerConstructor */
 /** @typedef {import('../types/Vologram').Vologram} Vologram */
-
-import VolWeb from "../vol_web.mjs";
 
 /** @type {VologramPlayerConstructor} */
 const VologramPlayer = (extensions) => {
@@ -304,6 +304,7 @@ const VologramPlayer = (extensions) => {
 		_events.onclose.forEach((fn) => fn());
 		_cleanVologramObject();
 		_cleanVologramModule();
+		_playbackMode = PB_TIMER;
 	};
 
 	const registerCallback = (event, callback) => {
@@ -352,11 +353,11 @@ const VologramPlayer = (extensions) => {
 	const play = () => {
 		switch (_playbackMode) {
 			case PB_VIDEO:
-				vologram.attachedVideo.currentTime = 0;
 				vologram.attachedVideo.loop = true;
+				vologram.attachedVideo.play();
 				break;
 			case PB_AUDIO:
-				vologram.attachedAudio.loop = false;
+				vologram.attachedAudio.loop = true;
 				vologram.attachedAudio.play();
 				break;
 			default:
