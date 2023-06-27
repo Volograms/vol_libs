@@ -87,13 +87,14 @@ const WebGlPlayerExtension = (glCtx, options) => {
 	}
 	/** @type {HTMLCanvasElement} */ const canvas = glCtx.canvas;
 
-	const gl = glCtx;
+	/** @type {WebGL2RenderingContext} */ const gl = glCtx;
 	const objs = {};
 
 	let _glFmt;
 	let _basisFmt;
 	let _callbackId;
 	/** @type {Vologram} */ let vologram;
+	let _usingDefaults = false;
 
 	const _init = (inVologram) => {
 		vologram = inVologram;
@@ -107,6 +108,7 @@ const WebGlPlayerExtension = (glCtx, options) => {
 		if (vologram.header.hasNormals) objs.normalsBuffer = gl.createBuffer(); // Normals buffer object. TODO(Anton) check if normals are in vologram
 		objs.indicesBuffer = gl.createBuffer(); // Index buffer object.
 		objs.texture = gl.createTexture();
+		objs.ready = true;
 	};
 
 	const bindToShader = () => {
@@ -115,7 +117,28 @@ const WebGlPlayerExtension = (glCtx, options) => {
 		gl.bindAttribLocation(objs.shaderProgram, objs.normsShaderAttribute.index, objs.normsShaderAttribute.name); // Normal
 	};
 
+	const _bindPositionAttributeLocation = (index, name) => {
+		objs.positionShaderAttribute = { index: index, name: name };
+	};
+
+	const _bindUvsAttributeLocation = (index, name) => {
+		objs.uvsShaderAttribute = { index: index, name: name };
+	};
+
+	const _bindNormalAttributeLocation = (index, name) => {
+		objs.normsShaderAttribute = { index: index, name: name };
+	};
+
+	const _setTextureTarget = (glInt) => {
+		objs.textureTarget = glInt;
+	};
+
+	const _setShaderProgram = (glInt) => {
+		objs.shaderProgram = glInt;
+	};
+
 	const _useDefaultShader = () => {
+		_usingDefaults = true;
 		objs.positionShaderAttribute = { index: POS_ATTR_LOC, name: POS_ATTR_NAME };
 		objs.uvsShaderAttribute = { index: UVS_ATTR_LOC, name: UVS_ATTR_NAME };
 		objs.normsShaderAttribute = { index: NOR_ATTR_LOC, name: NOR_ATTR_NAME };
@@ -165,6 +188,7 @@ const WebGlPlayerExtension = (glCtx, options) => {
 
 	const _updateVideoTexture = () => {
 		gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+		gl.activeTexture(objs.textureTarget);
 		gl.bindTexture(gl.TEXTURE_2D, objs.texture);
 		gl.texImage2D(
 			gl.TEXTURE_2D,
@@ -187,6 +211,7 @@ const WebGlPlayerExtension = (glCtx, options) => {
 	const _updateBasisTexture = () => {
 		if (!vologram.run_basis_transcode(_basisFmt)) return false;
 		const texData = vologram.basis_get_data();
+		gl.activeTexture(objs.textureTarget);
 		gl.bindTexture(gl.TEXTURE_2D, objs.texture);
 		let level_index = 0;
 		gl.compressedTexImage2D(
@@ -213,12 +238,13 @@ const WebGlPlayerExtension = (glCtx, options) => {
 	};
 
 	const _renderUpdate = () => {
+		if (!objs.ready) return false;
+		gl.useProgram(objs.shaderProgram);
+		gl.bindVertexArray(objs.vertexArrayObject);
+
 		if (!vologram.frame.indices || !_update()) {
 			return false;
 		}
-
-		gl.useProgram(objs.shaderProgram);
-		gl.bindVertexArray(objs.vertexArrayObject);
 
 		// Positions - upload.
 		gl.bindBuffer(gl.ARRAY_BUFFER, objs.positionsBuffer);
@@ -244,32 +270,41 @@ const WebGlPlayerExtension = (glCtx, options) => {
 		// Indices - upload.
 		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, objs.indicesBuffer);
 		gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, vologram.frame.indices, gl.STATIC_DRAW);
+
+		gl.activeTexture(objs.textureTarget);
+		gl.bindTexture(gl.TEXTURE_2D, objs.texture);
+		gl.bindVertexArray(objs.vertexArrayObject);
+		gl.drawElements(gl.TRIANGLES, vologram.frame.indices.length, gl.UNSIGNED_SHORT, 0); // UNSIGNED_SHORT == uint16_t indices.
 		return true;
 	};
 
 	const _animate = () => {
-		if (_renderUpdate()) {
-			gl.viewport(0, 0, canvas.clientWidth, canvas.clientHeight);
-			gl.clearColor(147.0 / 255.0, 149.0 / 255.0, 237.0 / 255.0, 1.0);
-			gl.cullFace(gl.BACK);
-			//gl.frontFace(gl.CCW);
-			//gl.frontFace(gl.CW);
-			gl.enable(gl.CULL_FACE);
-			gl.enable(gl.DEPTH_TEST);
-			gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+		gl.viewport(0, 0, canvas.clientWidth, canvas.clientHeight);
+		gl.clearColor(147.0 / 255.0, 149.0 / 255.0, 237.0 / 255.0, 1.0);
+		gl.cullFace(gl.BACK);
+		//gl.frontFace(gl.CCW);
+		//gl.frontFace(gl.CW);
+		gl.enable(gl.CULL_FACE);
+		gl.enable(gl.DEPTH_TEST);
+		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-			gl.useProgram(objs.shaderProgram);
-
-			gl.activeTexture(objs.textureTarget);
-			gl.bindTexture(gl.TEXTURE_2D, objs.texture);
-			gl.bindVertexArray(objs.vertexArrayObject);
-			gl.drawElements(gl.TRIANGLES, vologram.frame.indices.length, gl.UNSIGNED_SHORT, 0); // UNSIGNED_SHORT == uint16_t indices.
-		}
+		_renderUpdate();
 		_callbackId = requestAnimationFrame(_animate);
 	};
 
 	const _close = () => {
 		if (_callbackId) cancelAnimationFrame(_callbackId);
+		gl.deleteTexture(objs.texture);
+		gl.deleteBuffer(objs.indicesBuffer);
+		if (vologram.header.hasNormals) gl.deleteBuffer(objs.normalsBuffer);
+		gl.deleteBuffer(objs.uvsBuffer);
+		gl.deleteBuffer(objs.positionsBuffer);
+		gl.deleteVertexArray(objs.vertexArrayObject);
+		if (_usingDefaults) {
+			gl.deleteProgram(objs.shaderProgram);
+			_usingDefaults = false;
+		}
+		objs.ready = false;
 	};
 
 	return {
@@ -286,20 +321,20 @@ const WebGlPlayerExtension = (glCtx, options) => {
 			get objects() {
 				return objs;
 			},
-			set setPositionAttribute({ index, name }) {
-				objs.positionShaderAttribute = { index: index, name: name };
+			get bindPositionAttribute() {
+				return _bindPositionAttributeLocation;
 			},
-			set setNormalsAttribute({ index, name }) {
-				objs.normsShaderAttribute = { index: index, name: name };
+			get bindNormalsAttribute() {
+				return _bindNormalAttributeLocation;
 			},
-			set setUvsAttribute({ index, name }) {
-				objs.uvsShaderAttribute = { index: index, name: name };
+			get bindUvsAttribute() {
+				return _bindUvsAttributeLocation;
 			},
-			set setTextureTarget(glInt) {
-				objs.textureTarget = glInt;
+			get setTextureTarget() {
+				return _setTextureTarget;
 			},
-			set setShaderProgram(glInt) {
-				objs.shaderProgram = glInt;
+			get setShaderProgram() {
+				return _setShaderProgram;
 			},
 			get renderUpdate() {
 				return _renderUpdate;

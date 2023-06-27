@@ -86,6 +86,9 @@ const VologramPlayer = (extensions) => {
 		if (vologram.header.hasAudio && !vologram.attachedAudio) {
 			createAudio();
 		}
+		if (vologram.header.hasAudio) {
+			_getAudioData();
+		}
 		vologram.header.textureCompression = vologram.texture_compression();
 		vologram.header.textureContainerFormat = vologram.texture_container_format();
 		vologram.header.textureWidth = vologram.texture_width();
@@ -223,6 +226,10 @@ const VologramPlayer = (extensions) => {
 		const audioElmnt = document.createElement("audio");
 		document.body.insertAdjacentElement("afterbegin", audioElmnt);
 		audioElmnt.hidden = true;
+		attachAudio(audioElmnt);
+	};
+
+	const _getAudioData = () => {
 		const blob = new Blob([vologram.get_audio_data()], { type: "audio/mpeg" });
 		const blobUrl = URL.createObjectURL(blob);
 		window.addEventListener(
@@ -232,8 +239,7 @@ const VologramPlayer = (extensions) => {
 			},
 			false
 		);
-		audioElmnt.src = blobUrl;
-		attachAudio(audioElmnt);
+		vologram.attachedAudio.src = blobUrl;
 	};
 
 	const open = async ({ headerUrl, sequenceUrl, textureUrl, videoElement, audioElement }, onProgress) => {

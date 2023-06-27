@@ -18,7 +18,12 @@ void main () {
 `;
 
 /** @type {VologramPlayerExtensionConstructor} */
-const ThreeJsPlayerExtension = (options) => {
+const ThreeJsPlayerExtension = (glCtx, options) => {
+	if (!glCtx) {
+		console.error("Volograms ThreeJsPlayerExtension requires a gl rendering context");
+		return;
+	}
+
 	// Process input options
 	const three = THREE || (options?.threeModule ?? null);
 
@@ -36,7 +41,7 @@ const ThreeJsPlayerExtension = (options) => {
 
 	const _init = (inVologram) => {
 		vologram = inVologram;
-		const fmts = vologram.find_basis_fmt(canvas.getContext("webgl"));
+		const fmts = vologram.find_basis_fmt(glCtx);
 		_glFmt = fmts[0];
 		_basisFmt = fmts[1];
 		_createThreeJsVologram();
@@ -121,6 +126,7 @@ const ThreeJsPlayerExtension = (options) => {
 	};
 
 	const _updateMesh = () => {
+		if (!objs || !objs.geometry || !objs.mesh) return false;
 		// It seems that calculating bounding sphere does not work
 		// and always returns NaN value for the radius
 		if (objs.geometry.boundingSphere === null) {
