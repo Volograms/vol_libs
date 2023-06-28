@@ -98,13 +98,6 @@ To Run:
 		restart_button.disabled = true;
 		toggle_loop.disabled = true;
 
-		const updateUi = () => {
-			playing_text.innerText = `Is Playing: ${vologramPlayer.isPlaying()}`;
-			looping_text.innerText = `Is Looping: ${vologramPlayer.loop}`;
-			play_button.value = vologramPlayer.isPlaying() ? "pause vologram" : "play vologram";
-			uiUpdateRequest = requestAnimationFrame(updateUi);
-		};
-
 		const onVologramReady = () => {
 			play_button.disabled = false;
 			stop_button.disabled = false;

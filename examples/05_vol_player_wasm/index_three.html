@@ -64,11 +64,12 @@ To Run:
 		const canvas = document.getElementById("canvas");
 		canvas.width = window.innerWidth - 50;
 		canvas.height = window.innerHeight - 50;
+		const gl = canvas.getContext("webgl2");
 
 		let uiUpdateRequest;
 
 		// Define vologram files paths
-		const vologramPlayer = VologramPlayer([ThreeJsPlayerExtension()]);
+		const vologramPlayer = VologramPlayer([ThreeJsPlayerExtension(gl)]);
 		const header_url = "../example_vologram/calif/header.vols";
 		const sequence_url = "../example_vologram/calif/sequence_0.vols";
 		const video_url = "../example_vologram/calif/output_720.mp4";

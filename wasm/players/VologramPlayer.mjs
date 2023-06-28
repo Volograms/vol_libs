@@ -36,6 +36,9 @@ const VologramPlayer = (extensions) => {
 		if (vologram.lastFrameLoaded === frameIdx) {
 			return false;
 		} // Safety catch to avoid reloading the same frame twice.
+		if (frameIdx < 0 || frameIdx >= vologram.header.frameCount) {
+			return false;
+		}
 
 		// Ask the vol_geom WASM to read the frame data from the vologram file into `_frame_data`.
 		const ret = vologram.read_frame(frameIdx);
@@ -161,7 +164,7 @@ const VologramPlayer = (extensions) => {
 		_previousTime = nowTimestamp;
 
 		_getFrameFromSeconds(_timer / 1000);
-		if (_settingFrom == "" && _frameFromTime >= vologram.header.frameCount) {
+		if (_frameFromTime >= vologram.header.frameCount) {
 			_events.onloop.forEach((fn) => fn());
 			_frameFromTime = 0;
 			_timer = 0;
