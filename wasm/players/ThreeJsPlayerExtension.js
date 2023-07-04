@@ -1,5 +1,3 @@
-/** @typedef {import('../types/VologramPlayer').VologramPlayerExtensionConstructor} VologramPlayerExtensionConstructor */
-
 const BASIS_VERT = /*glsl*/ `
 varying vec2 rev_uv;
 void main () {
@@ -17,7 +15,6 @@ void main () {
 }
 `;
 
-/** @type {VologramPlayerExtensionConstructor} */
 const ThreeJsPlayerExtension = (glCtx, options) => {
 	if (!glCtx) {
 		console.error("Volograms ThreeJsPlayerExtension requires a gl rendering context");

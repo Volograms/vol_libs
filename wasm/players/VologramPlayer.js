@@ -1,18 +1,14 @@
-/** @typedef {import('../types/VologramPlayer').VologramPlayerConstructor} VologramPlayerConstructor */
-/** @typedef {import('../types/Vologram').Vologram} Vologram */
-
-/** @type {VologramPlayerConstructor} */
 const VologramPlayer = (extensions) => {
 	extensions = extensions || [];
 	const _extensionExports = {};
 	let _wasm = {};
-	/** @type {number} */ let _frameRequestId;
-	/** @type {number} */ let _frameFromTime;
-	/** @type {boolean} */ let _timerPaused;
+	let _frameRequestId;
+	let _frameFromTime;
+	let _timerPaused;
 	let _timerLooping;
-	/** @type {number} */ let _previousTime;
-	/** @type {number} */ let _timer;
-	/** @type {Vologram} */ let vologram = {};
+	let _previousTime;
+	let _timer;
+	let vologram = {};
 
 	const PB_TIMER = 0;
 	const PB_VIDEO = 1;
@@ -21,23 +17,12 @@ const VologramPlayer = (extensions) => {
 	let _playbackMode = PB_TIMER;
 
 	const _events = {
-		/** @type {Array<(vologram: any) => void>} */
 		onframeready: [],
-		/** @type {Array<() => void>} */
 		onclose: [],
-		/** @type {Array<() => void} */
 		onloop: [],
 	};
 
-	/** @type {(frameIdx: number) => boolean} _loadMesh */
 	const _loadMesh = (frameIdx) => {
-		if (vologram.lastFrameLoaded === frameIdx) {
-			return false;
-		} // Safety catch to avoid reloading the same frame twice.
-		if (frameIdx < 0 || frameIdx >= vologram.header.frameCount) {
-			return false;
-		}
-
 		// Ask the vol_geom WASM to read the frame data from the vologram file into `_frame_data`.
 		const ret = vologram.read_frame(frameIdx);
 		if (!ret) {
@@ -418,8 +403,8 @@ const VologramPlayer = (extensions) => {
 	};
 
 	const getMediaPlayer = () => {
-		if (_playbackMode === PB_AUDIO) return _audioPlayer;
-		if (_playbackMode === PB_VIDEO) return _videoPlayerElem;
+		if (_playbackMode === PB_AUDIO) return vologram.attachedAudio;
+		if (_playbackMode === PB_VIDEO) return vologram.attachedVideo;
 		else return null;
 	};
 

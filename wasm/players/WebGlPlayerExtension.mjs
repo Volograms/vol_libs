@@ -1,6 +1,3 @@
-/** @typedef {import('../types/Vologram').Vologram} Vologram */
-/** @typedef {import('../types/VologramPlayer').VologramPlayerExtensionConstructor} VologramPlayerExtensionConstructor */
-
 const POS_ATTR_LOC = 0;
 const NOR_ATTR_LOC = 1;
 const UVS_ATTR_LOC = 2;
@@ -79,21 +76,19 @@ void main () {
   gl_FragColor.rgba = vec4( texel_rgb, 1.0 );
 }`;
 
-/** @type {VologramPlayerExtensionConstructor} */
 const WebGlPlayerExtension = (glCtx, options) => {
 	if (!glCtx) {
 		console.error("Volograms WebGlPlayerExtension requires a gl rendering context");
 		return;
 	}
-	/** @type {HTMLCanvasElement} */ const canvas = glCtx.canvas;
-
-	/** @type {WebGL2RenderingContext} */ const gl = glCtx;
+	const canvas = glCtx.canvas;
+	const gl = glCtx;
 	const objs = {};
 
 	let _glFmt;
 	let _basisFmt;
 	let _callbackId;
-	/** @type {Vologram} */ let vologram;
+	let vologram;
 	let _usingDefaults = false;
 
 	const _init = (inVologram) => {
