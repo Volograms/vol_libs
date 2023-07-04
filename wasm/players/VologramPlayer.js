@@ -199,6 +199,7 @@ const VologramPlayer = (extensions) => {
 		if (vologram.header && vologram.header.ready) {
 			_getFrameFromSeconds(metadata.mediaTime);
 			_updateMeshFrameAllowingSkip(_frameFromTime);
+			vologram.lastUpdateTime = metadata.mediaTime;
 		}
 		_frameRequestId = vologram.attachedVideo.requestVideoFrameCallback(_updateFrameFromVideo); // Re-register the callback to be notified about the next frame.
 	};
@@ -207,6 +208,7 @@ const VologramPlayer = (extensions) => {
 		if (vologram.header && vologram.header.ready) {
 			_timeTick(now);
 			_updateMeshFrameAllowingSkip(_frameFromTime);
+			vologram.lastUpdateTime = _timer / 1000;
 		}
 		_frameRequestId = requestAnimationFrame(_updateFrameFromTimer);
 	};
@@ -215,6 +217,7 @@ const VologramPlayer = (extensions) => {
 		if (vologram.header && vologram.header.ready) {
 			_getFrameFromSeconds(vologram.attachedAudio.currentTime);
 			_updateMeshFrameAllowingSkip(_frameFromTime);
+			vologram.lastUpdateTime = vologram.attachedAudio.currentTime;
 		}
 		_frameRequestId = requestAnimationFrame(_updateFrameFromAudio);
 	};
