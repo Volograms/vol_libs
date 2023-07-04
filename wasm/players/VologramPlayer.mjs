@@ -70,6 +70,25 @@ const VologramPlayer = (extensions) => {
 		return true;
 	};
 
+	const _updateMeshFrameAllowingSkip = (desiredFrameIndex) => {
+		if (vologram.lastFrameLoaded === desiredFrameIndex) {
+			return false;
+		} // Safety catch to avoid reloading the same frame twice.
+		if (desiredFrameIndex < 0 || desiredFrameIndex >= vologram.header.frameCount) {
+			return false;
+		}
+
+		const keyframeRequired = vologram.find_previous_keyframe(desiredFrameIndex);
+
+		// If running slowly we may skip over a keyframe. Grab that now to avoid stale keyframe desync.
+		if (vologram.lastKeyframeLoaded !== keyframeRequired) {
+			const loadedKey = _loadMesh(keyframeRequired, true);
+		}
+		// Load actual current frame.
+		const loadedMesh = _loadMesh(desiredFrameIndex);
+		return true;
+	};
+
 	const _initVologram = () => {
 		let ret = false;
 		if (vologram.header.singleFile) {
@@ -181,7 +200,7 @@ const VologramPlayer = (extensions) => {
 	const _updateFrameFromVideo = (now, metadata) => {
 		if (vologram.header && vologram.header.ready) {
 			_getFrameFromSeconds(metadata.mediaTime);
-			_loadMesh(_frameFromTime);
+			_updateMeshFrameAllowingSkip(_frameFromTime);
 		}
 		_frameRequestId = vologram.attachedVideo.requestVideoFrameCallback(_updateFrameFromVideo); // Re-register the callback to be notified about the next frame.
 	};
@@ -189,7 +208,7 @@ const VologramPlayer = (extensions) => {
 	const _updateFrameFromTimer = (now) => {
 		if (vologram.header && vologram.header.ready) {
 			_timeTick(now);
-			_loadMesh(_frameFromTime);
+			_updateMeshFrameAllowingSkip(_frameFromTime);
 		}
 		_frameRequestId = requestAnimationFrame(_updateFrameFromTimer);
 	};
@@ -197,7 +216,7 @@ const VologramPlayer = (extensions) => {
 	const _updateFrameFromAudio = () => {
 		if (vologram.header && vologram.header.ready) {
 			_getFrameFromSeconds(vologram.attachedAudio.currentTime);
-			_loadMesh(_frameFromTime);
+			_updateMeshFrameAllowingSkip(_frameFromTime);
 		}
 		_frameRequestId = requestAnimationFrame(_updateFrameFromAudio);
 	};

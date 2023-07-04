@@ -135,8 +135,6 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 			objs.geometry.computeBoundingBox();
 			objs.geometry.boundingBox.getBoundingSphere(objs.geometry.boundingSphere);
 		}
-		objs.geometry.needsUpdate = true;
-		objs.mesh.needsUpdate = true;
 		return true;
 	};
 
@@ -175,6 +173,8 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 
 		// Indices - fetch and upload.
 		objs.geometry.setIndex(new three.Uint16BufferAttribute(vologram.frame.indices, 1));
+		objs.geometry.needsUpdate = true;
+		objs.mesh.needsUpdate = true;
 		return true;
 	};
 

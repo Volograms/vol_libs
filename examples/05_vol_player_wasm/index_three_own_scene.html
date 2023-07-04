@@ -66,6 +66,8 @@ To Run:
 		canvas.height = window.innerHeight - 400;
 		const gl = canvas.getContext("webgl2");
 
+		let uiUpdateRequest;
+
 		// Create three.js scene
 		const scene = new THREE.Scene();
 		const camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
@@ -105,8 +107,7 @@ To Run:
 			toggle_loop.disabled = false;
 			load_button.disabled = true;
 
-			const animate = () => {
-				requestAnimationFrame(animate);
+			const animate = async () => {
 				try {
 					vologramPlayer.extensions.threejs.renderUpdate();
 				} catch (e) {
@@ -116,6 +117,7 @@ To Run:
 				looping_text.innerText = `Is Looping: ${vologramPlayer.loop}`;
 				play_button.value = vologramPlayer.isPlaying() ? "pause vologram" : "play vologram";
 				renderer.render(scene, camera);
+				uiUpdateRequest = requestAnimationFrame(animate);
 			};
 
 			play_button.onclick = () => {
@@ -124,6 +126,7 @@ To Run:
 			};
 
 			stop_button.onclick = () => {
+				if (uiUpdateRequest) cancelAnimationFrame(uiUpdateRequest);
 				play_button.disabled = true;
 				stop_button.disabled = true;
 				restart_button.disabled = true;
@@ -147,7 +150,7 @@ To Run:
 
 			vologramPlayer.loop = false;
 
-			animate();
+			uiUpdateRequest = requestAnimationFrame(animate);
 			vologramPlayer.start();
 		};
 
