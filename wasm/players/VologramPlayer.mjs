@@ -19,9 +19,8 @@ const VologramPlayer = (extensions) => {
 	let _playbackMode = PB_TIMER;
 
 	const _events = {
-		onframeready: [],
 		onclose: [],
-		onloop: [],
+		onended: [],
 	};
 
 	const _loadMesh = (frameIdx) => {
@@ -169,7 +168,7 @@ const VologramPlayer = (extensions) => {
 
 		_getFrameFromSeconds(_timer / 1000);
 		if (_frameFromTime >= vologram.header.frameCount) {
-			_events.onloop.forEach((fn) => fn());
+			_events.onended.forEach((fn) => fn());
 			_frameFromTime = 0;
 			_timer = 0;
 		}
@@ -211,7 +210,7 @@ const VologramPlayer = (extensions) => {
 
 	const attachVideo = (videoElement) => {
 		videoElement.addEventListener("ended", () => {
-			_events.onloop.forEach((fn) => fn());
+			_events.onended.forEach((fn) => fn());
 		});
 		vologram.attachedVideo = videoElement;
 		videoElement.src = vologram.textureUrl;
@@ -227,7 +226,7 @@ const VologramPlayer = (extensions) => {
 
 	const attachAudio = (audioElement) => {
 		audioElement.addEventListener("ended", () => {
-			_events.onloop.forEach((fn) => fn());
+			_events.onended.forEach((fn) => fn());
 		});
 		vologram.attachedAudio = audioElement;
 		_frameRequestId = requestAnimationFrame(_updateFrameFromAudio);
@@ -257,7 +256,7 @@ const VologramPlayer = (extensions) => {
 		vologram.attachedAudio.src = blobUrl;
 	};
 
-	const open = async ({ headerUrl, sequenceUrl, textureUrl, videoElement, audioElement }, onProgress) => {
+	const _open = async ({ headerUrl, sequenceUrl, textureUrl, videoElement, audioElement }, onProgress) => {
 		vologram = {};
 		vologram.header = {};
 		vologram.frame = {};
@@ -298,7 +297,7 @@ const VologramPlayer = (extensions) => {
 		vologram.textureUrl = null;
 	};
 
-	const close = () => {
+	const _close = () => {
 		if (_frameRequestId && !vologram.attachedVideo) cancelAnimationFrame(_frameRequestId);
 
 		_timerPaused = true;
@@ -321,17 +320,17 @@ const VologramPlayer = (extensions) => {
 		_playbackMode = PB_TIMER;
 	};
 
-	const registerCallback = (event, callback) => {
+	const _registerCallback = (event, callback) => {
 		_events[event].push(callback);
 	};
 
-	const unregisterCallback = (event, callback) => {
+	const _unregisterCallback = (event, callback) => {
 		const index = _events[event].indexOf(callback);
 		if (index < 0) return;
 		_events[event].splice(index, 1);
 	};
 
-	const start = () => {
+	const _start = () => {
 		switch (_playbackMode) {
 			case PB_VIDEO:
 				vologram.attachedVideo.currentTime = 0;
@@ -346,7 +345,7 @@ const VologramPlayer = (extensions) => {
 		_startTimer();
 	};
 
-	const pause = () => {
+	const _pause = () => {
 		switch (_playbackMode) {
 			case PB_VIDEO:
 				vologram.attachedVideo.pause();
@@ -360,7 +359,7 @@ const VologramPlayer = (extensions) => {
 		_timerPaused = true;
 	};
 
-	const play = () => {
+	const _play = () => {
 		switch (_playbackMode) {
 			case PB_VIDEO:
 				vologram.attachedVideo.play();
@@ -374,21 +373,20 @@ const VologramPlayer = (extensions) => {
 		_timerPaused = false;
 	};
 
-	const isPlaying = () => {
+	const _isPlaying = () => {
 		if (vologram.attachedVideo) return !vologram.attachedVideo.paused && !vologram.attachedVideo.ended;
 		if (vologram.attachedAudio) return !vologram.attachedAudio.paused && !vologram.attachedAudio.ended;
 		else return !_timerPaused;
 	};
 
-	const mute = (setValue) => {
-		if (setValue !== undefined) {
-			if (vologram.attachedVideo) vologram.attachedVideo.muted = setValue;
-			if (vologram.attachedAudio) vologram.attachedAudio.muted = setValue;
-			return setValue;
-		} else {
-			if (vologram.attachedVideo) return vologram.attachedVideo.muted;
-			if (vologram.attachedAudio) return vologram.attachedAudio.muted;
-		}
+	const _setMute = (setValue) => {
+		if (vologram.attachedVideo) vologram.attachedVideo.muted = setValue;
+		if (vologram.attachedAudio) vologram.attachedAudio.muted = setValue;
+	};
+
+	const _getMute = () => {
+		if (vologram.attachedVideo) return vologram.attachedVideo.muted;
+		if (vologram.attachedAudio) return vologram.attachedAudio.muted;
 		return false;
 	};
 
@@ -414,21 +412,42 @@ const VologramPlayer = (extensions) => {
 		get vologram() {
 			return vologram;
 		},
-		start,
-		pause,
-		play,
-		isPlaying,
-		mute,
-		open,
-		close,
+		get start() {
+			return _start;
+		},
+		get pause() {
+			return _pause;
+		},
+		get play() {
+			return _play;
+		},
+		get isPlaying() {
+			return _isPlaying;
+		},
+		get mute() {
+			return _getMute();
+		},
+		set mute(newValue) {
+			return _setMute(newValue);
+		},
+		get open() {
+			return _open;
+		},
+		get close() {
+			return _close;
+		},
 		get loop() {
 			return _getLoop();
 		},
 		set loop(newValue) {
 			_setLoop(newValue);
 		},
-		registerCallback,
-		unregisterCallback,
+		get registerCallback() {
+			return _registerCallback;
+		},
+		get unregisterCallback() {
+			return _unregisterCallback;
+		},
 		get extensions() {
 			return _extensionExports;
 		},
