@@ -3,7 +3,7 @@
  *
  * vol_geom  | .vol Geometry Decoding API
  * --------- | ---------------------
- * Version   | 0.11
+ * Version   | 0.11.1
  * Authors   | See matching header file.
  * Copyright | 2021, Volograms (http://volograms.com/)
  * Language  | C99
@@ -22,7 +22,7 @@
 #include <sys/types.h>
 
 // NOTE: ftello() and fseeko() are replace ftell(), fseek(), and their Windows equivalents, to support 64-bit indices to >2GB files.
-#ifdef _WIN32
+#if defined( _WIN32 ) || defined( _WIN64 )
 #define vol_geom_stat64 _stat64
 #define vol_geom_stat64_t __stat64
 #define vol_geom_fseeko _fseeki64
@@ -128,7 +128,7 @@ static bool _read_short_str( const uint8_t* data_ptr, uint32_t data_sz, vol_geom
   if ( !data_ptr || !sstr ) { return false; }
   if ( offset >= data_sz ) { return false; } // OOB
 
-  sstr->sz = data_ptr[offset]; // assumes the 1-byte length
+  sstr->sz = data_ptr[offset];               // assumes the 1-byte length
   if ( sstr->sz > 127 ) {
     _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: string length %i given is > 127\n", (int)sstr->sz );
     return false;
@@ -292,7 +292,7 @@ static bool _build_frames_directory_from_file( const char* seq_filename, vol_geo
       }
       // version 10 doesn't have normals/texture, but 11 can do.
       if ( 11 == info_ptr->hdr.version ) {
-        info_ptr->frames_directory_ptr[i].corrected_payload_sz += 4; // normals sz
+        info_ptr->frames_directory_ptr[i].corrected_payload_sz += 4;   // normals sz
         if ( info_ptr->hdr.textured ) {
           info_ptr->frames_directory_ptr[i].corrected_payload_sz += 4; // texture sz
         }
@@ -459,7 +459,7 @@ bool vol_geom_read_audio_from_file( const char* vols_filename, vol_geom_info_t* 
 
   f_ptr = fopen( vols_filename, "rb" );
   if ( !f_ptr ) { goto vgraff_fail; }
-  if ( 0 != fseeko( f_ptr, info_ptr->hdr.audio_start, SEEK_SET ) ) { goto vgraff_fail; }
+  if ( 0 != vol_geom_fseeko( f_ptr, info_ptr->hdr.audio_start, SEEK_SET ) ) { goto vgraff_fail; }
   if ( 1 != fread( &info_ptr->audio_data_sz, sizeof( uint32_t ), 1, f_ptr ) ) { goto vgraff_fail; }
   info_ptr->audio_data_ptr = malloc( info_ptr->audio_data_sz );
   if ( !info_ptr->audio_data_ptr ) { goto vgraff_fail; }
