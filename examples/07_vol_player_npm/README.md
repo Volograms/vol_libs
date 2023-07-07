@@ -13,7 +13,7 @@ Then you have a choice of examples to launch:
 - `npm run gl`: vologram player with WebGL extension, using the default values
 - `npm run gl-scene`: vologram player with WebGL extension, but using your own scene
 - `npm run three`: vologram player with Three.js extension, using the default values
-- `npm run gl-scene`: vologram player with Three.js extension, but using your own scene
+- `npm run three-scene`: vologram player with Three.js extension, but using your own scene
 
 Running one of these commands with launch the project to your localhost, open the browser of your choice and open the address npm tells you, and there you have it.
 
