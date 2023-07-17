@@ -70,3 +70,9 @@ examples/*.webm
 examples/*_ld*/
 wasm/vol_geom.js
 wasm/vol_geom.wasm
+*.vols
+examples/07_vol_player_npm/node_modules
+*.tgz
+examples/07_vol_player_npm/dist
+examples/07_vol_player_npm/.parcel-cache
+examples/07_vol_player_npm/package-lock.json

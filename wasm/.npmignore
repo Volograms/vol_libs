@@ -1,0 +1,5 @@
+*.sh
+*.c 
+*.tgz
+players/*.js
+*.js

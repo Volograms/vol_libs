@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+	<!--
+Example vologram web player using three.js, and the vol_geom library compiled to WASM.
+
+First version - 2022 Dec 07 - Anton Gerdelan <anton@volograms.com> / Patrick Geoghegan <patrick@volograms.com>
+
+HTML5 video is used for video texture and audio playback.
+The requestVideoFrameCallback() extension is used for synchronous video frame fetch.
+This callback is not supported on all browsers yet. https://caniuse.com/mdn-api_htmlvideoelement_requestvideoframecallback
+
+To Run:
+
+* Copy the vologram you want to play as a subfolder into this folder.
+* Set the video source and header and sequence file to point to your vologram.
+* Launch a local HTTP server from this folder.
+* Open the HTML page.
+* Hit "load vologram" to load and play the vologram.
+-->
+	<meta charset="UTF-8" />
+	<meta name="author" content="Volograms Ltd." />
+	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
+
+	<head> </head>
+
+	<body style="display: flex; flex-direction: column">
+		<div style="display: flex; flex-direction: row">
+			<span>Load from single file</span>
+			<input type="checkbox" id="single_file_toggle" />
+		</div>
+		<div style="display: flex; flex-direction: row">
+			<span id="playing_status_text" style="margin-right: 5px">Is Playing: false</span>
+			<span id="looping_status_text" style="margin-right: 5px">Is Looping: false</span>
+		</div>
+		<div style="display: flex; flex-direction: row">
+			<input type="button" id="load_vols_files_button" value="load vologram" />
+		</div>
+		<div style="display: flex; flex-direction: row">
+			<input type="button" id="play_vols_files_button" value="play vologram" />
+			<input type="button" id="stop_vols_files_button" value="stop vologram" />
+			<input type="button" id="restart_vols_files_button" value="restart vologram" />
+			<input type="button" id="toggle_loop_button" value="toggle loop" />
+		</div>
+
+		<canvas id="canvas"></canvas>
+		<!-- playsinline stops mobile browsers fullscreen-ing the video (iOS 10+)-->
+		<div style="display: flex; flex-direction: row">
+			<video controls id="texture_video_el" type="video/mp4;" width="256" height="256" loop playsinline></video>
+			<audio controls id="audio_el" type="audio/mpeg;" width="256" height="256" loop playsinline></audio>
+		</div>
+	</body>
+
+	<!-- 
+    To import from the vol player from github use the following cdn template:
+    `https://cdn.jsdelivr.net/gh/Volograms/vol_libs@<BRANCH_NAME>/wasm/<FILE_NAME>`
+ 	-->
+	<script src="three.js"></script>
+
+	<script type="module">
+		import VologramPlayer from "@volograms/web_vol_lib/players/VologramPlayer.mjs";
+		import ThreeJsPlayerExtension from "@volograms/web_vol_lib/players/ThreeJsPlayerExtension.mjs";
+
+		// Initialise canvas for web drawing
+		const canvas = document.getElementById("canvas");
+		canvas.width = window.innerWidth - 50;
+		canvas.height = window.innerHeight - 400;
+		const gl = canvas.getContext("webgl2");
+
+		let uiUpdateRequest;
+
+		// Create three.js scene
+		const scene = new THREE.Scene();
+		const camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
+
+		const renderer = new THREE.WebGLRenderer({ canvas: canvas });
+		//renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+
+		// Define vologram files paths
+		const vologramPlayer = VologramPlayer([ThreeJsPlayerExtension(gl)]);
+		const header_url = new URL("./example_vologram/calif/header.vols", import.meta.url);
+		const sequence_url = new URL("./example_vologram/calif/sequence_0.vols", import.meta.url);
+		const video_url = new URL("./example_vologram/calif/output_720.mp4", import.meta.url);
+		const single_file_url = new URL("./example_vologram/combined.vols", import.meta.url);
+
+		// Create video element that will serve has the texture for the vologram
+		const video_element = document.getElementById("texture_video_el");
+		const audio_element = document.getElementById("audio_el");
+
+		const load_button = document.getElementById("load_vols_files_button");
+		const play_button = document.getElementById("play_vols_files_button");
+		const stop_button = document.getElementById("stop_vols_files_button");
+		const restart_button = document.getElementById("restart_vols_files_button");
+
+		const playing_text = document.getElementById("playing_status_text");
+		const looping_text = document.getElementById("looping_status_text");
+		const toggle_loop = document.getElementById("toggle_loop_button");
+
+		play_button.disabled = true;
+		stop_button.disabled = true;
+		restart_button.disabled = true;
+		toggle_loop.disabled = true;
+
+		const onVologramReady = () => {
+			play_button.disabled = false;
+			stop_button.disabled = false;
+			restart_button.disabled = false;
+			toggle_loop.disabled = false;
+			load_button.disabled = true;
+
+			const animate = async () => {
+				try {
+					vologramPlayer.extensions.threejs.renderUpdate();
+				} catch (e) {
+					console.error(e);
+				}
+				playing_text.innerText = `Is Playing: ${vologramPlayer.isPlaying()}`;
+				looping_text.innerText = `Is Looping: ${vologramPlayer.loop}`;
+				play_button.value = vologramPlayer.isPlaying() ? "pause vologram" : "play vologram";
+				renderer.render(scene, camera);
+				uiUpdateRequest = requestAnimationFrame(animate);
+			};
+
+			play_button.onclick = () => {
+				if (vologramPlayer.isPlaying()) vologramPlayer.pause();
+				else vologramPlayer.play();
+			};
+
+			stop_button.onclick = () => {
+				if (uiUpdateRequest) cancelAnimationFrame(uiUpdateRequest);
+				play_button.disabled = true;
+				stop_button.disabled = true;
+				restart_button.disabled = true;
+				toggle_loop.disabled = true;
+				load_button.disabled = false;
+				scene.remove(vologramPlayer.extensions.threejs.objects.mesh);
+				vologramPlayer.close();
+			};
+
+			restart_button.onclick = () => {
+				vologramPlayer.start();
+			};
+
+			toggle_loop.onclick = () => {
+				vologramPlayer.loop = !vologramPlayer.loop;
+			};
+
+			camera.position.set(0.0, 1.2, 5.0);
+			camera.lookAt(0.0, 1.2, 0.0);
+			scene.add(vologramPlayer.extensions.threejs.objects.mesh);
+
+			vologramPlayer.loop = false;
+
+			uiUpdateRequest = requestAnimationFrame(animate);
+			vologramPlayer.start();
+		};
+
+		load_button.onclick = () => {
+			if (document.getElementById("single_file_toggle").checked) {
+				vologramPlayer
+					.open(
+						{
+							sequenceUrl: single_file_url,
+							audioElement: audio_element,
+						},
+						console.log
+					)
+					.then(() => {
+						onVologramReady();
+					});
+			} else {
+				vologramPlayer
+					.open(
+						{
+							headerUrl: header_url,
+							sequenceUrl: sequence_url,
+							textureUrl: video_url,
+							videoElement: video_element,
+						},
+						console.log
+					)
+					.then(() => {
+						onVologramReady();
+					});
+			}
+		};
+	</script>
+</html>
