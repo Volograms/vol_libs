@@ -13,7 +13,7 @@
 	"author": "",
 	"license": "ISC",
 	"dependencies": {
-		"@volograms/web_vol_lib": "file:./volograms-web_vol_lib-1.1.3.tgz"
+		"@volograms/web_vol_lib": "^1.2.0"
 	},
 	"devDependencies": {
 		"@parcel/transformer-glsl": "^2.9.3",
