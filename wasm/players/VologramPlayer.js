@@ -114,6 +114,7 @@ const VologramPlayer = (extensions) => {
 			_playbackMode = PB_AUDIO;
 		} else {
 			_playbackMode = PB_TIMER;
+			_frameRequestId = requestAnimationFrame(_updateFrameFromTimer);
 		}
 
 		// Initialise Extensions e.g. ThreeJsPlayer or WebGlPlayer
@@ -167,8 +168,13 @@ const VologramPlayer = (extensions) => {
 		_getFrameFromSeconds(_timer / 1000);
 		if (_frameFromTime >= vologram.header.frameCount) {
 			_events.onended.forEach((fn) => fn());
-			_frameFromTime = 0;
-			_timer = 0;
+			if (_timerLooping) {
+				_frameFromTime = 0;
+				_timer = 0;
+			} else {
+				_frameFromTime = vologram.header.frameCount - 1;
+				_pause();
+			}
 		}
 	};
 
@@ -189,7 +195,7 @@ const VologramPlayer = (extensions) => {
 	};
 
 	const _updateFrameFromTimer = (now) => {
-		if (vologram.header && vologram.header.ready) {
+		if (!_timerPaused && vologram.header && vologram.header.ready) {
 			_timeTick(now);
 			_updateMeshFrameAllowingSkip(_frameFromTime);
 			vologram.lastUpdateTime = _timer / 1000;
@@ -203,7 +209,7 @@ const VologramPlayer = (extensions) => {
 			_updateMeshFrameAllowingSkip(_frameFromTime);
 			vologram.lastUpdateTime = vologram.attachedAudio.currentTime;
 		}
-		_frameRequestId = requestAnimationFrame(_updateFrameFromAudio);
+		if (vologram.attachedAudio) _frameRequestId = requestAnimationFrame(_updateFrameFromAudio);
 	};
 
 	const attachVideo = (videoElement) => {
@@ -296,7 +302,7 @@ const VologramPlayer = (extensions) => {
 	};
 
 	const _close = () => {
-		if (_frameRequestId && !vologram.attachedVideo) cancelAnimationFrame(_frameRequestId);
+		if (_frameRequestId) cancelAnimationFrame(_frameRequestId);
 
 		_timerPaused = true;
 		_timerLooping = false;
@@ -366,6 +372,9 @@ const VologramPlayer = (extensions) => {
 				vologram.attachedAudio.play();
 				break;
 			default:
+				if (_frameFromTime >= vologram.header.frameCount - 1) {
+					_startTimer();
+				}
 				break;
 		}
 		_timerPaused = false;
@@ -398,6 +407,41 @@ const VologramPlayer = (extensions) => {
 		if (vologram.attachedVideo) return vologram.attachedVideo.loop;
 		if (vologram.attachedAudio) return vologram.attachedAudio.loop;
 		return _timerLooping;
+	};
+
+	const _removeMediaPlayer = () => {
+		if (_frameRequestId) cancelAnimationFrame(_frameRequestId);
+
+		_timerPaused = true;
+		_timerLooping = false;
+		if (vologram.attachedVideo) {
+			vologram.attachedVideo.cancelVideoFrameCallback(_frameRequestId);
+			vologram.attachedVideo.pause();
+			vologram.attachedVideo = null;
+		}
+		if (vologram.attachedAudio) {
+			vologram.attachedAudio.pause();
+			vologram.attachedAudio = null;
+		}
+		_playbackMode = PB_TIMER;
+	};
+
+	const _enablePlaybackWithoutMedia = () => {
+		_removeMediaPlayer();
+		_frameRequestId = requestAnimationFrame(_updateFrameFromTimer);
+		_playbackMode = PB_TIMER;
+	};
+
+	const _addVideoPlayerElement = (videoElement) => {
+		_removeMediaPlayer();
+		attachVideo(videoElement);
+		_playbackMode = PB_VIDEO;
+	};
+
+	const _addAudioPlayerElement = (audioElement) => {
+		_removeMediaPlayer();
+		attachAudio(audioElement);
+		_playbackMode = PB_AUDIO;
 	};
 
 	const getMediaPlayer = () => {
@@ -445,6 +489,18 @@ const VologramPlayer = (extensions) => {
 		},
 		get unregisterCallback() {
 			return _unregisterCallback;
+		},
+		get addVideoPlayerElement() {
+			console.debug("WARN: addVideoPlayerElement is experimental");
+			return _addVideoPlayerElement;
+		},
+		get addAudioPlayerElement() {
+			console.debug("WARN: addAudioPlayerElement is experimental");
+			return _addAudioPlayerElement;
+		},
+		get enablePlaybackWithoutMedia() {
+			console.debug("WARN: enablePlaybackWithoutMedia is experimental");
+			return _enablePlaybackWithoutMedia;
 		},
 		get extensions() {
 			return _extensionExports;
