@@ -81,7 +81,7 @@ const VologramPlayer = (extensions) => {
 
 		if (!ret) {
 			console.error("failed to load vologram");
-			return;
+			return false;
 		}
 
 		vologram.header.hasNormals = vologram.has_normals();
@@ -122,6 +122,7 @@ const VologramPlayer = (extensions) => {
 			ext.init(vologram);
 			_extensionExports[ext.name] = ext.exports;
 		});
+		return true;
 	};
 
 	const _initWasmSingleFile = async (onProgress) =>
@@ -133,8 +134,8 @@ const VologramPlayer = (extensions) => {
 				return _wasm.fetch_file("vologram.vols", vologram.sequenceUrl, onProgress);
 			})
 			.then((response) => {
-				_initVologram();
-				return true;
+				console.debug(response);
+				return _initVologram();
 			})
 			.catch((err) => {
 				console.error(err);
@@ -151,8 +152,7 @@ const VologramPlayer = (extensions) => {
 			})
 			.then((response) => _wasm.fetch_file("sequence.vols", vologram.sequenceUrl, onProgress))
 			.then((response) => {
-				_initVologram();
-				return true;
+				return _initVologram();
 			})
 			.catch((err) => {
 				console.error(err);
