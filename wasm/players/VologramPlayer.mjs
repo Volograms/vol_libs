@@ -136,7 +136,6 @@ const VologramPlayer = (extensions) => {
 				return _wasm.fetch_file("vologram.vols", vologram.sequenceUrl, onProgress);
 			})
 			.then((response) => {
-				console.debug(response);
 				return _initVologram();
 			})
 			.catch((err) => {
