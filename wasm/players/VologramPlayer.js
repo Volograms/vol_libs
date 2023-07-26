@@ -160,7 +160,10 @@ const VologramPlayer = (extensions) => {
 	};
 
 	const _timeTick = (nowTimestamp) => {
-		if (_timerPaused) return;
+		if (_timerPaused) {
+			_previousTime = nowTimestamp;
+			return;
+		}
 		const delta = Math.max(0, nowTimestamp - _previousTime);
 		_timer += delta;
 		_previousTime = nowTimestamp;
@@ -195,8 +198,8 @@ const VologramPlayer = (extensions) => {
 	};
 
 	const _updateFrameFromTimer = (now) => {
+		_timeTick(now);
 		if (!_timerPaused && vologram.header && vologram.header.ready) {
-			_timeTick(now);
 			_updateMeshFrameAllowingSkip(_frameFromTime);
 			vologram.lastUpdateTime = _timer / 1000;
 		}
