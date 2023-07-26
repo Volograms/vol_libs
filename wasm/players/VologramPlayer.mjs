@@ -137,6 +137,10 @@ const VologramPlayer = (extensions) => {
 			.then((response) => {
 				_initVologram();
 				return true;
+			})
+			.catch((err) => {
+				console.error(err);
+				return false;
 			});
 
 	const _initWasm = (onProgress) =>
