@@ -188,7 +188,6 @@ const VologramPlayer = (extensions) => {
 
 	const _getFrameFromSeconds = (seconds) => {
 		_frameFromTime = Math.floor(seconds * vologram.header.fps);
-		console.log(seconds, vologram.header.fps, _frameFromTime);
 	};
 
 	const _timeTick = (nowTimestamp) => {
@@ -211,12 +210,10 @@ const VologramPlayer = (extensions) => {
 				_pause();
 			}
 		}
-		console.debug(_frameFromTime);
 	};
 
 	const _startTimer = () => {
 		_previousTime = performance.now();
-		console.debug("Start timer", _previousTime);
 		_timerPaused = false;
 		_frameFromTime = 0;
 		_timer = 0;
@@ -234,7 +231,6 @@ const VologramPlayer = (extensions) => {
 	const _updateFrameFromTimer = (now) => {
 		_timeTick(now);
 		if (!_timerPaused && vologram.header && vologram.header.ready) {
-			console.debug(_frameFromTime);
 			_updateMeshFrameAllowingSkip(_frameFromTime);
 			vologram.lastUpdateTime = _timer / 1000;
 		}
@@ -252,7 +248,6 @@ const VologramPlayer = (extensions) => {
 
 	const _attachVideo = (videoElement) => {
 		videoElement.onended = (e) => {
-			console.log(vologram.lastFrameLoaded);
 			_events.onended.forEach((fn) => fn());
 		};
 		vologram.attachedVideo = videoElement;
@@ -472,7 +467,6 @@ const VologramPlayer = (extensions) => {
 			return vologram;
 		},
 		get start() {
-			console.log("start called");
 			return _start;
 		},
 		get pause() {
