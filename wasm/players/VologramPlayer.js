@@ -187,8 +187,8 @@ const VologramPlayer = (extensions) => {
 			});
 
 	const _getFrameFromSeconds = (seconds) => {
-		console.debug(vologram.header.fps);
 		_frameFromTime = Math.floor(seconds * vologram.header.fps);
+		console.log(seconds, vologram.header.fps, _frameFromTime);
 	};
 
 	const _timeTick = (nowTimestamp) => {
