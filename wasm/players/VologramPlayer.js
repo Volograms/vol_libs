@@ -472,6 +472,7 @@ const VologramPlayer = (extensions) => {
 			return vologram;
 		},
 		get start() {
+			console.log("start called");
 			return _start;
 		},
 		get pause() {
