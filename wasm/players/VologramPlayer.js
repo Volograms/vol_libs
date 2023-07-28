@@ -84,18 +84,19 @@ const VologramPlayer = (extensions) => {
 			return false;
 		}
 
+		_initVologramHeader();
+		_initAdditionalElements();
+		_initPlayerExtensions();
+
+		return true;
+	};
+
+	const _initVologramHeader = () => {
 		vologram.header.hasNormals = vologram.has_normals();
 		vologram.header.hasTexture = vologram.has_texture();
-		if (!vologram.header.hasTexture && vologram.textureUrl && !vologram.attachedVideo) {
-			createVideo();
-		}
+
 		vologram.header.hasAudio = vologram.has_audio();
-		if (vologram.header.hasAudio && !vologram.attachedAudio) {
-			createAudio();
-		}
-		if (vologram.header.hasAudio) {
-			_getAudioData();
-		}
+
 		vologram.header.textureCompression = vologram.texture_compression();
 		vologram.header.textureContainerFormat = vologram.texture_container_format();
 		vologram.header.textureWidth = vologram.texture_width();
@@ -107,6 +108,18 @@ const VologramPlayer = (extensions) => {
 		vologram.header.fps = 30;
 		vologram.header.durationS = vologram.header.frameCount / vologram.header.fps; // 5.0;
 		vologram.header.ready = true;
+	};
+
+	const _initAdditionalElements = () => {
+		if (!vologram.header.hasTexture && vologram.textureUrl && !vologram.attachedVideo) {
+			_createVideo();
+		}
+		if (vologram.header.hasAudio && !vologram.attachedAudio) {
+			_createAudio();
+		}
+		if (vologram.header.hasAudio) {
+			_getAudioData();
+		}
 
 		if (vologram.attachedVideo) {
 			_playbackMode = PB_VIDEO;
@@ -116,13 +129,14 @@ const VologramPlayer = (extensions) => {
 			_playbackMode = PB_TIMER;
 			_frameRequestId = requestAnimationFrame(_updateFrameFromTimer);
 		}
+	};
 
+	const _initPlayerExtensions = () => {
 		// Initialise Extensions e.g. ThreeJsPlayer or WebGlPlayer
 		extensions.forEach((ext) => {
 			ext.init(vologram);
 			_extensionExports[ext.name] = ext.exports;
 		});
-		return true;
 	};
 
 	const _initWasmSingleFile = async (onProgress) =>
@@ -134,7 +148,11 @@ const VologramPlayer = (extensions) => {
 				return _wasm.fetch_file("vologram.vols", vologram.sequenceUrl, onProgress);
 			})
 			.then((response) => {
-				return _initVologram();
+				return new Promise((resolve, reject) => {
+					const initSuccess = _initVologram();
+					if (initSuccess) resolve(initSuccess);
+					else reject(new Error("_initVologram failed to open vologram"));
+				});
 			})
 			.catch((err) => {
 				console.error(err);
@@ -151,7 +169,11 @@ const VologramPlayer = (extensions) => {
 			})
 			.then((response) => _wasm.fetch_file("sequence.vols", vologram.sequenceUrl, onProgress))
 			.then((response) => {
-				return _initVologram();
+				return new Promise((resolve, reject) => {
+					const initSuccess = _initVologram();
+					if (initSuccess) resolve(initSuccess);
+					else reject(new Error("_initVologram failed to open vologram"));
+				});
 			})
 			.catch((err) => {
 				console.error(err);
@@ -212,29 +234,31 @@ const VologramPlayer = (extensions) => {
 	const _updateFrameFromAudio = () => {
 		if (vologram.header && vologram.header.ready) {
 			_getFrameFromSeconds(vologram.attachedAudio.currentTime);
-			_updateMeshFrameAllowingSkip(_frameFromTime);
+			_updateMeshFrameAllowingSkip(Math.max(0, _frameFromTime - 1));
 			vologram.lastUpdateTime = vologram.attachedAudio.currentTime;
 		}
 		if (vologram.attachedAudio) _frameRequestId = requestAnimationFrame(_updateFrameFromAudio);
 	};
 
-	const attachVideo = (videoElement) => {
-		videoElement.addEventListener("ended", () => {
+	const _attachVideo = (videoElement) => {
+		videoElement.onended = (e) => {
+			console.log(vologram.lastFrameLoaded);
 			_events.onended.forEach((fn) => fn());
-		});
+		};
 		vologram.attachedVideo = videoElement;
 		videoElement.src = vologram.textureUrl;
 		_frameRequestId = videoElement.requestVideoFrameCallback(_updateFrameFromVideo);
 	};
 
-	const createVideo = () => {
+	const _createVideo = () => {
 		const videoElmnt = document.createElement("video");
 		document.body.insertAdjacentElement("afterbegin", videoElmnt);
 		videoElmnt.hidden = true;
-		attachVideo(videoElmnt);
+		videoElmnt.createdByVologramsPlayer = true;
+		_attachVideo(videoElmnt);
 	};
 
-	const attachAudio = (audioElement) => {
+	const _attachAudio = (audioElement) => {
 		audioElement.addEventListener("ended", () => {
 			_events.onended.forEach((fn) => fn());
 		});
@@ -242,7 +266,7 @@ const VologramPlayer = (extensions) => {
 		_frameRequestId = requestAnimationFrame(_updateFrameFromAudio);
 	};
 
-	const createAudio = () => {
+	const _createAudio = () => {
 		if (!vologram.header.hasAudio) {
 			console.warn("Vologram has no audio - cannot create audio element");
 			return;
@@ -250,7 +274,8 @@ const VologramPlayer = (extensions) => {
 		const audioElmnt = document.createElement("audio");
 		document.body.insertAdjacentElement("afterbegin", audioElmnt);
 		audioElmnt.hidden = true;
-		attachAudio(audioElmnt);
+		audioElmnt.createdByVologramsPlayer = true;
+		_attachAudio(audioElmnt);
 	};
 
 	const _getAudioData = () => {
@@ -277,8 +302,8 @@ const VologramPlayer = (extensions) => {
 		if (videoElement && audioElement) {
 			console.warn("Using both video and audio elements is not supported, audio element will be ignored");
 		}
-		if (videoElement) attachVideo(videoElement);
-		else if (audioElement) attachAudio(audioElement);
+		if (videoElement) _attachVideo(videoElement);
+		else if (audioElement) _attachAudio(audioElement);
 
 		if (vologram.header.singleFile) return _initWasmSingleFile(onProgress);
 		else return _initWasm(onProgress);
@@ -308,7 +333,7 @@ const VologramPlayer = (extensions) => {
 	};
 
 	const _close = () => {
-		if (_frameRequestId) cancelAnimationFrame(_frameRequestId);
+		if (_frameRequestId && !vologram.attachedVideo) cancelAnimationFrame(_frameRequestId);
 
 		_timerPaused = true;
 		_timerLooping = false;
@@ -331,12 +356,23 @@ const VologramPlayer = (extensions) => {
 	};
 
 	const _registerCallback = (event, callback) => {
+		if (!_events[event]) {
+			console.warn(`Vologram player event ${event} does not exist`);
+			return;
+		}
 		_events[event].push(callback);
 	};
 
 	const _unregisterCallback = (event, callback) => {
+		if (!_events[event]) {
+			console.warn(`Vologram player event ${event} does not exist`);
+			return;
+		}
 		const index = _events[event].indexOf(callback);
-		if (index < 0) return;
+		if (index < 0) {
+			console.warn(`Inputted callback does not exist in event ${event}`);
+			return;
+		}
 		_events[event].splice(index, 1);
 	};
 
@@ -415,41 +451,6 @@ const VologramPlayer = (extensions) => {
 		return _timerLooping;
 	};
 
-	const _removeMediaPlayer = () => {
-		if (_frameRequestId) cancelAnimationFrame(_frameRequestId);
-
-		_timerPaused = true;
-		_timerLooping = false;
-		if (vologram.attachedVideo) {
-			vologram.attachedVideo.cancelVideoFrameCallback(_frameRequestId);
-			vologram.attachedVideo.pause();
-			vologram.attachedVideo = null;
-		}
-		if (vologram.attachedAudio) {
-			vologram.attachedAudio.pause();
-			vologram.attachedAudio = null;
-		}
-		_playbackMode = PB_TIMER;
-	};
-
-	const _enablePlaybackWithoutMedia = () => {
-		_removeMediaPlayer();
-		_frameRequestId = requestAnimationFrame(_updateFrameFromTimer);
-		_playbackMode = PB_TIMER;
-	};
-
-	const _addVideoPlayerElement = (videoElement) => {
-		_removeMediaPlayer();
-		attachVideo(videoElement);
-		_playbackMode = PB_VIDEO;
-	};
-
-	const _addAudioPlayerElement = (audioElement) => {
-		_removeMediaPlayer();
-		attachAudio(audioElement);
-		_playbackMode = PB_AUDIO;
-	};
-
 	const getMediaPlayer = () => {
 		if (_playbackMode === PB_AUDIO) return vologram.attachedAudio;
 		if (_playbackMode === PB_VIDEO) return vologram.attachedVideo;
@@ -495,18 +496,6 @@ const VologramPlayer = (extensions) => {
 		},
 		get unregisterCallback() {
 			return _unregisterCallback;
-		},
-		get addVideoPlayerElement() {
-			console.debug("WARN: addVideoPlayerElement is experimental");
-			return _addVideoPlayerElement;
-		},
-		get addAudioPlayerElement() {
-			console.debug("WARN: addAudioPlayerElement is experimental");
-			return _addAudioPlayerElement;
-		},
-		get enablePlaybackWithoutMedia() {
-			console.debug("WARN: enablePlaybackWithoutMedia is experimental");
-			return _enablePlaybackWithoutMedia;
 		},
 		get extensions() {
 			return _extensionExports;

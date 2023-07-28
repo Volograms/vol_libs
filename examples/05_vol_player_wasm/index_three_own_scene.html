@@ -80,9 +80,7 @@ To Run:
 		const header_url = "../example_vologram/calif/header.vols";
 		const sequence_url = "../example_vologram/calif/sequence_0.vols";
 		const video_url = "../example_vologram/calif/output_720.mp4";
-		//const single_file_url = "../../samples/combined.vols";
-		const single_file_url =
-			"https://public-vms-volograms-storage.s3.eu-west-1.amazonaws.com/testing/Patrick_Horse_ld_1024_ETC1S_BASIS_mp3.vols";
+		const single_file_url = "../../samples/combined.vols";
 
 		// Create video element that will serve has the texture for the vologram
 		const video_element = document.getElementById("texture_video_el");
@@ -102,23 +100,24 @@ To Run:
 		restart_button.disabled = true;
 		toggle_loop.disabled = true;
 
-		const onVologramReady = (attachVideo = false) => {
+		const onVologramReady = () => {
 			play_button.disabled = false;
 			stop_button.disabled = false;
 			restart_button.disabled = false;
 			toggle_loop.disabled = false;
 			load_button.disabled = true;
 
-			const animate = async () => {
+			const animate = () => {
 				try {
 					vologramPlayer.extensions.threejs.renderUpdate();
+					playing_text.innerText = `Is Playing: ${vologramPlayer.isPlaying()}`;
+					looping_text.innerText = `Is Looping: ${vologramPlayer.loop}`;
+					play_button.value = vologramPlayer.isPlaying() ? "pause vologram" : "play vologram";
+					renderer.render(scene, camera);
 				} catch (e) {
 					console.error(e);
 				}
-				playing_text.innerText = `Is Playing: ${vologramPlayer.isPlaying()}`;
-				looping_text.innerText = `Is Looping: ${vologramPlayer.loop}`;
-				play_button.value = vologramPlayer.isPlaying() ? "pause vologram" : "play vologram";
-				renderer.render(scene, camera);
+
 				uiUpdateRequest = requestAnimationFrame(animate);
 			};
 
@@ -153,7 +152,6 @@ To Run:
 			vologramPlayer.loop = false;
 
 			uiUpdateRequest = requestAnimationFrame(animate);
-			if (attachVideo) vologramPlayer.addVideoPlayerElement(video_element);
 			vologramPlayer.start();
 		};
 
@@ -163,7 +161,7 @@ To Run:
 					.open(
 						{
 							sequenceUrl: single_file_url,
-							//audioElement: audio_element,
+							audioElement: audio_element,
 						},
 						console.log
 					)
@@ -177,12 +175,12 @@ To Run:
 							headerUrl: header_url,
 							sequenceUrl: sequence_url,
 							textureUrl: video_url,
-							// videoElement: video_element,
+							videoElement: video_element,
 						},
 						console.log
 					)
 					.then(() => {
-						onVologramReady(true);
+						onVologramReady();
 					});
 			}
 		};
