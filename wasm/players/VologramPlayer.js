@@ -3,7 +3,7 @@ const VologramPlayer = (extensions) => {
 	const _extensionExports = {};
 	let _wasm = {};
 	let _frameRequestId;
-	let _frameFromTime;
+	let _frameFromTime = 0;
 	let _timerPaused;
 	let _timerLooping;
 	let _previousTime;
@@ -187,6 +187,7 @@ const VologramPlayer = (extensions) => {
 			});
 
 	const _getFrameFromSeconds = (seconds) => {
+		console.debug(vologram.header.fps);
 		_frameFromTime = Math.floor(seconds * vologram.header.fps);
 	};
 
@@ -211,6 +212,7 @@ const VologramPlayer = (extensions) => {
 				_pause();
 			}
 		}
+		console.debug(_frameFromTime);
 	};
 
 	const _startTimer = () => {
@@ -230,7 +232,6 @@ const VologramPlayer = (extensions) => {
 	};
 
 	const _updateFrameFromTimer = (now) => {
-		console.debug(now);
 		_timeTick(now);
 		if (!_timerPaused && vologram.header && vologram.header.ready) {
 			console.debug(_frameFromTime);
