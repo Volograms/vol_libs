@@ -7,7 +7,7 @@ const VologramPlayer = (extensions) => {
 	let _timerPaused;
 	let _timerLooping;
 	let _previousTime;
-	let _timer;
+	let _timer = 0;
 	let vologram = {};
 
 	const PB_TIMER = 0;
@@ -192,7 +192,7 @@ const VologramPlayer = (extensions) => {
 	};
 
 	const _timeTick = (nowTimestamp) => {
-		if (_timerPaused) {
+		if (_timerPaused || _previousTime === -1) {
 			_previousTime = nowTimestamp;
 			return;
 		}
@@ -216,7 +216,7 @@ const VologramPlayer = (extensions) => {
 	};
 
 	const _startTimer = () => {
-		_previousTime = performance.now();
+		_previousTime = -1;
 		_timerPaused = false;
 		_frameFromTime = 0;
 		_timer = 0;
