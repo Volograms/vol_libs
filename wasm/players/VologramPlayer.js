@@ -230,8 +230,8 @@ const VologramPlayer = (extensions) => {
 
 	const _updateFrameFromTimer = (now) => {
 		_timeTick(now);
-		console.debug(!_timerPaused, vologram.header, vologram.header.ready);
 		if (!_timerPaused && vologram.header && vologram.header.ready) {
+			console.debug(_frameFromTime);
 			_updateMeshFrameAllowingSkip(_frameFromTime);
 			vologram.lastUpdateTime = _timer / 1000;
 		}
