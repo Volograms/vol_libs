@@ -206,6 +206,7 @@ const VologramPlayer = (extensions) => {
 				_frameFromTime = 0;
 				_timer = 0;
 			} else {
+				console.debug(vologram.header.frameCount);
 				_frameFromTime = vologram.header.frameCount - 1;
 				_pause();
 			}
