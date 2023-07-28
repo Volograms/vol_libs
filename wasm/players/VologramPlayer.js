@@ -229,6 +229,7 @@ const VologramPlayer = (extensions) => {
 	};
 
 	const _updateFrameFromTimer = (now) => {
+		console.debug(now);
 		_timeTick(now);
 		if (!_timerPaused && vologram.header && vologram.header.ready) {
 			console.debug(_frameFromTime);
