@@ -19,8 +19,8 @@ Module.fetch_file = (dest, fileUrl, onProgress) => {
 			Module.FS.close(stream);
 			resolve({ status: xhr.status, responseUrl: xhr.responseURL });
 		};
-		xhr.onerror = () => reject(new Error("File upload failed"));
-		xhr.onabort = () => reject(new Error("File upload aborted"));
+		xhr.onerror = () => reject(new Error("Download failed"));
+		xhr.onabort = () => reject(new Error("Download aborted"));
 		xhr.send(null);
 	});
 };

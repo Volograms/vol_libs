@@ -25,15 +25,12 @@ To Run:
 
 	<body style="display: flex; flex-direction: column">
 		<div style="display: flex; flex-direction: row">
-			<span>Load from single file</span>
-			<input type="checkbox" id="single_file_toggle" />
-		</div>
-		<div style="display: flex; flex-direction: row">
 			<span id="playing_status_text" style="margin-right: 5px">Is Playing: false</span>
 			<span id="looping_status_text" style="margin-right: 5px">Is Looping: false</span>
 		</div>
 		<div style="display: flex; flex-direction: row">
 			<input type="button" id="load_vols_files_button" value="load vologram" />
+			<p id="load_progress_text"></p>
 		</div>
 		<div style="display: flex; flex-direction: row">
 			<input type="button" id="play_vols_files_button" value="play vologram" />
@@ -45,7 +42,6 @@ To Run:
 		<canvas id="canvas"></canvas>
 		<!-- playsinline stops mobile browsers fullscreen-ing the video (iOS 10+)-->
 		<div style="display: flex; flex-direction: row">
-			<video controls id="texture_video_el" type="video/mp4;" width="256" height="256" loop playsinline></video>
 			<audio controls id="audio_el" type="audio/mpeg;" width="256" height="256" loop playsinline></audio>
 		</div>
 	</body>
@@ -55,8 +51,8 @@ To Run:
     `https://cdn.jsdelivr.net/gh/Volograms/vol_libs@<BRANCH_NAME>/wasm/<FILE_NAME>`
  	-->
 	<script src="../../wasm/vol_web.js"></script>
-	<script src="../../wasm/players/VologramPlayer.js"></script>
-	<script src="../../wasm/players/ThreeJsPlayerExtension.js"></script>
+	<script src="../../wasm/players/VologramLoader.js"></script>
+	<script src="../../wasm/players/ThreeJsLoader.js"></script>
 	<script src="three.js"></script>
 
 	<script>
@@ -66,26 +62,20 @@ To Run:
 		canvas.height = window.innerHeight - 400;
 		const gl = canvas.getContext("webgl2");
 
-		let uiUpdateRequest;
+		// Define vologram files paths
+		const single_file_url = "../../samples/combined.vols";
+
+		const loader = VologramLoader(gl);
+		const threeJsLoader = ThreeJsLoader();
+
+		let uiUpdateRequest = -1;
 
 		// Create three.js scene
 		const scene = new THREE.Scene();
 		const camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
 
 		const renderer = new THREE.WebGLRenderer({ canvas: canvas });
-		//renderer.setSize(canvas.clientWidth, canvas.clientHeight);
 
-		// Define vologram files paths
-		const vologramPlayer = VologramPlayer([ThreeJsPlayerExtension(gl)]);
-		const header_url = "../example_vologram/calif/header.vols";
-		const sequence_url = "../example_vologram/calif/sequence_0.vols";
-		const video_url = "../example_vologram/calif/output_720.mp4";
-		// const single_file_url = "../../samples/combined.vols";
-		const single_file_url =
-			"https://public-vms-volograms-storage.s3.eu-west-1.amazonaws.com/testing/Patrick_Horse_ld_1024_ETC1S_BASIS_mp3.vols";
-
-		// Create video element that will serve has the texture for the vologram
-		const video_element = document.getElementById("texture_video_el");
 		const audio_element = document.getElementById("audio_el");
 
 		const load_button = document.getElementById("load_vols_files_button");
@@ -93,6 +83,7 @@ To Run:
 		const stop_button = document.getElementById("stop_vols_files_button");
 		const restart_button = document.getElementById("restart_vols_files_button");
 
+		const load_progress_text = document.getElementById("load_progress_text");
 		const playing_text = document.getElementById("playing_status_text");
 		const looping_text = document.getElementById("looping_status_text");
 		const toggle_loop = document.getElementById("toggle_loop_button");
@@ -102,89 +93,111 @@ To Run:
 		restart_button.disabled = true;
 		toggle_loop.disabled = true;
 
+		let vologramGeom, vologramTexture, vologramMaterial, vologramMesh;
+
+		let frameNumber = 0;
+		let frame = {};
+
+		const onLoadProgress = (p) => {
+			load_progress_text.innerText = `Downloaded: ${Math.floor(p * 100)}%`;
+		};
+
 		const onVologramReady = () => {
+			audio_element.src = loader.header.audioUrl;
+
+			vologramGeom = new THREE.BufferGeometry();
+			vologramTexture = threeJsLoader.createVologramTexture(loader);
+
+			vologramMaterial = new THREE.ShaderMaterial({
+				vertexShader: threeJsLoader.sampleVertexShader(loader.header.hasBasisTexture),
+				fragmentShader: threeJsLoader.sampleFragmentShader,
+				uniforms: {
+					map: { value: vologramTexture },
+				},
+			});
+			vologramMesh = new THREE.Mesh(vologramGeom, vologramMaterial);
+			vologramMesh.frustumCulled = false;
+			vologramMesh.needsUpdate = true;
+			camera.position.set(0.0, 1.2, 5.0);
+			camera.lookAt(0.0, 1.2, 0.0);
+			scene.add(vologramMesh);
+
 			play_button.disabled = false;
 			stop_button.disabled = false;
 			restart_button.disabled = false;
 			toggle_loop.disabled = false;
-			load_button.disabled = true;
-
-			const animate = () => {
-				try {
-					vologramPlayer.extensions.threejs.renderUpdate();
-					playing_text.innerText = `Is Playing: ${vologramPlayer.isPlaying()}`;
-					looping_text.innerText = `Is Looping: ${vologramPlayer.loop}`;
-					play_button.value = vologramPlayer.isPlaying() ? "pause vologram" : "play vologram";
-					renderer.render(scene, camera);
-				} catch (e) {
-					console.error(e);
-				}
-
-				uiUpdateRequest = requestAnimationFrame(animate);
-			};
 
 			play_button.onclick = () => {
-				if (vologramPlayer.isPlaying()) vologramPlayer.pause();
-				else vologramPlayer.play();
+				audio_element.paused ? audio_element.play() : audio_element.pause();
 			};
 
 			stop_button.onclick = () => {
-				if (uiUpdateRequest) cancelAnimationFrame(uiUpdateRequest);
+				if (uiUpdateRequest) {
+					cancelAnimationFrame(uiUpdateRequest);
+				}
 				play_button.disabled = true;
 				stop_button.disabled = true;
 				restart_button.disabled = true;
 				toggle_loop.disabled = true;
 				load_button.disabled = false;
-				scene.remove(vologramPlayer.extensions.threejs.objects.mesh);
-				vologramPlayer.close();
+				scene.remove(vologramMesh);
+				vologramTexture.dispose();
+				audio_element.pause();
+
+				loader.close();
 			};
 
 			restart_button.onclick = () => {
-				vologramPlayer.start();
+				audio_element.currentTime = 0;
 			};
 
 			toggle_loop.onclick = () => {
-				vologramPlayer.loop = !vologramPlayer.loop;
+				audio_element.loop = !audio_element.loop;
 			};
 
 			camera.position.set(0.0, 1.2, 5.0);
 			camera.lookAt(0.0, 1.2, 0.0);
-			scene.add(vologramPlayer.extensions.threejs.objects.mesh);
 
-			vologramPlayer.loop = false;
-
-			uiUpdateRequest = requestAnimationFrame(animate);
-			vologramPlayer.start();
+			audio_element.play();
+			renderLoop();
 		};
 
 		load_button.onclick = () => {
-			if (document.getElementById("single_file_toggle").checked) {
-				vologramPlayer
-					.open(
-						{
-							sequenceUrl: single_file_url,
-							video_element: video_element,
-						},
-						console.log
-					)
-					.then(() => {
-						onVologramReady();
-					});
-			} else {
-				vologramPlayer
-					.open(
-						{
-							headerUrl: header_url,
-							sequenceUrl: sequence_url,
-							textureUrl: video_url,
-							videoElement: video_element,
-						},
-						console.log
-					)
-					.then(() => {
-						onVologramReady();
-					});
+			load_button.disabled = true;
+			loader
+				.open(
+					{
+						sequenceUrl: single_file_url,
+					},
+					onLoadProgress
+				)
+				.then(() => {
+					onVologramReady();
+				});
+		};
+
+		const renderLoop = () => {
+			uiUpdateRequest = requestAnimationFrame(animate);
+		};
+
+		const animate = (now, metadata) => {
+			if (loader.header.ready) {
+				try {
+					frameNumber = loader.frameFromSeconds(audio_element.currentTime);
+					frame = loader.loadFrame(frameNumber);
+					threeJsLoader.loadFrameIntoGeometry(frame, vologramGeom);
+					threeJsLoader.updateVologramTexture(frame, vologramTexture);
+				} catch (e) {
+					console.error(e);
+				}
 			}
+
+			playing_text.innerText = `Is Playing: ${!audio_element.paused && !audio_element.ended}`;
+			looping_text.innerText = `Is Looping: ${audio_element.loop}`;
+			play_button.value = !audio_element.paused ? "pause vologram" : "play vologram";
+
+			renderer.render(scene, camera);
+			renderLoop();
 		};
 	</script>
 </html>
