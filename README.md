@@ -58,7 +58,16 @@ make example_programs
 cd examples/
 `./vol_geom_av_opengl.bin PATH_TO_MY/header.vols PATH_TO_MY/sequence_0.vols PATH_TO_MY/texture_2048_h264.mp4`
 ```
+To run web examples start an https server ([http-server](https://www.npmjs.com/package/http-server)) inside the root folder. For example:
+```
+// create a certificate 
+openssl req -newkey rsa:2048 -new -nodes -x509 -days 3650 -keyout key.pem -out cert.pem
 
+// run https server
+http-server -S -C cert.pem
+
+// Open in web browser https://127.0.0.1:8080/examples/05_vol_player_wasm/index_three.html
+```
 | Example               | Description                                                                                                                                                                                                                                                                           | Parameters                                                                         |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | get_images            | Example code showing how to use vol_av to fetch textures from the video.                                                                                                                                                                                                              | `./get_images.bin ../samples/counter.webm`                                         |
