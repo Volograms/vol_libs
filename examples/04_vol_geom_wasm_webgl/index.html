@@ -81,9 +81,10 @@ To Run:
 		var canvas;
 		var gl;
 		var vologram = new Object(); // Stores state about the current vologram.
-		vologram.header_url = "../example_vologram/calif/header.vols";
-		vologram.sequence_url = "../example_vologram/calif/sequence_0.vols";
-		vologram.video_url = "../example_vologram/calif/output_720.mp4";
+		vologram.header_url = "../example_vologram/vologram_video/header.vols";
+		vologram.sequence_url = "../example_vologram/vologram_video/sequence_0.vols";
+		vologram.video_url = "../example_vologram/vologram_video/texture_1024_h264.mp4";
+		// vologram.single_url = "../example_vologram/vologram_basis/vologram_ld_1024_ETC1S_BASIS_mp3.vols";
 		vologram.fps = 30.0; // Change this value if not using 30 frames-per-second video.
 		var init_done = false; // If the basic shaders/objects are set up. A vologram can be downloaded & prepared after this is true.
 
@@ -316,7 +317,8 @@ To Run:
 			console.log("vologram.has_normals = " + vologram.has_normals);
 			mesh_from_frame(0); // Load in frame 0 so something displays even if we don't play yet.
 			console.log("mesh initialised");
-			start_video();
+			if (!vologram.single_url)
+				start_video();
 			vologram.ready = true;
 		}
 
@@ -353,7 +355,7 @@ To Run:
 				if (vologram.single_url) {
 					console.log(vologram.single_url);
 					let singleFileRequest = new Request(
-						"https://public-vms-volograms-storage.s3.eu-west-1.amazonaws.com/testing/rafa-founder-1615225793836_ld_1024_ETC1S_BASIS_mp3.vols",
+						vologram.single_url,
 						{
 							mode: "cors",
 							method: "GET",

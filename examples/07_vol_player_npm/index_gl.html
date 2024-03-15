@@ -70,10 +70,10 @@ To Run:
 
 		// Define vologram files paths
 		const vologramPlayer = VologramPlayer([WebGlPlayerExtension(gl)]);
-		const header_url = new URL("./example_vologram/calif/header.vols", import.meta.url);
-		const sequence_url = new URL("./example_vologram/calif/sequence_0.vols", import.meta.url);
-		const video_url = new URL("./example_vologram/calif/output_720.mp4", import.meta.url);
-		const single_file_url = new URL("./example_vologram/combined.vols", import.meta.url);
+		const header_url = new URL("./example_vologram/vologram_video/header.vols", import.meta.url);
+		const sequence_url = new URL("./example_vologram/vologram_video/sequence_0.vols", import.meta.url);
+		const video_url = new URL("./example_vologram/vologram_video/texture_1024_h264.mp4", import.meta.url);
+		const single_file_url = new URL("./example_vologram/vologram_basis/vologram_ld_1024_ETC1S_BASIS_mp3.vols", import.meta.url);
 
 		// Create video element that will serve has the texture for the vologram
 		const video_element = document.getElementById("texture_video_el");

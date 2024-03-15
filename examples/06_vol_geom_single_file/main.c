@@ -71,7 +71,7 @@ static bool _update_mesh_with_frame( gfx_mesh_t* mesh_ptr, int frame_number, con
 int main( int argc, char** argv ) {
   const char* filename_vols = argv[1];
   if ( argc < 2 ) {
-    filename_vols = "../samples/combined.vols";
+    filename_vols = "../examples/example_vologram/vologram_basis/vologram_ld_1024_ETC1S_BASIS_mp3.vols";
     printf( "Usage: %s MYFILE.vols\n. Using default: %s", argv[0], filename_vols );
   }
 
