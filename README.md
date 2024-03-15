@@ -78,9 +78,9 @@ http-server -S -C cert.pem
 | vol_geom_wasm_threejs | Plays a vologram in a webpage, with [Three.js](https://threejs.org/), using vol_geom compiled to web assembly.                                                                                                                                                                        | Host an HTTP server from the project's root directory, and connect with a browser. |
 | vol_geom_single_file  | Use vol_geom to play a vologram where the header, sequence, and texture are all in one .vols file.                                                                                                                                                                                    | `./vol_geom_single_file.bin samples/combined.vols`                                 |
 
-![vol_geom_av_opengl used to load a Vologram captured with Volu and animate it in OpenGL](example_jan.png)
+![04_vol_geom_wasm_webgl used to load a Vologram captured with Volu and animate it in WebGL](example_jan.jpg)
 
-*vol_geom_av_opengl used to load a Vologram captured with Volu and animate it in OpenGL.*
+*04_vol_geom_wasm_webgl used to load a Vologram captured with Volu and animate it in WebGL.*
 
 ### Troubleshooting
 
