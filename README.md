@@ -58,7 +58,16 @@ make example_programs
 cd examples/
 `./vol_geom_av_opengl.bin PATH_TO_MY/header.vols PATH_TO_MY/sequence_0.vols PATH_TO_MY/texture_2048_h264.mp4`
 ```
+To run web examples start an https server ([http-server](https://www.npmjs.com/package/http-server)) inside the root folder. For example:
+```
+// create a certificate 
+openssl req -newkey rsa:2048 -new -nodes -x509 -days 3650 -keyout key.pem -out cert.pem
 
+// run https server
+http-server -S -C cert.pem
+
+// Open in web browser https://127.0.0.1:8080/examples/05_vol_player_wasm/index_three.html
+```
 | Example               | Description                                                                                                                                                                                                                                                                           | Parameters                                                                         |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | get_images            | Example code showing how to use vol_av to fetch textures from the video.                                                                                                                                                                                                              | `./get_images.bin ../samples/counter.webm`                                         |
@@ -69,9 +78,9 @@ cd examples/
 | vol_geom_wasm_threejs | Plays a vologram in a webpage, with [Three.js](https://threejs.org/), using vol_geom compiled to web assembly.                                                                                                                                                                        | Host an HTTP server from the project's root directory, and connect with a browser. |
 | vol_geom_single_file  | Use vol_geom to play a vologram where the header, sequence, and texture are all in one .vols file.                                                                                                                                                                                    | `./vol_geom_single_file.bin samples/combined.vols`                                 |
 
-![vol_geom_av_opengl used to load a Vologram captured with Volu and animate it in OpenGL](example_jan.png)
+![04_vol_geom_wasm_webgl used to load a Vologram captured with Volu and animate it in WebGL](example_jan.jpg)
 
-*vol_geom_av_opengl used to load a Vologram captured with Volu and animate it in OpenGL.*
+*04_vol_geom_wasm_webgl used to load a Vologram captured with Volu and animate it in WebGL.*
 
 ### Troubleshooting
 
