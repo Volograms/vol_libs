@@ -635,7 +635,7 @@ int vol_geom_find_previous_keyframe( const vol_geom_info_t* info_ptr, uint32_t f
   return -1;
 }
 
-bool vol_geom_read_frame( const char* seq_filename, const vol_geom_info_t* info_ptr, uint32_t frame_idx, vol_geom_frame_data_t* frame_data_ptr ) {
+bool vol_geom_read_frame( const char* seq_filename,  vol_geom_info_t* info_ptr, uint32_t frame_idx, vol_geom_frame_data_t* frame_data_ptr ) {
   assert( seq_filename && info_ptr && frame_data_ptr );
   if ( !seq_filename || !info_ptr || !frame_data_ptr ) { return false; }
 
@@ -676,6 +676,8 @@ bool vol_geom_read_frame( const char* seq_filename, const vol_geom_info_t* info_
 
     // if the frame directory wasn't created yet, do it now 
     if(info_ptr->frame_headers_ptr[frame_idx].mesh_data_sz == 0) {
+      vol_geom_size_t biggest_frame_blob_sz = info_ptr->biggest_frame_blob_sz;
+
       // need to seek to the end of the previous frame
       // find the last frame that has a good directory item and start filling it until we reach curent frame
       uint32_t last_idx = frame_idx - 1;
@@ -692,11 +694,23 @@ bool vol_geom_read_frame( const char* seq_filename, const vol_geom_info_t* info_
         fclose( f_ptr );
         return false;
       }
+      // uint32_t idx = min(frame_idx, info_ptr->hdr.frame_count);
+      last_idx+=1;
       _vol_loggerf( VOL_GEOM_LOG_TYPE_INFO, "INFO filling directory from %i to %i .\n", last_idx, frame_idx ); 
-      for(++last_idx; last_idx <= frame_idx; ++last_idx ) {
+      for(; last_idx <= frame_idx; ++last_idx ) {
         if(_build_frame_directory_from_file( f_ptr, info_ptr,  file_sz,  last_idx ) == false) {
           // data are not there, skip the frame
           fclose( f_ptr );
+          return false;
+        }
+      }
+      //TODO(jan): Update maximum blob size and its allocation in the memory
+      if(info_ptr->biggest_frame_blob_sz > biggest_frame_blob_sz ) {
+        if ( info_ptr->preallocated_frame_blob_ptr ) { free( info_ptr->preallocated_frame_blob_ptr ); }
+
+        info_ptr->preallocated_frame_blob_ptr = calloc( 1, info_ptr->biggest_frame_blob_sz );
+        if ( !info_ptr->preallocated_frame_blob_ptr ) {
+          _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: out of memory allocating frame blob reserve.\n" );
           return false;
         }
       }

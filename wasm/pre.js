@@ -70,8 +70,8 @@ Module.fetch_stream_file = async (dest, fileUrl, onProgress) => {
 				Module.FS.write(fileStream, value, 0, value.length, seekLocation);
 
 				seekLocation += value.length
-				// Read some more, and call this function again
-				if (seekLocation > 60) {
+				// Read some more, and call this function again (1048576 ~ 1MB)
+				if (seekLocation > 1048576) {
 					Module.headerFetched = true;
 					// return  reader.read().then(pump);
 				}
