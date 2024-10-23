@@ -26,22 +26,18 @@
 // };
 
 Module.fileFetched = false;
+Module.headerFetched = false;
 
 Module.isHeaderLoaded = () => {
 
 	console.log(Module.fileFetched);
 
-	return new Promise((resolve) => {
-		function wait() {
-			setTimeout(1000);
-			if (Module.fileFetched) {
-				console.log(('File fetched - isHeaderLoaded.'));
-				return resolve();
-			}
-			wait();
-		}
-		wait();
-	});
+	const poll = resolve => {
+		if(Module.headerFetched == true) resolve();
+		else setTimeout(_ => poll(resolve), 400);
+	  }
+
+	  return new Promise(poll);
 }
 
 Module.fetch_stream_file = async (dest, fileUrl, onProgress) => {
@@ -58,7 +54,7 @@ Module.fetch_stream_file = async (dest, fileUrl, onProgress) => {
 			var fileSize = response.headers.get("content-length");
 			fetchStarted = true;
 
-			await reader.read().then(async function pump({ done, value }) {
+			reader.read().then(function pump({ done, value }) {
 				if (onProgress) {
 					onProgress(seekLocation/fileSize);
 				}
@@ -75,7 +71,11 @@ Module.fetch_stream_file = async (dest, fileUrl, onProgress) => {
 
 				seekLocation += value.length
 				// Read some more, and call this function again
-				return await reader.read().then(pump);
+				if (seekLocation > 60) {
+					Module.headerFetched = true;
+					// return  reader.read().then(pump);
+				}
+				return reader.read().then(pump);
 			})
 
 			// return new ReadableStream({
@@ -120,8 +120,6 @@ Module.fetch_stream_file = async (dest, fileUrl, onProgress) => {
 	// 	})
 	// 	.then((url) => console.log(('Stream ready.')))
 	// 	.catch((err) => console.error(err));
-
-	return;
 };
 
 Module.fetch_file = async (dest, fileUrl, onProgress) => {
