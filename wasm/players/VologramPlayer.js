@@ -154,7 +154,7 @@ const VologramPlayer = (extensions) => {
 				_wasm = wasmInstance;
 				_wasm.ccall("basis_init", "boolean");
 				_wasm.initVologramFunctions(vologram);
-				return _wasm.fetch_file("vologram.vols", vologram.sequenceUrl, onProgress);
+				return _wasm.fetch_stream_file("vologram.vols", vologram.sequenceUrl, onProgress);
 			})
 			.then((response) => {
 				return new Promise((resolve, reject) => {
