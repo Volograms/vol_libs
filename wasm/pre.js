@@ -1,28 +1,165 @@
-Module.fetch_file = (dest, fileUrl, onProgress) => {
-	return new Promise((resolve, reject) => {
-		const xhr = new XMLHttpRequest();
-		xhr.open("GET", fileUrl, true);
-		xhr.responseType = "arraybuffer";
-		xhr.onprogress = (e) => {
-			if (onProgress) {
-				onProgress(e.loaded / e.total);
+// Module.fetch_file = (dest, fileUrl, onProgress) => {
+// 	return new Promise((resolve, reject) => {
+// 		const xhr = new XMLHttpRequest();
+// 		xhr.open("GET", fileUrl, true);
+// 		xhr.responseType = "arraybuffer";
+// 		xhr.onprogress = (e) => {
+// 			if (onProgress) {
+// 				onProgress(e.loaded / e.total);
+// 			}
+// 		};
+// 		xhr.onload = () => {
+// 			if (!xhr.response) {
+// 				reject(new Error("No response received"));
+// 				return;
+// 			}
+// 			const byteArray = new Uint8Array(xhr.response);
+// 			var stream = Module.FS.open(dest, "w");
+// 			Module.FS.write(stream, byteArray, 0, byteArray.length, 0);
+// 			Module.FS.close(stream);
+// 			resolve({ status: xhr.status, responseUrl: xhr.responseURL });
+// 		};
+// 		xhr.onerror = () => reject(new Error("Download failed"));
+// 		xhr.onabort = () => reject(new Error("Download aborted"));
+// 		xhr.send(null);
+// 	});
+// };
+
+Module.fileFetched = false;
+
+Module.isHeaderLoaded = () => {
+
+	console.log(Module.fileFetched);
+
+	return new Promise((resolve) => {
+		function wait() {
+			setTimeout(1000);
+			if (Module.fileFetched) {
+				console.log(('File fetched - isHeaderLoaded.'));
+				return resolve();
 			}
-		};
-		xhr.onload = () => {
-			if (!xhr.response) {
-				reject(new Error("No response received"));
-				return;
-			}
-			const byteArray = new Uint8Array(xhr.response);
-			var stream = Module.FS.open(dest, "w");
-			Module.FS.write(stream, byteArray, 0, byteArray.length, 0);
-			Module.FS.close(stream);
-			resolve({ status: xhr.status, responseUrl: xhr.responseURL });
-		};
-		xhr.onerror = () => reject(new Error("Download failed"));
-		xhr.onabort = () => reject(new Error("Download aborted"));
-		xhr.send(null);
+			wait();
+		}
+		wait();
 	});
+}
+
+Module.fetch_stream_file = async (dest, fileUrl, onProgress) => {
+
+	return await fetch(fileUrl)
+		// Retrieve its body as ReadableStream
+		.then(async (response) => {
+			if (!response.ok) {
+				throw new Error(`HTTP error! Status: ${response.status}`);
+			}
+			const reader = response.body.getReader();
+			var fileStream = Module.FS.open(dest, "w");
+			var seekLocation = 0;
+			var fileSize = response.headers.get("content-length");
+			fetchStarted = true;
+
+			await reader.read().then(async function pump({ done, value }) {
+				if (onProgress) {
+					onProgress(seekLocation/fileSize);
+				}
+
+				if (done) {
+					// Do something with last chunk of data then exit reader
+					Module.FS.close(fileStream);
+					Module.fileFetched = true;
+					console.log(('Fetching stream finished.'));
+					return;
+				}
+				// Otherwise do something here to process current chunk
+				Module.FS.write(fileStream, value, 0, value.length, seekLocation);
+
+				seekLocation += value.length
+				// Read some more, and call this function again
+				return await reader.read().then(pump);
+			})
+
+			// return new ReadableStream({
+			// 	start(controller) {
+			// 		return pump(0);
+			// 		function pump(start) {
+			// 			return reader.read().then(({ done, value }) => {
+			// 				// When no more data needs to be consumed, close the stream
+			// 				if (done) {
+			// 					Module.FS.close(fileStream);
+			// 					controller.close();
+			// 					console.log(('Fetching stream finished.'));
+			// 					return;
+			// 				}
+			// 				// Enqueue the next data chunk into our target stream
+			// 				Module.FS.write(fileStream, value, start, value.length, 0);
+			// 				controller.enqueue(value);
+			// 				return pump(start + value.length);
+			// 			});
+			// 		}
+			// 	},
+			// });
+		})
+		// .then((stream) => new Response(stream))
+		.then((url) => console.log(('Stream ready.')))
+		.catch((err) => console.error(err));
+
+	// await fetch(fileUrl)
+	// 	// Retrieve its body as ReadableStream
+	// 	.then((response) => {
+	// 		if (!response.ok) {
+	// 			throw new Error(`HTTP error! Status: ${response.status}`);
+	// 		}
+	// 		return response.arrayBuffer();
+	// 	})
+	// 	.then((arrayBuffer) => {
+	// 		const byteArray = new Uint8Array(arrayBuffer);
+	// 		var stream = Module.FS.open(dest, "w");
+	// 		Module.FS.write(stream, byteArray, 0, byteArray.length, 0);
+	// 		Module.FS.close(stream);
+
+	// 	})
+	// 	.then((url) => console.log(('Stream ready.')))
+	// 	.catch((err) => console.error(err));
+
+	return;
+};
+
+Module.fetch_file = async (dest, fileUrl, onProgress) => {
+
+	return await fetch(fileUrl)
+		// Retrieve its body as ReadableStream
+		.then(async (response) => {
+			if (!response.ok) {
+				throw new Error(`HTTP error! Status: ${response.status}`);
+			}
+			const reader = response.body.getReader();
+			var fileStream = Module.FS.open(dest, "w");
+			var seekLocation = 0;
+			var fileSize = response.headers.get("content-length");
+
+			await reader.read().then(async function pump({ done, value }) {
+				if (onProgress) {
+					onProgress(seekLocation/fileSize);
+				}
+
+				if (done) {
+					// Do something with last chunk of data then exit reader
+					Module.FS.close(fileStream);
+					Module.fileFetched = true;
+					console.log(('Fetching stream finished.'));
+					return;
+				}
+				// Otherwise do something here to process current chunk
+				Module.FS.write(fileStream, value, 0, value.length, seekLocation);
+
+				seekLocation += value.length
+				// Read some more, and call this function again
+				return await reader.read().then(pump);
+			})
+		})
+		// .then((stream) => new Response(stream))
+		.then((url) => console.log(('Stream ready.')))
+		.catch((err) => console.error(err));
 };
 
 Module.initVologramFunctions = (containerObject) => {

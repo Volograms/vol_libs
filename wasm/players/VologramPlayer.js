@@ -71,8 +71,11 @@ const VologramPlayer = (extensions) => {
 		return true;
 	};
 
-	const _initVologram = () => {
+	const _initVologram = async () => {
 		let ret = false;
+		// Wait until we have a header and audio donwloaded
+		await _wasm.isHeaderLoaded();
+
 		if (vologram.header.singleFile) {
 			ret = vologram.create_single_file_info("vologram.vols");
 		} else {
