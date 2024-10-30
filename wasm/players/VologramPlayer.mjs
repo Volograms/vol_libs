@@ -5,11 +5,11 @@ const VologramPlayer = (extensions) => {
 	const _extensionExports = {};
 	let _wasm = {};
 	let _frameRequestId;
-	let _frameFromTime;
+	let _frameFromTime = 0;
 	let _timerPaused;
 	let _timerLooping;
 	let _previousTime;
-	let _timer;
+	let _timer = 0;
 	let vologram = {};
 
 	const PB_TIMER = 0;
@@ -75,6 +75,7 @@ const VologramPlayer = (extensions) => {
 
 	const _initVologram = () => {
 		let ret = false;
+
 		if (vologram.header.singleFile) {
 			ret = vologram.create_single_file_info("vologram.vols");
 		} else {
@@ -147,10 +148,13 @@ const VologramPlayer = (extensions) => {
 				_wasm = wasmInstance;
 				_wasm.ccall("basis_init", "boolean");
 				_wasm.initVologramFunctions(vologram);
-				return _wasm.fetch_file("vologram.vols", vologram.sequenceUrl, onProgress);
+				return _wasm.fetch_stream_file("vologram.vols", vologram.sequenceUrl, onProgress);
 			})
 			.then((response) => {
-				return new Promise((resolve, reject) => {
+				return new Promise(async (resolve, reject) => {
+					// Wait until we have a header and audio donwloaded
+					await _wasm.isHeaderLoaded();
+
 					const initSuccess = _initVologram();
 					if (initSuccess) resolve(initSuccess);
 					else reject(new Error("_initVologram failed to open vologram"));
@@ -171,7 +175,7 @@ const VologramPlayer = (extensions) => {
 			})
 			.then((response) => _wasm.fetch_file("sequence.vols", vologram.sequenceUrl, onProgress))
 			.then((response) => {
-				return new Promise((resolve, reject) => {
+				return new Promise( (resolve, reject) => {
 					const initSuccess = _initVologram();
 					if (initSuccess) resolve(initSuccess);
 					else reject(new Error("_initVologram failed to open vologram"));
