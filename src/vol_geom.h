@@ -21,6 +21,7 @@
  *
  * History
  * -------
+ * - 0.12.0 (2022/04/)   - Support for streaming - incomplete files - and frame skipping.
  * - 0.11.0 (2022/04/)   - Support for reading single-file volograms.
  * - 0.10.0 (2022/03/22) - Support added for reading >2GB volograms.
  * - 0.9.0  (2022/03/22) - Version bump for parity with vol_av.
@@ -99,6 +100,8 @@ VOL_GEOM_EXPORT typedef struct vol_geom_frame_hdr_t {
    */
   /// Mesh data size in bytes.
   uint32_t mesh_data_sz;
+  /// id of a keyframe. For keyframe this is the same as frame_number.
+  uint32_t keyframe_number;
   /// 0 = tracked frame, 1 = first/key frame, 2 = last tracked frame (for backward traversal, only if Version >= 12)
   uint8_t keyframe;
 } vol_geom_frame_hdr_t;
@@ -134,6 +137,8 @@ VOL_GEOM_EXPORT typedef struct vol_geom_info_t {
   uint8_t* sequence_blob_byte_ptr;
   /// Byte offset of the sequence chunk from the start of file. For separated hdr/seq files this will be 0.
   vol_geom_size_t sequence_offset;
+  /// Frame number that was read the last and is a keayframe. Useful during seek or when skipping frames. 
+  uint32_t last_keyframe;
 } vol_geom_info_t;
 
 /** Meta-data for each from of the Vologram sequence. */

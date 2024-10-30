@@ -255,6 +255,19 @@ static bool _build_frame_directory_from_file( FILE* f_ptr, vol_geom_info_t* info
     _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: keyframe (type) was out of file size range in sequence file.\n" );
     goto bfdff_fail;
   }
+  // This will help to seek to keyframe
+  if(frame_hdr.keyframe == 1 || frame_hdr.keyframe == 2) {
+    frame_hdr.keyframe_number = frame_hdr.frame_number;
+  } else {
+    // find keyframe. We are building directory sequentially so we can go back, those records exists. 
+    for(uint32_t i=frame_idx-1; i >= 0; --i) {
+      if(info_ptr->frame_headers_ptr[i].keyframe == 1 ) {
+        // save the first keyframe == 1 we find (ignore == 2) as we need to seek back when playing a sequence. If streaming not all data might be there. 
+        frame_hdr.keyframe_number = i;
+        break;
+      }
+    }
+  }
 
   vol_geom_size_t frame_current_offset = vol_geom_ftello( f_ptr );
   if ( -1LL == frame_current_offset ) { goto bfdff_fail; }
@@ -565,7 +578,7 @@ bool vol_geom_create_file_info( const char* hdr_filename, const char* seq_filena
 
   vol_geom_file_record_t record = ( vol_geom_file_record_t ){ .sz = 0 };
   vol_geom_size_t hdr_sz        = 0;
-  *info_ptr                     = ( vol_geom_info_t ){ .biggest_frame_blob_sz = 0 };
+  *info_ptr                     = ( vol_geom_info_t ){ .biggest_frame_blob_sz = 0, .last_keyframe = 0 };
   info_ptr->sequence_offset     = 0; // Using separate files here, so there is no offset.
 
   if ( !vol_geom_read_hdr_from_file( hdr_filename, &info_ptr->hdr, &hdr_sz ) ) { goto cfi_fail; }
@@ -762,9 +775,23 @@ bool vol_geom_read_frame( const char* seq_filename,  vol_geom_info_t* info_ptr, 
     fclose( f_ptr );
   } // end FILE i/o block
 
+  // Bruteforce
+  // Indices and UVs if we miss indices and UVs from a keyframe that was skipped. Current_frame should be frame_idx-1 otherwise our indices might be wrong.
+  if(info_ptr->frame_headers_ptr[frame_idx].keyframe == 0 && info_ptr->last_keyframe != info_ptr->frame_headers_ptr[frame_idx].keyframe_number) {
+    uint32_t keyframe_number = info_ptr->frame_headers_ptr[frame_idx].keyframe_number;
+
+    if ( !vol_geom_read_frame( seq_filename,  info_ptr, keyframe_number, frame_data_ptr ) ) {
+      // we have a problem
+      _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR reading key frame %i\n", frame_idx );
+    }
+  }
+
   if ( !_read_vol_frame( info_ptr, frame_idx, frame_data_ptr ) ) {
     _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR parsing frame %i\n", frame_idx );
     return false;
+  } else {
+    // Remember we loaded a keyframe 
+    if(info_ptr->frame_headers_ptr[frame_idx].keyframe == 1) info_ptr->last_keyframe = frame_idx;
   }
   return true;
 }
