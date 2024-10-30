@@ -229,6 +229,11 @@ static bool _build_frame_directory_from_file( FILE* f_ptr, vol_geom_info_t* info
     goto bfdff_fail; 
   }
 
+  if(frame_start_offset + sizeof(vol_geom_frame_hdr_t) > sequence_file_sz) {
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: frame header at frame %i in sequence file was out of file size range.\n", frame_idx );
+    goto bfdff_fail;
+  }
+
   if ( !fread( &frame_hdr.frame_number, sizeof( uint32_t ), 1, f_ptr ) ) {
     _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: frame_number at frame %i in sequence file was out of file size range.\n", frame_idx );
     goto bfdff_fail;
@@ -672,8 +677,6 @@ bool vol_geom_read_frame( const char* seq_filename,  vol_geom_info_t* info_ptr, 
       return false;
     }
 
-
-
     // if the frame directory wasn't created yet, do it now 
     if(info_ptr->frame_headers_ptr[frame_idx].mesh_data_sz == 0) {
       vol_geom_size_t biggest_frame_blob_sz = info_ptr->biggest_frame_blob_sz;
@@ -683,32 +686,46 @@ bool vol_geom_read_frame( const char* seq_filename,  vol_geom_info_t* info_ptr, 
       uint32_t last_idx = frame_idx - 1;
       for(; last_idx >= 0; --last_idx ) {
         if(info_ptr->frame_headers_ptr[last_idx].mesh_data_sz != 0) {
-          _vol_loggerf( VOL_GEOM_LOG_TYPE_INFO, "INFO last good directory item is for frame %i .\n", last_idx ); 
+          // _vol_loggerf( VOL_GEOM_LOG_TYPE_INFO, "INFO last good directory item is for frame %i .\n", last_idx ); 
           break;
         }
       }
-      // move to the end of a known directory record
+      
+      // This is a good enough approximation for en early reject if (offset + blob) is bigger than the file size.
       vol_geom_size_t last_offset_end = info_ptr->frames_directory_ptr[last_idx].offset_sz + info_ptr->frames_directory_ptr[last_idx].total_sz;
+      uint32_t idx_diff = (frame_idx - last_idx);
+      vol_geom_size_t blob_end = biggest_frame_blob_sz * idx_diff + last_offset_end;
+      if( frame_idx < (info_ptr->hdr.frame_count - 1) && blob_end > file_sz) {
+        fclose( f_ptr );
+        return false;
+      }
+
+      // move to the end of a known directory record
       if ( 0 != vol_geom_fseeko( f_ptr, last_offset_end, SEEK_SET ) ) {
         _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR seeking frame %i from sequence file - file too small for data.\n", last_idx );
         fclose( f_ptr );
         return false;
       }
-      // uint32_t idx = min(frame_idx, info_ptr->hdr.frame_count);
+      
       last_idx+=1;
-      _vol_loggerf( VOL_GEOM_LOG_TYPE_INFO, "INFO filling directory from %i to %i .\n", last_idx, frame_idx ); 
-      for(; last_idx <= frame_idx; ++last_idx ) {
+      for(; last_idx < info_ptr->hdr.frame_count; ++last_idx ) {
         if(_build_frame_directory_from_file( f_ptr, info_ptr,  file_sz,  last_idx ) == false) {
-          // data are not there, skip the frame
+          if(frame_idx <= last_idx) {
+            break;
+          }
+          // data for current frame are not there, skip it
           fclose( f_ptr );
           return false;
         }
       }
-      //TODO(jan): Update maximum blob size and its allocation in the memory
-      if(info_ptr->biggest_frame_blob_sz > biggest_frame_blob_sz ) {
-        if ( info_ptr->preallocated_frame_blob_ptr ) { free( info_ptr->preallocated_frame_blob_ptr ); }
 
-        info_ptr->preallocated_frame_blob_ptr = calloc( 1, info_ptr->biggest_frame_blob_sz );
+      // Update maximum blob size and its allocation in the memory
+      if(info_ptr->biggest_frame_blob_sz > biggest_frame_blob_sz ) {
+        if ( info_ptr->preallocated_frame_blob_ptr ) { 
+          info_ptr->preallocated_frame_blob_ptr = realloc( info_ptr->preallocated_frame_blob_ptr, info_ptr->biggest_frame_blob_sz ); 
+        } else {
+          info_ptr->preallocated_frame_blob_ptr = calloc( 1, info_ptr->biggest_frame_blob_sz );
+        }
         if ( !info_ptr->preallocated_frame_blob_ptr ) {
           _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: out of memory allocating frame blob reserve.\n" );
           return false;
