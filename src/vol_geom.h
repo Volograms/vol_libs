@@ -18,10 +18,10 @@
  * ----------
  * - allow custom allocator
  * - removes statics to make thread-safe
- *
+ * 
  * History
  * -------
- * - 0.12.0 (2022/04/)   - Support for streaming - incomplete files - and frame skipping.
+ * - 0.12.0 (2024/11/02) - Support for streaming, incomplete files, and frame skipping.
  * - 0.11.0 (2022/04/)   - Support for reading single-file volograms.
  * - 0.10.0 (2022/03/22) - Support added for reading >2GB volograms.
  * - 0.9.0  (2022/03/22) - Version bump for parity with vol_av.

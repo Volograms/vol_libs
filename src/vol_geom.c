@@ -651,13 +651,6 @@ int vol_geom_find_previous_keyframe( const vol_geom_info_t* info_ptr, uint32_t f
     // _vol_loggerf( VOL_GEOM_LOG_TYPE_INFO, "INFO: find_previous_keyframe from keyframe_number is %i .\n", info_ptr->frame_headers_ptr[frame_idx].keyframe_number );
     return info_ptr->frame_headers_ptr[frame_idx].keyframe_number;
   }
-  // for ( int i = frame_idx; i >= 0; i-- ) {
-  //   if(info_ptr->frame_headers_ptr[frame_idx].mesh_data_sz == 0) { return -1; }
-  //   if ( vol_geom_is_keyframe( info_ptr, i ) ) { 
-  //     _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "INFO: find_previous_keyframe from loop is %i .\n", i );
-  //     return i; 
-  //   }
-  // }
   return -1;
 }
 

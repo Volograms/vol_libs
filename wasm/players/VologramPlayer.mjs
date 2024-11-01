@@ -69,6 +69,10 @@ const VologramPlayer = (extensions) => {
 				return false;
 			}
 			keyframeRequired = vologram.find_previous_keyframe(desiredFrameIndex);
+			if(keyframeRequired === -1) {
+				_pause();
+				return false;
+			}
 		}
 		// If running slowly we may skip over a keyframe. Grab that now to avoid stale keyframe desync.
 		if (vologram.lastKeyframeLoaded !== keyframeRequired && keyframeRequired !== desiredFrameIndex) {
