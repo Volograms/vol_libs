@@ -52,7 +52,6 @@ Module.fetch_stream_file = async (dest, fileUrl, onProgress) => {
 			var fileStream = Module.FS.open(dest, "w");
 			var seekLocation = 0;
 			var fileSize = response.headers.get("content-length");
-			fetchStarted = true;
 
 			reader.read().then(function pump({ done, value }) {
 				if (onProgress) {
@@ -181,6 +180,7 @@ Module.initVologramFunctions = (containerObject) => {
 	insertObject["frame_count"] = Module.cwrap("frame_count", "number");
 	insertObject["loaded_frame_number"] = Module.cwrap("loaded_frame_number", "number");
 	insertObject["read_frame"] = Module.cwrap("read_frame", "boolean", ["number"]);
+	insertObject["update_frames_directory"] = Module.cwrap("update_frames_directory", "boolean", ["number"]);
 	insertObject["max_blob_sz"] = Module.cwrap("max_blob_sz", "number");
 	insertObject["is_keyframe"] = Module.cwrap("is_keyframe", "boolean", ["number"]);
 	insertObject["find_previous_keyframe"] = Module.cwrap("find_previous_keyframe", "number", ["number"]);

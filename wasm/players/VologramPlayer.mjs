@@ -62,14 +62,22 @@ const VologramPlayer = (extensions) => {
 			return false;
 		}
 
-		const keyframeRequired = vologram.find_previous_keyframe(desiredFrameIndex);
-
+		let keyframeRequired = vologram.find_previous_keyframe(desiredFrameIndex);
+		if(keyframeRequired === -1) { 
+			// We need to update frame directory 
+			if(vologram.update_frames_directory(desiredFrameIndex) === false) {
+				return false;
+			}
+			keyframeRequired = vologram.find_previous_keyframe(desiredFrameIndex);
+		}
 		// If running slowly we may skip over a keyframe. Grab that now to avoid stale keyframe desync.
-		if (vologram.lastKeyframeLoaded !== keyframeRequired) {
-			const loadedKey = _loadMesh(keyframeRequired, true);
+		if (vologram.lastKeyframeLoaded !== keyframeRequired && keyframeRequired !== desiredFrameIndex) {
+			if (!_loadMesh(keyframeRequired)) {
+				return false;
+			}
 		}
 		// Load actual current frame.
-		const loadedMesh = _loadMesh(desiredFrameIndex);
+		const ret = _loadMesh(desiredFrameIndex);
 		return true;
 	};
 

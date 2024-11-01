@@ -201,6 +201,9 @@ VOL_GEOM_EXPORT bool vol_geom_read_hdr_from_file( const char* filename, vol_geom
 /** As vol_geom_create_file_info, but for volograms where the contents { header, sequence } are all in one .vols file. */
 VOL_GEOM_EXPORT bool vol_geom_create_file_info_from_file( const char* vols_filename, vol_geom_info_t* info_ptr );
 
+/** Update missing items in frames directory initially created by vol_geom_create_file_info_from_file. */
+VOL_GEOM_EXPORT bool vol_geom_update_frames_directory(  const char* seq_filename, vol_geom_info_t* info_ptr, uint32_t frame_idx );
+
 /** Call this function before playing a vologram sequence.
  * It will build a directory of file and frame information about the VOL sequence, and pre-allocate memory.
  * You only need to call this function once per Vologram - you can keep the vol_geom_info_t struct in memory and re-use it during playback.

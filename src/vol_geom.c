@@ -259,13 +259,13 @@ static bool _build_frame_directory_from_file( FILE* f_ptr, vol_geom_info_t* info
   if(frame_hdr.keyframe == 1 || frame_hdr.keyframe == 2) {
     frame_hdr.keyframe_number = frame_hdr.frame_number;
   } else {
-    // find keyframe. We are building directory sequentially so we can go back, those records exists. 
-    for(uint32_t i=frame_idx-1; i >= 0; --i) {
-      if(info_ptr->frame_headers_ptr[i].keyframe == 1 ) {
-        // save the first keyframe == 1 we find (ignore == 2) as we need to seek back when playing a sequence. If streaming not all data might be there. 
-        frame_hdr.keyframe_number = i;
-        break;
-      }
+    // find keyframe. We are building directory sequentially so we can go back, those records should exist.
+    // int ret = vol_geom_find_previous_keyframe(info_ptr, frame_idx);
+    int ret = info_ptr->frame_headers_ptr[frame_idx-1].keyframe_number;
+    if (ret >= 0 ) {
+      frame_hdr.keyframe_number = ret;
+    } else {
+      goto bfdff_fail;
     }
   }
 
@@ -646,11 +646,83 @@ bool vol_geom_is_keyframe( const vol_geom_info_t* info_ptr, uint32_t frame_idx )
 int vol_geom_find_previous_keyframe( const vol_geom_info_t* info_ptr, uint32_t frame_idx ) {
   assert( info_ptr );
   if ( !info_ptr ) { return -1; }
-  if ( frame_idx >= info_ptr->hdr.frame_count ) { return false; }
-  for ( int i = frame_idx; i >= 0; i-- ) {
-    if ( vol_geom_is_keyframe( info_ptr, i ) ) { return i; }
+  if ( frame_idx >= info_ptr->hdr.frame_count ) { return -1; }
+  if ( info_ptr->frame_headers_ptr[frame_idx].mesh_data_sz > 0 ) { 
+    // _vol_loggerf( VOL_GEOM_LOG_TYPE_INFO, "INFO: find_previous_keyframe from keyframe_number is %i .\n", info_ptr->frame_headers_ptr[frame_idx].keyframe_number );
+    return info_ptr->frame_headers_ptr[frame_idx].keyframe_number;
   }
+  // for ( int i = frame_idx; i >= 0; i-- ) {
+  //   if(info_ptr->frame_headers_ptr[frame_idx].mesh_data_sz == 0) { return -1; }
+  //   if ( vol_geom_is_keyframe( info_ptr, i ) ) { 
+  //     _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "INFO: find_previous_keyframe from loop is %i .\n", i );
+  //     return i; 
+  //   }
+  // }
   return -1;
+}
+
+bool vol_geom_update_frames_directory( const char* seq_filename, vol_geom_info_t* info_ptr, uint32_t frame_idx) {
+
+  // Get file size and check for file size issues before allocating memory or reading
+  vol_geom_size_t file_sz = 0;
+  if ( !_get_file_sz( seq_filename, &file_sz ) ) {
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: sequence file `%s` could not be opened.\n", seq_filename );
+    return false;
+  }
+  // open file to read the frame
+  FILE* f_ptr = fopen( seq_filename, "rb" );
+  if ( !f_ptr ) {
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR could not open file `%s` for frame data.\n", seq_filename );
+    return false;
+  }
+
+  vol_geom_size_t biggest_frame_blob_sz = info_ptr->biggest_frame_blob_sz;
+
+  // Find the last frame that has a good directory item and start filling it until we reach curent frame
+  uint32_t last_idx = frame_idx - 1;
+  for(; last_idx >= 0; --last_idx ) {
+    if(info_ptr->frame_headers_ptr[last_idx].mesh_data_sz != 0) {
+      break;
+    }
+  }
+
+  // move to the end of a known directory record
+  vol_geom_size_t last_offset_end = info_ptr->frames_directory_ptr[last_idx].offset_sz + info_ptr->frames_directory_ptr[last_idx].total_sz;
+  if ( 0 != vol_geom_fseeko( f_ptr, last_offset_end, SEEK_SET ) ) {
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR seeking frame %i from sequence file - file too small for data.\n", last_idx );
+    fclose( f_ptr );
+    return false;
+  }
+
+  for(last_idx += 1; last_idx < info_ptr->hdr.frame_count; ++last_idx ) {
+    // _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "INFO Building directory for frame %i\n", last_idx );
+
+    if(_build_frame_directory_from_file( f_ptr, info_ptr,  file_sz,  last_idx ) == false) {
+      if(frame_idx <= last_idx) {
+        // we got a record for our frame, we can continue
+        break;
+      }
+      // data for current frame are not there
+      fclose( f_ptr );
+      return false;
+    }
+  }
+  fclose( f_ptr );
+
+  // Update maximum blob size and its allocation in the memory
+  if(info_ptr->biggest_frame_blob_sz > biggest_frame_blob_sz ) {
+    if ( info_ptr->preallocated_frame_blob_ptr ) { 
+      info_ptr->preallocated_frame_blob_ptr = realloc( info_ptr->preallocated_frame_blob_ptr, info_ptr->biggest_frame_blob_sz ); 
+    } else {
+      info_ptr->preallocated_frame_blob_ptr = calloc( 1, info_ptr->biggest_frame_blob_sz );
+    }
+    if ( !info_ptr->preallocated_frame_blob_ptr ) {
+      _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: out of memory allocating frame blob reserve.\n" );
+      return false;
+    }
+  }
+
+  return true;
 }
 
 bool vol_geom_read_frame( const char* seq_filename,  vol_geom_info_t* info_ptr, uint32_t frame_idx, vol_geom_frame_data_t* frame_data_ptr ) {
@@ -677,6 +749,14 @@ bool vol_geom_read_frame( const char* seq_filename,  vol_geom_info_t* info_ptr, 
 
   // Read frame blob from file.
   } else {
+
+    // if the frame directory wasn't created yet for frame_idx, do it now
+    if(info_ptr->frame_headers_ptr[frame_idx].mesh_data_sz == 0) {
+      if(vol_geom_update_frames_directory(seq_filename, info_ptr, frame_idx) == false) {
+        return false;
+      }
+    }
+
     // Get file size and check for file size issues before allocating memory or reading
     vol_geom_size_t file_sz = 0;
     if ( !_get_file_sz( seq_filename, &file_sz ) ) {
@@ -688,62 +768,6 @@ bool vol_geom_read_frame( const char* seq_filename,  vol_geom_info_t* info_ptr, 
     if ( !f_ptr ) {
       _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR could not open file `%s` for frame data.\n", seq_filename );
       return false;
-    }
-
-    // if the frame directory wasn't created yet, do it now 
-    if(info_ptr->frame_headers_ptr[frame_idx].mesh_data_sz == 0) {
-      vol_geom_size_t biggest_frame_blob_sz = info_ptr->biggest_frame_blob_sz;
-
-      // need to seek to the end of the previous frame
-      // find the last frame that has a good directory item and start filling it until we reach curent frame
-      uint32_t last_idx = frame_idx - 1;
-      for(; last_idx >= 0; --last_idx ) {
-        if(info_ptr->frame_headers_ptr[last_idx].mesh_data_sz != 0) {
-          // _vol_loggerf( VOL_GEOM_LOG_TYPE_INFO, "INFO last good directory item is for frame %i .\n", last_idx ); 
-          break;
-        }
-      }
-      
-      // This is a good enough approximation for en early reject if (offset + blob) is bigger than the file size.
-      vol_geom_size_t last_offset_end = info_ptr->frames_directory_ptr[last_idx].offset_sz + info_ptr->frames_directory_ptr[last_idx].total_sz;
-      uint32_t idx_diff = (frame_idx - last_idx);
-      vol_geom_size_t blob_end = biggest_frame_blob_sz * idx_diff + last_offset_end;
-      if( frame_idx < (info_ptr->hdr.frame_count - 1) && blob_end > file_sz) {
-        fclose( f_ptr );
-        return false;
-      }
-
-      // move to the end of a known directory record
-      if ( 0 != vol_geom_fseeko( f_ptr, last_offset_end, SEEK_SET ) ) {
-        _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR seeking frame %i from sequence file - file too small for data.\n", last_idx );
-        fclose( f_ptr );
-        return false;
-      }
-      
-      last_idx+=1;
-      for(; last_idx < info_ptr->hdr.frame_count; ++last_idx ) {
-        if(_build_frame_directory_from_file( f_ptr, info_ptr,  file_sz,  last_idx ) == false) {
-          if(frame_idx <= last_idx) {
-            break;
-          }
-          // data for current frame are not there, skip it
-          fclose( f_ptr );
-          return false;
-        }
-      }
-
-      // Update maximum blob size and its allocation in the memory
-      if(info_ptr->biggest_frame_blob_sz > biggest_frame_blob_sz ) {
-        if ( info_ptr->preallocated_frame_blob_ptr ) { 
-          info_ptr->preallocated_frame_blob_ptr = realloc( info_ptr->preallocated_frame_blob_ptr, info_ptr->biggest_frame_blob_sz ); 
-        } else {
-          info_ptr->preallocated_frame_blob_ptr = calloc( 1, info_ptr->biggest_frame_blob_sz );
-        }
-        if ( !info_ptr->preallocated_frame_blob_ptr ) {
-          _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: out of memory allocating frame blob reserve.\n" );
-          return false;
-        }
-      }
     }
 
     // Get the offset of that frame and size required to allocate for it.
@@ -775,10 +799,13 @@ bool vol_geom_read_frame( const char* seq_filename,  vol_geom_info_t* info_ptr, 
     fclose( f_ptr );
   } // end FILE i/o block
 
-  // Bruteforce
-  // Indices and UVs if we miss indices and UVs from a keyframe that was skipped. Current_frame should be frame_idx-1 otherwise our indices might be wrong.
+  // Brute force
+  // if we miss indices and UVs from a keyframe that was skipped. Current_frame should be frame_idx-1 otherwise our indices might be wrong.
   if(info_ptr->frame_headers_ptr[frame_idx].keyframe == 0 && info_ptr->last_keyframe != info_ptr->frame_headers_ptr[frame_idx].keyframe_number) {
     uint32_t keyframe_number = info_ptr->frame_headers_ptr[frame_idx].keyframe_number;
+    
+    // Web player should never get here, it has its own solution for this.
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_INFO, "INFO loading keyframe %i for frame %i.\n", keyframe_number, frame_idx );
 
     if ( !vol_geom_read_frame( seq_filename,  info_ptr, keyframe_number, frame_data_ptr ) ) {
       // we have a problem
