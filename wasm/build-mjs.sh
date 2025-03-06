@@ -25,10 +25,13 @@ CPP="g++ -std=c++11"
 emcc -O3 -fno-strict-aliasing -DBASISD_SUPPORT_KTX2=0 \
 -s "EXPORTED_RUNTIME_METHODS=['ccall','cwrap','FS']" \
 -s SINGLE_FILE \
--s ALLOW_MEMORY_GROWTH \
+-s INITIAL_MEMORY=33554432  \
+-s MAXIMUM_MEMORY=1073741824 \
+-s ALLOW_MEMORY_GROWTH=1 \
 -s EXPORT_ES6=1 \
 -s MODULARIZE=1 \
 -s EXPORT_NAME="VolWeb" \
+-s WASMFS \
 -o vol_web.mjs \
 --pre-js "pre.js" \
 -g \

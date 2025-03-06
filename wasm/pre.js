@@ -1,162 +1,273 @@
-// Module.fetch_file = (dest, fileUrl, onProgress) => {
-// 	return new Promise((resolve, reject) => {
-// 		const xhr = new XMLHttpRequest();
-// 		xhr.open("GET", fileUrl, true);
-// 		xhr.responseType = "arraybuffer";
-// 		xhr.onprogress = (e) => {
-// 			if (onProgress) {
-// 				onProgress(e.loaded / e.total);
-// 			}
-// 		};
-// 		xhr.onload = () => {
-// 			if (!xhr.response) {
-// 				reject(new Error("No response received"));
-// 				return;
-// 			}
-// 			const byteArray = new Uint8Array(xhr.response);
-// 			var stream = Module.FS.open(dest, "w");
-// 			Module.FS.write(stream, byteArray, 0, byteArray.length, 0);
-// 			Module.FS.close(stream);
-// 			resolve({ status: xhr.status, responseUrl: xhr.responseURL });
-// 		};
-// 		xhr.onerror = () => reject(new Error("Download failed"));
-// 		xhr.onabort = () => reject(new Error("Download aborted"));
-// 		xhr.send(null);
-// 	});
-// };
+// Initialize and mount OPFS
+Module.initOPFS = async () => {
+	try {
+		// Check if OPFS is supported
+		if (!navigator.storage || !navigator.storage.getDirectory) {
+			console.warn('OPFS is not supported in this browser.');
+			return false;
+		}
 
-Module.fileFetched = false;
-Module.headerFetched = false;
+		// Use backend API to create a mount to OPFS
+		console.log('Initializing OPFS...');
+		
+		// Create directory for OPFS mounting
+		try {
+			Module.FS.mkdir('/opfs');
+		} catch (error) {
+			// Directory might already exist
+			console.log('OPFS directory already exists or could not be created:', error);
+		}
 
-Module.isHeaderLoaded = () => {
-
-	console.log(Module.fileFetched);
-
-	const poll = resolve => {
-		if(Module.headerFetched == true) resolve();
-		else setTimeout(_ => poll(resolve), 400);
-	  }
-
-	  return new Promise(poll);
-}
-
-Module.fetch_stream_file = async (dest, fileUrl, onProgress) => {
-
-	return await fetch(fileUrl)
-		// Retrieve its body as ReadableStream
-		.then(async (response) => {
-			if (!response.ok) {
-				throw new Error(`HTTP error! Status: ${response.status}`);
-			}
-			const reader = response.body.getReader();
-			var fileStream = Module.FS.open(dest, "w");
-			var seekLocation = 0;
-			var fileSize = response.headers.get("content-length");
-
-			reader.read().then(function pump({ done, value }) {
-				if (onProgress) {
-					onProgress(seekLocation/fileSize);
-				}
-
-				if (done) {
-					// Do something with last chunk of data then exit reader
-					Module.FS.close(fileStream);
-					Module.fileFetched = true;
-					console.log(('Fetching stream finished.'));
-					return;
-				}
-				// Otherwise do something here to process current chunk
-				Module.FS.write(fileStream, value, 0, value.length, seekLocation);
-
-				seekLocation += value.length
-				// Read some more, and call this function again (1048576 ~ 1MB)
-				if (seekLocation > 1048576) {
-					Module.headerFetched = true;
-					// return  reader.read().then(pump);
-				}
-				return reader.read().then(pump);
-			})
-
-			// return new ReadableStream({
-			// 	start(controller) {
-			// 		return pump(0);
-			// 		function pump(start) {
-			// 			return reader.read().then(({ done, value }) => {
-			// 				// When no more data needs to be consumed, close the stream
-			// 				if (done) {
-			// 					Module.FS.close(fileStream);
-			// 					controller.close();
-			// 					console.log(('Fetching stream finished.'));
-			// 					return;
-			// 				}
-			// 				// Enqueue the next data chunk into our target stream
-			// 				Module.FS.write(fileStream, value, start, value.length, 0);
-			// 				controller.enqueue(value);
-			// 				return pump(start + value.length);
-			// 			});
-			// 		}
-			// 	},
-			// });
-		})
-		// .then((stream) => new Response(stream))
-		.then((url) => console.log(('Stream ready.')))
-		.catch((err) => console.error(err));
-
-	// await fetch(fileUrl)
-	// 	// Retrieve its body as ReadableStream
-	// 	.then((response) => {
-	// 		if (!response.ok) {
-	// 			throw new Error(`HTTP error! Status: ${response.status}`);
-	// 		}
-	// 		return response.arrayBuffer();
-	// 	})
-	// 	.then((arrayBuffer) => {
-	// 		const byteArray = new Uint8Array(arrayBuffer);
-	// 		var stream = Module.FS.open(dest, "w");
-	// 		Module.FS.write(stream, byteArray, 0, byteArray.length, 0);
-	// 		Module.FS.close(stream);
-
-	// 	})
-	// 	.then((url) => console.log(('Stream ready.')))
-	// 	.catch((err) => console.error(err));
+		// Wait for OPFS mounting to complete
+		// This is a simpler approach that relies on the built-in WasmFS OPFS support
+		const opfsRoot = await navigator.storage.getDirectory();
+		
+		// Mark OPFS as initialized
+		Module._opfsInitialized = true;
+		console.log('OPFS initialized successfully');
+		return true;
+	} catch (error) {
+		console.error('Failed to initialize OPFS:', error);
+		Module._opfsInitialized = false;
+		return false;
+	}
 };
 
-Module.fetch_file = async (dest, fileUrl, onProgress) => {
+// Create or open a file in OPFS
+Module.getOPFSFile = async (filename, create = true) => {
+	if (!Module._opfsInitialized) {
+		await Module.initOPFS();
+	}
+	
+	try {
+		const root = await navigator.storage.getDirectory();
+		const fileHandle = await root.getFileHandle(filename, { create });
+		return fileHandle;
+	} catch (error) {
+		console.error(`Error accessing OPFS file '${filename}':`, error);
+		return null;
+	}
+};
 
-	return await fetch(fileUrl)
-		// Retrieve its body as ReadableStream
-		.then(async (response) => {
-			if (!response.ok) {
-				throw new Error(`HTTP error! Status: ${response.status}`);
+// Check if a file exists in OPFS
+Module.fileExistsInOPFS = async (filePath) => {
+	try {
+		// Try to get the file without creating it
+		const fileHandle = await Module.getOPFSFile(filePath, false);
+		return fileHandle !== null;
+	} catch (error) {
+		// File does not exist or could not be accessed
+		return false;
+	}
+};
+
+// Write a file to OPFS directly
+Module.writeToOPFS = async (filename, data) => {
+	try {
+		const fileHandle = await Module.getOPFSFile(filename, true);
+		const writable = await fileHandle.createWritable();
+		await writable.write(data);
+		await writable.close();
+		return true;
+	} catch (error) {
+		console.error(`Error writing to OPFS file '${filename}':`, error);
+		return false;
+	}
+};
+
+// Update fetch_file to use OPFS directly when possible
+Module.fetch_file = (dest, fileUrl, onProgress) => {
+	return new Promise((resolve, reject) => {
+		const xhr = new XMLHttpRequest();
+		xhr.open("GET", fileUrl, true);
+		xhr.responseType = "arraybuffer";
+		xhr.onprogress = (e) => {
+			if (onProgress) {
+				onProgress(e.loaded / e.total);
 			}
-			const reader = response.body.getReader();
-			var fileStream = Module.FS.open(dest, "w");
-			var seekLocation = 0;
-			var fileSize = response.headers.get("content-length");
+		};
+		xhr.onload = async () => {
+			if (!xhr.response) {
+				reject(new Error("No response received"));
+				return;
+			}
+			const byteArray = new Uint8Array(xhr.response);
 
-			await reader.read().then(async function pump({ done, value }) {
-				if (onProgress) {
-					onProgress(seekLocation/fileSize);
+			// First, try to write the file to OPFS directly
+			if (Module._opfsInitialized) {
+				try {
+					const success = await Module.writeToOPFS(dest, byteArray);
+					if (success) {
+						// Set headerFetched to true regardless of storage location
+						Module.headerFetched = true;
+						resolve({ status: xhr.status, responseUrl: xhr.responseURL });
+						return;
+					}
+				} catch (error) {
+					console.error(`Error writing to OPFS, falling back to MEMFS:`, error);
 				}
+			}
+			
+			// Fallback to MEMFS if OPFS writing failed
+			try {
+				var stream = Module.FS.open(dest, "w");
+				console.log(`Writing to MEMFS: ${dest}`);
+				Module.FS.write(stream, byteArray, 0, byteArray.length, 0);
+				Module.FS.close(stream);
+				// Set headerFetched to true regardless of storage location
+				Module.headerFetched = true;
+				resolve({ status: xhr.status, responseUrl: xhr.responseURL });
+			} catch (fallbackError) {
+				reject(new Error(`Failed to write file: ${fallbackError}`));
+			}
+		};
+		xhr.onerror = () => reject(new Error("Download failed"));
+		xhr.onabort = () => reject(new Error("Download aborted"));
+		xhr.send(null);
+	});
+};
 
-				if (done) {
-					// Do something with last chunk of data then exit reader
-					Module.FS.close(fileStream);
-					Module.fileFetched = true;
-					console.log(('Fetching stream finished.'));
-					return;
+// Update fetch_stream_file to use OPFS
+Module.fetch_stream_file = async (dest, fileUrl, onProgress) => {
+	// Check if OPFS is initialized
+	if (!Module._opfsInitialized) {
+		try {
+			Module._opfsInitialized = await Module.initOPFS();
+		} catch (error) {
+			console.warn('OPFS initialization failed, using MEMFS instead:', error);
+		}
+	}
+
+	try {
+		const response = await fetch(fileUrl);
+		if (!response.ok) {
+			throw new Error(`HTTP error! Status: ${response.status}`);
+		}
+		
+		const fileSize = response.headers.get("content-length");
+		const reader = response.body.getReader();
+
+		// Create a file in OPFS if possible
+		let opfsWritable = null;
+		let usingOPFS = false;
+		if (Module._opfsInitialized) {
+			try {
+				const fileHandle = await Module.getOPFSFile(dest, true);
+				opfsWritable = await fileHandle.createWritable();
+				usingOPFS = true;
+				console.log(`Streaming to OPFS: ${dest}`);
+			} catch (error) {
+				console.error('Failed to create OPFS writable stream, falling back to MEMFS:', error);
+			}
+		}
+
+		// If OPFS failed, use MEMFS
+		let memfsStream = null;
+		if (!usingOPFS) {
+			try {
+				memfsStream = Module.FS.open(dest, "w");
+				console.log(`Streaming to MEMFS: ${dest}`);
+			} catch (error) {
+				throw new Error(`Failed to open MEMFS file: ${error}`);
+			}
+		}
+
+		let seekLocation = 0;
+		
+		// Process the stream
+		while (true) {
+			const { done, value } = await reader.read();
+			
+			if (onProgress) {
+				onProgress(seekLocation/fileSize);
+			}
+			
+			if (done) {
+				if (usingOPFS && opfsWritable) {
+					await opfsWritable.close();
+				} else if (memfsStream) {
+					Module.FS.close(memfsStream);
 				}
-				// Otherwise do something here to process current chunk
-				Module.FS.write(fileStream, value, 0, value.length, seekLocation);
+				Module.fileFetched = true;
+				console.info(`Fetching stream finished. File stored in ${usingOPFS ? 'OPFS' : 'MEMFS'}`);
+				break;
+			}
+			
+			try {
+				if (usingOPFS && opfsWritable) {
+					// For OPFS we specify the position in the write options
+					await opfsWritable.write({
+						type: 'write',
+						position: seekLocation,
+						data: value
+					});
+				} else if (memfsStream) {
+					// For MEMFS we specify the position as a parameter
+					Module.FS.write(memfsStream, value, 0, value.length, seekLocation);
+				}
+				
+				seekLocation += value.length;
+				
+				// Set headerFetched flag once we've read enough data (1MB)
+				if (seekLocation > 1048576 && !Module.headerFetched) {
+					console.log("Setting headerFetched = true after reading 1MB of data");
+					Module.headerFetched = true;
+				}
+			} catch (error) {
+				console.error(`Writing stream failed at ${seekLocation/1048576} MB:`, error);
+				
+				// Clean up resources
+				if (usingOPFS && opfsWritable) {
+					try {
+						await opfsWritable.close();
+					} catch (closeError) {
+						console.error('Error closing OPFS writable:', closeError);
+					}
+				} else if (memfsStream) {
+					try {
+						Module.FS.close(memfsStream);
+					} catch (closeError) {
+						console.error('Error closing MEMFS stream:', closeError);
+					}
+				}
+				
+				throw error;
+			}
+		}
+		
+		return { success: true, path: dest, storage: usingOPFS ? 'opfs' : 'memfs' };
+	} catch (error) {
+		console.error(`Stream download failed:`, error);
+		throw error;
+	}
+};
 
-				seekLocation += value.length
-				// Read some more, and call this function again
-				return await reader.read().then(pump);
-			})
-		})
-		// .then((stream) => new Response(stream))
-		.then((url) => console.log(('Stream ready.')))
-		.catch((err) => console.error(err));
+// Helper to check if a file exists and get its path in various storage locations
+Module.resolvePath = async (filePath) => {
+	// Check OPFS first
+	if (Module._opfsInitialized) {
+		try {
+			const exists = await Module.fileExistsInOPFS(filePath);
+			if (exists) {
+				console.log(`File found in OPFS: ${filePath}`);
+				return `/opfs/${filePath}`;
+			}
+		} catch (error) {
+			console.warn(`Error checking OPFS for ${filePath}:`, error);
+		}
+	}
+	
+	// Then check MEMFS
+	try {
+		Module.FS.stat(filePath);
+		console.log(`File found in MEMFS: ${filePath}`);
+		return filePath;
+	} catch (error) {
+		// File not found in MEMFS
+	}
+	
+	console.warn(`File not found in any storage: ${filePath}`);
+	return filePath; // Return original path as fallback
 };
 
 Module.initVologramFunctions = (containerObject) => {
@@ -333,3 +444,66 @@ Module.initVologramFunctions = (containerObject) => {
 		insertObject.HEAP8 = Module.HEAP8;
 	}
 };
+
+// Pre-run initialization
+Module.preRun = Module.preRun || [];
+Module.preRun.push(function() {
+	// We'll initialize OPFS when the module starts
+	console.log("Module preRun - will initialize OPFS when ready");
+});
+
+// Helper to check if a header is loaded
+Module.isHeaderLoaded = () => {
+	console.log(`Header loaded status: ${Module.headerFetched}`);
+
+	const poll = resolve => {
+		if (Module.headerFetched === true) {
+			resolve();
+		} else {
+			setTimeout(_ => poll(resolve), 400);
+		}
+	};
+
+	return new Promise(poll);
+};
+
+// Helper function to create a file in OPFS from an existing file in MEMFS
+Module.copyToOPFS = async (memfsPath, opfsPath) => {
+	if (!Module._opfsInitialized) {
+		try {
+			Module._opfsInitialized = await Module.initOPFS();
+		} catch (error) {
+			console.error("Failed to initialize OPFS:", error);
+			return false;
+		}
+	}
+	
+	try {
+		// Read the file from MEMFS
+		const data = Module.FS.readFile(memfsPath);
+		
+		// Create directories if needed
+		const dirs = opfsPath.split('/').slice(0, -1);
+		let currentPath = '/opfs';
+		
+		for (const dir of dirs) {
+			if (!dir) continue;
+			currentPath += `/${dir}`;
+			try {
+				Module.FS.mkdir(currentPath);
+			} catch (error) {
+				// Directory might already exist
+			}
+		}
+		
+		// Write the file to OPFS
+		const fullOpfsPath = `/opfs/${opfsPath}`;
+		Module.FS.writeFile(fullOpfsPath, data);
+		console.log(`Copied ${memfsPath} to ${fullOpfsPath}`);
+		return true;
+	} catch (error) {
+		console.error(`Failed to copy file to OPFS: ${error}`);
+		return false;
+	}
+};
+

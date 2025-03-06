@@ -242,11 +242,74 @@ Here we create the vologram related functions using `Module.initVologramFunction
 
 ```js
 const Module = {};
-Module["onRuntimeInitialized"] = function () {
+Module["onRuntimeInitialized"] = async function () {
 	Module.initVologramFunctions();
 };
 VolWeb(Module);
 ```
+
+### Using WasmFS with OPFS for Large Files
+
+When dealing with large volumetric videos (>1GB), especially on mobile devices like iOS, using the Origin Private File System (OPFS) provides much better memory handling and performance. This approach stores files on disk rather than in memory, allowing you to work with much larger files.
+
+```js
+// Initialize the module with OPFS support
+const Module = {};
+Module["onRuntimeInitialized"] = async function () {
+	// Initialize vologram functions
+	Module.initVologramFunctions();
+	
+	// Initialize OPFS 
+	const opfsReady = await Module.initOPFS();
+	if (!opfsReady) {
+		console.warn("OPFS initialization failed. Large files may cause memory issues.");
+	}
+	
+	// Download and store files in OPFS
+	const headerFile = "header.vols";
+	const sequenceFile = "sequence.vols";
+	
+	// Download files to OPFS
+	await Module.fetch_file(headerFile, 'https://example.com/header.vols', progress => {
+		console.log(`Header download progress: ${progress * 100}%`);
+	});
+	
+	await Module.fetch_stream_file(sequenceFile, 'https://example.com/sequence.vols', progress => {
+		console.log(`Sequence download progress: ${progress * 100}%`);
+	});
+	
+	// Check if files exist in OPFS
+	const headerExists = await Module.fileExistsInOPFS(headerFile);
+	const sequenceExists = await Module.fileExistsInOPFS(sequenceFile);
+	
+	// Create file info using the appropriate file system paths
+	// If files are in OPFS, they'll be accessed directly from disk instead of memory
+	await Module.create_file_info(
+		headerExists ? `/opfs/${headerFile}` : headerFile,
+		sequenceExists ? `/opfs/${sequenceFile}` : sequenceFile
+	);
+	
+	// Now you can use the vologram as usual, but with much better memory efficiency
+	// as the files are stored on disk rather than in memory
+};
+VolWeb(Module);
+```
+
+#### Benefits of Using WasmFS with OPFS
+
+- **Handles very large files**: Files stay on disk rather than in memory, allowing files >1GB
+- **Efficient for looping playback**: Since volumetric videos have keyframes followed by dependent frames, OPFS provides efficient random access for looping
+- **Persistent between sessions**: Files are cached on disk and available for future sessions
+- **Compatible with standard file operations**: Works with the same C file operations (fopen, fread, etc.)
+- **Better mobile support**: Especially useful for iOS devices with memory limitations
+
+#### Browser Compatibility
+
+- **Chrome/Edge/Opera**: Full support for OPFS
+- **Safari**: Support from version 15.2+
+- **Firefox**: Currently implementing support (falls back to MEMFS automatically)
+
+The implementation will automatically fall back to MEMFS if OPFS is not supported or fails, ensuring compatibility across browsers.
 
 `Module.initVologramFunctions()` can only be called once the Module object has been initialized. It calls [emscripten's `cwrap` method](https://emscripten.org/docs/porting/connecting_cpp_and_javascript/Interacting-with-code.html#interacting-with-code-ccall-cwrap) on all the vologram wasm functions.
 
