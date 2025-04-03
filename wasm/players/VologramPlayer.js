@@ -60,20 +60,26 @@ const VologramPlayer = (extensions) => {
 			return false;
 		}
 
-		const keyframeRequired = vologram.find_previous_keyframe(desiredFrameIndex);
+		let keyframeRequired = vologram.find_previous_keyframe(desiredFrameIndex);
 		if(keyframeRequired === -1) { 
 			// We need to update frame directory 
 			if(vologram.update_frames_directory(desiredFrameIndex) === false) {
 				return false;
 			}
 			keyframeRequired = vologram.find_previous_keyframe(desiredFrameIndex);
+			if(keyframeRequired === -1) {
+				_pause();
+				return false;
+			}
 		}
 		// If running slowly we may skip over a keyframe. Grab that now to avoid stale keyframe desync.
 		if (vologram.lastKeyframeLoaded !== keyframeRequired  && keyframeRequired !== desiredFrameIndex) {
-			const loadedKey = _loadMesh(keyframeRequired);
+			if (!_loadMesh(keyframeRequired)) {
+				return false;
+			}
 		}
 		// Load actual current frame.
-		const loadedMesh = _loadMesh(desiredFrameIndex);
+		const ret = _loadMesh(desiredFrameIndex);
 		return true;
 	};
 
@@ -175,9 +181,7 @@ const VologramPlayer = (extensions) => {
 			})
 			.then((response) => {
 				return new Promise(async (resolve, reject) => {
-					// Wait until we have a header and audio downloaded
-					await _wasm.isHeaderLoaded();
-					
+							
 					// Check for OPFS file
 					let fileInOPFS = false;
 					if (_wasm.fileExistsInOPFS) {
@@ -190,6 +194,8 @@ const VologramPlayer = (extensions) => {
 					} else {
 						vologram.singleFilePath = "vologram.vols";
 					}
+					// Wait until we have a header and audio downloaded
+					await _wasm.isHeaderLoaded();
 					
 					const initSuccess = _initVologram();
 					if (initSuccess) resolve(initSuccess);
