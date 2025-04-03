@@ -1,8 +1,11 @@
+import VolWeb from "../vol_web.mjs"; // Assuming MJS version is desired for loader too
+
 const VologramLoader = (glContext) => {
 	let _wasm = {};
 	let vologram = {};
 	const header = {};
 	const frame = {};
+	vologram.useOPFS = false; // Add useOPFS flag
 
 	const _loadMesh = (frameIdx) => {
 		// Ask the vol_geom WASM to read the frame data from the vologram file into `_frame_data`.
@@ -61,10 +64,12 @@ const VologramLoader = (glContext) => {
 
 	const _initVologram = () => {
 		let ret = false;
+		const basePath = vologram.useOPFS ? "/opfs/" : ""; // Determine base path
+
 		if (header.singleFile) {
-			ret = vologram.create_single_file_info("vologram.vols");
+			ret = vologram.create_single_file_info(basePath + "vologram.vols");
 		} else {
-			ret = vologram.create_file_info("header.vols", "sequence.vols");
+			ret = vologram.create_file_info(basePath + "header.vols", basePath + "sequence.vols");
 		}
 
 		if (!ret) {
@@ -123,7 +128,14 @@ const VologramLoader = (glContext) => {
 				_wasm = wasmInstance;
 				_wasm.ccall("basis_init", "boolean");
 				_wasm.initVologramFunctions(vologram);
-				return _wasm.fetch_file("vologram.vols", vologram.sequenceUrl, onProgress);
+				// Conditional fetch based on useOPFS
+				if (vologram.useOPFS) {
+					console.log("Loader: Using OPFS for single file download...");
+					// Loader typically needs the whole file before proceeding, so use fetch_file_opfs
+					return _wasm.fetch_file_opfs("vologram.vols", vologram.sequenceUrl, onProgress);
+				} else {
+					return _wasm.fetch_file("vologram.vols", vologram.sequenceUrl, onProgress);
+				}
 			})
 			.then((response) => {
 				return new Promise((resolve, reject) => {
@@ -133,7 +145,7 @@ const VologramLoader = (glContext) => {
 				});
 			})
 			.catch((err) => {
-				console.error(err);
+				console.error("Loader: Error during WASM single file initialization:", err);
 				return false;
 			});
 
@@ -143,9 +155,23 @@ const VologramLoader = (glContext) => {
 				_wasm = wasmInstance;
 				_wasm.ccall("basis_init", "boolean");
 				_wasm.initVologramFunctions(vologram);
-				return _wasm.fetch_file("header.vols", vologram.headerUrl, onProgress);
+				// Conditional fetch for header
+				if (vologram.useOPFS) {
+					console.log("Loader: Using OPFS for header download...");
+					return _wasm.fetch_file_opfs("header.vols", vologram.headerUrl, onProgress);
+				} else {
+					return _wasm.fetch_file("header.vols", vologram.headerUrl, onProgress);
+				}
 			})
-			.then((response) => _wasm.fetch_file("sequence.vols", vologram.sequenceUrl, onProgress))
+			.then((response) => {
+				// Conditional fetch for sequence
+				if (vologram.useOPFS) {
+					console.log("Loader: Using OPFS for sequence download...");
+					return _wasm.fetch_file_opfs("sequence.vols", vologram.sequenceUrl, onProgress);
+				} else {
+					return _wasm.fetch_file("sequence.vols", vologram.sequenceUrl, onProgress);
+				}
+			})
 			.then((response) => {
 				return new Promise((resolve, reject) => {
 					const initSuccess = _initVologram();
@@ -154,7 +180,7 @@ const VologramLoader = (glContext) => {
 				});
 			})
 			.catch((err) => {
-				console.error(err);
+				console.error("Loader: Error during WASM multi-file initialization:", err);
 				return false;
 			});
 
@@ -168,8 +194,9 @@ const VologramLoader = (glContext) => {
 		return blobUrl;
 	};
 
-	const _open = async ({ headerUrl, sequenceUrl }, onProgress) => {
+	const _open = async ({ headerUrl, sequenceUrl, useOPFS = false }, onProgress) => {
 		vologram = {};
+		vologram.useOPFS = useOPFS; // Store the OPFS flag
 		header.singleFile = !headerUrl;
 		vologram.headerUrl = headerUrl;
 		vologram.sequenceUrl = sequenceUrl;
@@ -181,14 +208,23 @@ const VologramLoader = (glContext) => {
 	const _cleanVologramModule = () => {
 		_wasm.ccall("basis_free", "boolean");
 		vologram.free_file_info();
-		if (_wasm.FS.analyzePath("vologram.vols").exists) {
-			_wasm.FS.unlink("vologram.vols");
-		}
-		if (_wasm.FS.analyzePath("header.vols").exists) {
-			_wasm.FS.unlink("header.vols");
-		}
-		if (_wasm.FS.analyzePath("sequence_0.vols").exists) {
-			_wasm.FS.unlink("sequence_0.vols");
+		const basePath = vologram.useOPFS ? "/opfs/" : "";
+		try {
+			if (_wasm.FS.analyzePath(basePath + "vologram.vols").exists) {
+				_wasm.FS.unlink(basePath + "vologram.vols");
+			}
+			if (_wasm.FS.analyzePath(basePath + "header.vols").exists) {
+				_wasm.FS.unlink(basePath + "header.vols");
+			}
+			if (_wasm.FS.analyzePath(basePath + "sequence.vols").exists) { // Check sequence.vols too
+				_wasm.FS.unlink(basePath + "sequence.vols");
+			}
+			// Note: sequence_0.vols seems specific to older logic, might not be needed for OPFS/current MEMFS
+			if (_wasm.FS.analyzePath("sequence_0.vols").exists) {
+				_wasm.FS.unlink("sequence_0.vols");
+			}
+		} catch (e) {
+			console.warn("Loader: Error during FS cleanup (file might not exist):", e);
 		}
 		_wasm = null;
 	};
@@ -231,3 +267,14 @@ const VologramLoader = (glContext) => {
 		},
 	};
 };
+
+// Make available globally or export depending on usage context
+// If used via <script>, it might attach to window
+// If used as a module, export it
+if (typeof exports === 'object' && typeof module === 'object') {
+    module.exports = VologramLoader;
+} else if (typeof define === 'function' && define.amd) {
+    define([], () => VologramLoader);
+} else if (typeof window !== 'undefined') {
+    window.VologramLoader = VologramLoader;
+}

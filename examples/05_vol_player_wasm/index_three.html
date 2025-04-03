@@ -73,8 +73,8 @@ To Run:
 		const header_url = "../example_vologram/vologram_video/header.vols";
 		const sequence_url = "../example_vologram/vologram_video/sequence_0.vols";
 		const video_url = "../example_vologram/vologram_video/texture_1024_h264.mp4";
-		// const single_file_url = "../example_vologram/vologram_basis/vologram_ld_1024_ETC1S_BASIS_mp3.vols";
-		const single_file_url = "https://public-vms-volograms-storage.s3.eu-west-1.amazonaws.com/testing/Patrick_Horse_ld_1024_ETC1S_BASIS_mp3.vols"
+		const single_file_url = "../example_vologram/vologram_basis/vologram_ld_1024_ETC1S_BASIS_mp3.vols";
+		// const single_file_url = "https://public-vms-volograms-storage.s3.eu-west-1.amazonaws.com/testing/Patrick_Horse_ld_1024_ETC1S_BASIS_mp3.vols"
 
 		// Create video element that will serve has the texture for the vologram
 		const video_element = document.getElementById("texture_video_el");
@@ -148,6 +148,7 @@ To Run:
 						{
 							sequenceUrl: single_file_url,
 							audioElement: audio_element,
+							useOPFS: true,
 						},
 						console.log
 					)
