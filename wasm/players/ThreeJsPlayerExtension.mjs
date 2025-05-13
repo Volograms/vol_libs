@@ -36,28 +36,8 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 	let _callbackId;
 	let vologram;
 
-	// Add OPFS check
-	const _checkOpfsAvailable = async () => {
-		if (!vologram.Module.opfsInitialized) {
-			console.warn("OPFS not initialized yet");
-			return false;
-		}
-		const opfsIsReady = await vologram.Module.opfsInitialized;
-		return opfsIsReady;
-	};
-
-	const _init = async (inVologram) => {
+	const _init = (inVologram) => {
 		vologram = inVologram;
-
-		// Wait for OPFS if file is stored there
-		if (vologram.useOpfs) {
-			const opfsReady = await _checkOpfsAvailable();
-			if (!opfsReady) {
-				console.error("OPFS not available but required for this vologram");
-				return;
-			}
-		}
-
 		const fmts = vologram.find_basis_fmt(glCtx);
 		_glFmt = fmts[0];
 		_basisFmt = fmts[1];

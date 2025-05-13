@@ -9,8 +9,6 @@ const ThreeJsLoader = (options) => {
 
 	const _createNewVologramTexture = (loader, video) => {
 		const { header } = loader;
-		
-		// Handle video textures normally since they don't use OPFS
 		if (!header.hasBasisTexture && video) {
 			return new three.VideoTexture(video);
 		}
@@ -32,8 +30,6 @@ const ThreeJsLoader = (options) => {
 	const _updateVologramTexture = (frame, texture) => {
 		const { textureData } = frame;
 		if (!textureData || !texture.isCompressedTexture) return false;
-
-		// Handle texture data update, whether from memory or OPFS
 		texture.mipmaps[0].data.set(textureData);
 		texture.minFilter = three.LinearFilter;
 		texture.needsUpdate = true;
