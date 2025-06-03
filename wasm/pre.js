@@ -272,6 +272,10 @@ Module.fetch_file = async (dest, fileUrl, onProgress) => {
 };
 
 Module.initVologramFunctions = (containerObject) => {
+	// Remove the problematic assignment that creates stale references
+	// With WASMFS, HEAP8 gets updated automatically but Module.HEAP8 doesn't
+	// So we'll access HEAP8 directly instead of via Module.HEAP8
+
 	var usingExternalObject = false;
 	let insertObject = Module;
 	if (containerObject) {
@@ -324,33 +328,33 @@ Module.initVologramFunctions = (containerObject) => {
 	insertObject["frame_get_verts"] = () => {
 		const vp_copied = Module.ccall("frame_vp_copied", "array");
 		const vp_sz = Module.ccall("frame_vertices_sz", "number");
-		return new Float32Array(Module.HEAP8.buffer, vp_copied, vp_sz / 4);
+		return new Float32Array(HEAP8.buffer, vp_copied, vp_sz / 4);
 	};
 
 	insertObject["frame_get_norms"] = () => {
 		const normals_copied = Module.ccall("frame_normals_copied", "array");
 		const normals_sz = Module.ccall("frame_normals_sz", "number");
-		return new Float32Array(Module.HEAP8.buffer, normals_copied, normals_sz / 4);
+		return new Float32Array(HEAP8.buffer, normals_copied, normals_sz / 4);
 	};
 
 	insertObject["frame_get_uvs"] = () => {
 		const uvs_copied = Module.ccall("frame_uvs_copied", "array");
 		const uvs_sz = Module.ccall("frame_uvs_sz", "number");
-		return new Float32Array(Module.HEAP8.buffer, uvs_copied, uvs_sz / 4);
+		return new Float32Array(HEAP8.buffer, uvs_copied, uvs_sz / 4);
 	};
 
 	insertObject["frame_get_ind"] = () => {
 		const indices_copied = Module.ccall("frame_indices_copied", "array");
 		const indices_sz = Module.ccall("frame_i_sz", "number");
 		const n_indices = indices_sz / 2; // ushort
-		return new Uint16Array(Module.HEAP8.buffer, indices_copied, n_indices);
+		return new Uint16Array(HEAP8.buffer, indices_copied, n_indices);
 	};
 
 	insertObject["basis_get_data"] = () => {
 		const ptr = Module.ccall("basis_get_transcoded_ptr", "number");
 		const w = Module.ccall("texture_width", "number");
 		const h = Module.ccall("texture_height", "number");
-		return new Uint8Array(Module.HEAP8.buffer, ptr, w * h);
+		return new Uint8Array(HEAP8.buffer, ptr, w * h);
 	};
 
 	insertObject["find_basis_fmt"] = (gl, hasAlpha = true) => {
@@ -438,10 +442,11 @@ Module.initVologramFunctions = (containerObject) => {
 	insertObject["get_audio_data"] = () => {
 		let ptr = Module.ccall("audio_data_ptr", "array");
 		let sz = Module.ccall("audio_data_sz", "number");
-		return new Uint8Array(Module.HEAP8.buffer, ptr, sz);
+		return new Uint8Array(HEAP8.buffer, ptr, sz);
 	};
 
 	if (usingExternalObject) {
-		insertObject.HEAP8 = Module.HEAP8;
+		insertObject.HEAP8 = HEAP8;
 	}
 };
+
