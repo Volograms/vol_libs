@@ -10,6 +10,7 @@ Write-Host ""
 Write-Host "Test URLs:" -ForegroundColor Cyan
 Write-Host "  OPFS Test: $url/test-opfs.html" -ForegroundColor White
 Write-Host "  Example:   $url/examples/opfs_streaming_example.html" -ForegroundColor White
+Write-Host "  Example:   $url/examples/05_vol_player_wasm/index_three.html" -ForegroundColor White
 Write-Host ""
 
 # Create HTTP listener

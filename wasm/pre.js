@@ -83,6 +83,12 @@ Module.setupOPFS = async () => {
 			return false;
 		}
 
+		// Check if OPFS functions are available (only in WASMFS builds)
+		if (typeof Module.ccall('setup_opfs_wasmfs', null, [], []) === 'undefined') {
+			console.warn('OPFS functions not available in this build. Use pthread build for OPFS support.');
+			return false;
+		}
+
 		// Call the C++ function to setup OPFS backend via WasmFS
 		console.log('Setting up WasmFS OPFS backend...');
 		Module.ccall('setup_opfs_wasmfs', null, [], []);
@@ -328,33 +334,57 @@ Module.initVologramFunctions = (containerObject) => {
 	insertObject["frame_get_verts"] = () => {
 		const vp_copied = Module.ccall("frame_vp_copied", "array");
 		const vp_sz = Module.ccall("frame_vertices_sz", "number");
-		return new Float32Array(HEAP8.buffer, vp_copied, vp_sz / 4);
+		// Copy data to independent buffer to avoid WASMFS detachment issues
+		const float32Count = vp_sz / 4;
+		const result = new Float32Array(float32Count);
+		const sourceView = new Float32Array(HEAP8.buffer, vp_copied, float32Count);
+		result.set(sourceView);  // Copy data immediately
+		return result;
 	};
 
 	insertObject["frame_get_norms"] = () => {
 		const normals_copied = Module.ccall("frame_normals_copied", "array");
 		const normals_sz = Module.ccall("frame_normals_sz", "number");
-		return new Float32Array(HEAP8.buffer, normals_copied, normals_sz / 4);
+		// Copy data to independent buffer to avoid WASMFS detachment issues
+		const float32Count = normals_sz / 4;
+		const result = new Float32Array(float32Count);
+		const sourceView = new Float32Array(HEAP8.buffer, normals_copied, float32Count);
+		result.set(sourceView);  // Copy data immediately
+		return result;
 	};
 
 	insertObject["frame_get_uvs"] = () => {
 		const uvs_copied = Module.ccall("frame_uvs_copied", "array");
 		const uvs_sz = Module.ccall("frame_uvs_sz", "number");
-		return new Float32Array(HEAP8.buffer, uvs_copied, uvs_sz / 4);
+		// Copy data to independent buffer to avoid WASMFS detachment issues
+		const float32Count = uvs_sz / 4;
+		const result = new Float32Array(float32Count);
+		const sourceView = new Float32Array(HEAP8.buffer, uvs_copied, float32Count);
+		result.set(sourceView);  // Copy data immediately
+		return result;
 	};
 
 	insertObject["frame_get_ind"] = () => {
 		const indices_copied = Module.ccall("frame_indices_copied", "array");
 		const indices_sz = Module.ccall("frame_i_sz", "number");
 		const n_indices = indices_sz / 2; // ushort
-		return new Uint16Array(HEAP8.buffer, indices_copied, n_indices);
+		// Copy data to independent buffer to avoid WASMFS detachment issues
+		const result = new Uint16Array(n_indices);
+		const sourceView = new Uint16Array(HEAP8.buffer, indices_copied, n_indices);
+		result.set(sourceView);  // Copy data immediately
+		return result;
 	};
 
 	insertObject["basis_get_data"] = () => {
 		const ptr = Module.ccall("basis_get_transcoded_ptr", "number");
 		const w = Module.ccall("texture_width", "number");
 		const h = Module.ccall("texture_height", "number");
-		return new Uint8Array(HEAP8.buffer, ptr, w * h);
+		const totalBytes = w * h;
+		// Copy data to independent buffer to avoid WASMFS detachment issues
+		const result = new Uint8Array(totalBytes);
+		const sourceView = new Uint8Array(HEAP8.buffer, ptr, totalBytes);
+		result.set(sourceView);  // Copy data immediately
+		return result;
 	};
 
 	insertObject["find_basis_fmt"] = (gl, hasAlpha = true) => {
@@ -442,7 +472,11 @@ Module.initVologramFunctions = (containerObject) => {
 	insertObject["get_audio_data"] = () => {
 		let ptr = Module.ccall("audio_data_ptr", "array");
 		let sz = Module.ccall("audio_data_sz", "number");
-		return new Uint8Array(HEAP8.buffer, ptr, sz);
+		// Copy data to independent buffer to avoid WASMFS detachment issues
+		const result = new Uint8Array(sz);
+		const sourceView = new Uint8Array(HEAP8.buffer, ptr, sz);
+		result.set(sourceView);  // Copy data immediately
+		return result;
 	};
 
 	if (usingExternalObject) {
