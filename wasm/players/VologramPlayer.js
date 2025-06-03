@@ -9,6 +9,7 @@ const VologramPlayer = (extensions) => {
 	let _previousTime;
 	let _timer = 0;
 	let vologram = {};
+	vologram.useOPFS = false; // Add useOPFS flag
 
 	const PB_TIMER = 0;
 	const PB_VIDEO = 1;
@@ -85,16 +86,12 @@ const VologramPlayer = (extensions) => {
 
 	const _initVologram = () => {
 		let ret = false;
+		const basePath = vologram.useOPFS ? "/opfs/" : ""; // Determine base path
 
 		if (vologram.header.singleFile) {
-			// Use the OPFS path if available (set by _initWasmSingleFile)
-			ret = vologram.create_single_file_info(vologram.singleFilePath || "vologram.vols");
+			ret = vologram.create_single_file_info(basePath + "vologram.vols");
 		} else {
-			// Use the OPFS paths if available (set by _initWasm)
-			ret = vologram.create_file_info(
-				vologram.headerPath || "header.vols", 
-				vologram.sequencePath || "sequence.vols"
-			);
+			ret = vologram.create_file_info(basePath + "header.vols", basePath + "sequence.vols");
 		}
 
 		if (!ret) {
@@ -165,79 +162,56 @@ const VologramPlayer = (extensions) => {
 
 	const _initWasmSingleFile = async (onProgress) =>
 		VolWeb()
-			.then(async (wasmInstance) => {
+			.then((wasmInstance) => {
 				_wasm = wasmInstance;
 				_wasm.ccall("basis_init", "boolean");
 				_wasm.initVologramFunctions(vologram);
-				
-				// Initialize OPFS if available
-				let opfsReady = false;
-				if (_wasm.initOPFS) {
-					opfsReady = await _wasm.initOPFS();
-					console.log("OPFS initialization: " + (opfsReady ? "successful" : "failed"));
+				// Conditional fetch based on useOPFS
+				if (vologram.useOPFS) {
+					console.log("Using OPFS for single file download...");
+					return _wasm.fetch_stream_file("/opfs/vologram.vols", vologram.sequenceUrl, onProgress);
+				} else {
+					return _wasm.fetch_stream_file("vologram.vols", vologram.sequenceUrl, onProgress);
 				}
-				
-				return _wasm.fetch_stream_file("vologram.vols", vologram.sequenceUrl, onProgress);
 			})
 			.then((response) => {
 				return new Promise(async (resolve, reject) => {
-							
-					// Check for OPFS file
-					let fileInOPFS = false;
-					if (_wasm.fileExistsInOPFS) {
-						fileInOPFS = await _wasm.fileExistsInOPFS("vologram.vols");
-					}
-					
-					// Use OPFS path if available
-					if (fileInOPFS) {
-						vologram.singleFilePath = "/opfs/vologram.vols";
-					} else {
-						vologram.singleFilePath = "vologram.vols";
-					}
-					// Wait until we have a header and audio downloaded
+					// Wait until we have a header and audio donwloaded
 					await _wasm.isHeaderLoaded();
-					
 					const initSuccess = _initVologram();
 					if (initSuccess) resolve(initSuccess);
 					else reject(new Error("_initVologram failed to open vologram"));
 				});
 			})
 			.catch((err) => {
-				console.error(err);
+				console.error("Error during WASM single file initialization:", err);
 				return false;
 			});
 
 	const _initWasm = (onProgress) =>
 		VolWeb()
-			.then(async (wasmInstance) => {
+			.then((wasmInstance) => {
 				_wasm = wasmInstance;
 				_wasm.ccall("basis_init", "boolean");
 				_wasm.initVologramFunctions(vologram);
-				
-				// Initialize OPFS if available
-				let opfsReady = false;
-				if (_wasm.initOPFS) {
-					opfsReady = await _wasm.initOPFS();
-					console.log("OPFS initialization: " + (opfsReady ? "successful" : "failed"));
+				// Conditional fetch for header
+				if (vologram.useOPFS) {
+					console.log("Using OPFS for header download...");
+					return _wasm.fetch_file_opfs("header.vols", vologram.headerUrl, onProgress);
+				} else {
+					return _wasm.fetch_file("header.vols", vologram.headerUrl, onProgress);
 				}
-				
-				return _wasm.fetch_file("header.vols", vologram.headerUrl, onProgress);
 			})
-			.then((response) => _wasm.fetch_file("sequence.vols", vologram.sequenceUrl, onProgress))
-			.then(async (response) => {
-				// Check for OPFS files
-				let headerInOPFS = false;
-				let sequenceInOPFS = false;
-				
-				if (_wasm.fileExistsInOPFS) {
-					headerInOPFS = await _wasm.fileExistsInOPFS("header.vols");
-					sequenceInOPFS = await _wasm.fileExistsInOPFS("sequence.vols");
+			.then((response) => {
+				// Conditional fetch for sequence
+				if (vologram.useOPFS) {
+					console.log("Using OPFS for sequence download...");
+					return _wasm.fetch_file_opfs("sequence.vols", vologram.sequenceUrl, onProgress);
+				} else {
+					return _wasm.fetch_file("sequence.vols", vologram.sequenceUrl, onProgress);
 				}
-				
-				// Store paths for use in initVologram
-				vologram.headerPath = headerInOPFS ? "/opfs/header.vols" : "header.vols";
-				vologram.sequencePath = sequenceInOPFS ? "/opfs/sequence.vols" : "sequence.vols";
-				
+			})
+			.then((response) => {
 				return new Promise((resolve, reject) => {
 					const initSuccess = _initVologram();
 					if (initSuccess) resolve(initSuccess);
@@ -245,7 +219,7 @@ const VologramPlayer = (extensions) => {
 				});
 			})
 			.catch((err) => {
-				console.error(err);
+				console.error("Error during WASM multi-file initialization:", err);
 				return false;
 			});
 
@@ -359,10 +333,11 @@ const VologramPlayer = (extensions) => {
 		vologram.attachedAudio.src = blobUrl;
 	};
 
-	const _open = async ({ headerUrl, sequenceUrl, textureUrl, videoElement, audioElement }, onProgress) => {
+	const _open = async ({ headerUrl, sequenceUrl, textureUrl, videoElement, audioElement, useOPFS = false }, onProgress) => {
 		vologram = {};
 		vologram.header = {};
 		vologram.frame = {};
+		vologram.useOPFS = useOPFS; // Store the OPFS flag
 		vologram.header.singleFile = !headerUrl;
 		vologram.headerUrl = headerUrl;
 		vologram.sequenceUrl = sequenceUrl;
@@ -378,29 +353,26 @@ const VologramPlayer = (extensions) => {
 	};
 
 	const _cleanVologramModule = () => {
-		_wasm.ccall("basis_init", "boolean");
+		_wasm.ccall("basis_free", "boolean");
 		vologram.free_file_info();
-		
-		// Clean up both regular and OPFS paths
-		const paths = [
-			"vologram.vols", 
-			"header.vols", 
-			"sequence.vols",
-			"/opfs/vologram.vols",
-			"/opfs/header.vols",
-			"/opfs/sequence.vols"
-		];
-		
-		for (const path of paths) {
-			try {
-				if (_wasm.FS.analyzePath(path).exists) {
-					_wasm.FS.unlink(path);
-				}
-			} catch (e) {
-				console.warn(`Could not remove file ${path}: ${e.message}`);
+		const basePath = vologram.useOPFS ? "/opfs/" : "";
+		try {
+			if (_wasm.FS.analyzePath(basePath + "vologram.vols").exists) {
+				_wasm.FS.unlink(basePath + "vologram.vols");
 			}
+			if (_wasm.FS.analyzePath(basePath + "header.vols").exists) {
+				_wasm.FS.unlink(basePath + "header.vols");
+			}
+			if (_wasm.FS.analyzePath(basePath + "sequence.vols").exists) { // Check sequence.vols too
+				_wasm.FS.unlink(basePath + "sequence.vols");
+			}
+			// Note: sequence_0.vols seems specific to older logic, might not be needed for OPFS/current MEMFS
+			if (_wasm.FS.analyzePath("sequence_0.vols").exists) {
+				_wasm.FS.unlink("sequence_0.vols");
+			}
+		} catch (e) {
+			console.warn("Error during FS cleanup (file might not exist):", e);
 		}
-		
 		_wasm = null;
 	};
 
@@ -410,9 +382,6 @@ const VologramPlayer = (extensions) => {
 		vologram.headerUrl = null;
 		vologram.sequenceUrl = null;
 		vologram.textureUrl = null;
-		vologram.headerPath = null;
-		vologram.sequencePath = null;
-		vologram.singleFilePath = null;
 	};
 
 	const _close = () => {
