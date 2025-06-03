@@ -197,7 +197,7 @@
             <label for="vologramUrl"><strong>Vologram URL:</strong></label>
             <input type="text" id="vologramUrl" class="url-input" 
                    placeholder="https://example.com/vologram.vols"
-                   value="">
+                   value="https://public-vms-volograms-storage.s3.eu-west-1.amazonaws.com/testing/Patrick_Horse_ld_1024_ETC1S_BASIS_mp3.vols">
         </div>
 
         <!-- Controls -->
@@ -417,10 +417,13 @@
                     elements.stopBtn.disabled = false;
                     elements.clearStorageBtn.disabled = false;
                     
-                    // Setup WebGL rendering
-                    webglExtension.useDefaults();
-                    
-                    updateStatus('Ready to play! Click Play button to start.', 'success');
+                    // Setup WebGL rendering with error handling - use the same pattern as working examples
+                    if (vologramPlayer.extensions.webgl && vologramPlayer.extensions.webgl.useDefaults) {
+                        vologramPlayer.extensions.webgl.useDefaults();
+                        updateStatus('Ready to play! Click Play button to start.', 'success');
+                    } else {
+                        throw new Error('WebGL extension not properly initialized');
+                    }
                 } else {
                     throw new Error('Failed to load vologram');
                 }
@@ -434,7 +437,10 @@
 
         // Play vologram
         function playVologram() {
-            if (!vologramPlayer) return;
+            if (!vologramPlayer || !vologramPlayer.extensions.webgl) {
+                updateStatus('Error: Player not properly initialized', 'error');
+                return;
+            }
             
             vologramPlayer.start();
             isPlaying = true;
@@ -444,8 +450,13 @@
             
             updateStatus('Playing vologram...', 'info');
             
-            // Start rendering loop
-            webglExtension.beginRendering();
+            // Start rendering loop with error handling - use the same pattern as working examples
+            if (vologramPlayer.extensions.webgl.beginRendering) {
+                vologramPlayer.extensions.webgl.beginRendering();
+            } else {
+                updateStatus('Error: WebGL beginRendering method not available', 'error');
+                console.error('vologramPlayer.extensions.webgl.beginRendering is not a function');
+            }
         }
 
         // Pause vologram
