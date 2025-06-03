@@ -28,6 +28,106 @@
 Module.fileFetched = false;
 Module.headerFetched = false;
 
+// OPFS support flag and initialization
+Module._opfsInitialized = false;
+Module._opfsMounted = false;
+Module._useOPFS = false;
+
+/**
+ * Initialize OPFS (Origin Private File System) support using WasmFS
+ * This checks browser support but uses WasmFS backend for actual OPFS access
+ */
+Module.initOPFS = async () => {
+	// Check browser support for OPFS
+	if (!navigator.storage || !navigator.storage.getDirectory) {
+		console.warn('OPFS is not supported in this browser. Falling back to MEMFS.');
+		Module._opfsInitialized = false;
+		return false;
+	}
+
+	// Check if we're in a secure context (required for OPFS)
+	if (!window.isSecureContext) {
+		console.warn('OPFS requires a secure context (HTTPS). Falling back to MEMFS.');
+		Module._opfsInitialized = false;
+		return false;
+	}
+
+	try {
+		// Test OPFS access - WasmFS backend will handle actual file operations
+		const root = await navigator.storage.getDirectory();
+		console.log('OPFS browser support verified - WasmFS backend will handle file operations');
+		Module._opfsInitialized = true;
+		return true;
+	} catch (error) {
+		console.error('Failed to initialize OPFS:', error);
+		Module._opfsInitialized = false;
+		return false;
+	}
+};
+
+/**
+ * Setup OPFS filesystem using WasmFS backend
+ * This calls the C++ function that creates the OPFS backend and mounts it
+ * No direct JavaScript OPFS API usage - all handled by WasmFS
+ */
+Module.setupOPFS = async () => {
+	if (!Module._opfsInitialized) {
+		console.error('OPFS not initialized. Call initOPFS() first.');
+		return false;
+	}
+
+	try {
+		// Wait for module to be ready
+		if (!Module.ccall) {
+			console.error('Module not ready. Wait for WASM to load.');
+			return false;
+		}
+
+		// Call the C++ function to setup OPFS backend via WasmFS
+		console.log('Setting up WasmFS OPFS backend...');
+		Module.ccall('setup_opfs_wasmfs', null, [], []);
+		
+		// Test OPFS functionality via WasmFS
+		const testResult = Module.ccall('test_opfs_functionality', 'number', [], []);
+		
+		if (testResult === 1) {
+			console.log('WasmFS OPFS backend setup and test completed successfully');
+			Module._opfsMounted = true;
+			return true;
+		} else {
+			console.error('WasmFS OPFS backend test failed');
+			return false;
+		}
+		
+	} catch (error) {
+		console.error('Failed to setup WasmFS OPFS backend:', error);
+		return false;
+	}
+};
+
+/**
+ * Check if OPFS is ready for use via WasmFS backend
+ */
+Module.isOPFSReady = () => {
+	return Module._opfsInitialized && Module._opfsMounted;
+};
+
+/**
+ * Utility function to bridge async/sync calls for pthread-based WASM
+ * Based on working WasmFS examples
+ */
+Module.asyncWasm = (fn, ...args) => {
+	const id = crypto.randomUUID();
+	return new Promise((resolve) => {
+		globalThis.addEventListener(id, () => resolve(), { once: true });
+		fn(id, ...args);
+	});
+};
+
+// Note: File operations are handled by WasmFS OPFS backend in C code
+// using standard fopen("/opfs/filename", "w") operations
+// No need for JavaScript OPFS API file manipulation
+
 Module.isHeaderLoaded = () => {
 
 	console.log(Module.fileFetched);
@@ -41,6 +141,12 @@ Module.isHeaderLoaded = () => {
 }
 
 Module.fetch_stream_file = async (dest, fileUrl, onProgress) => {
+	// If OPFS is ready and dest starts with /opfs/, handle it specially
+	if (Module.isOPFSReady() && dest.startsWith('/opfs/')) {
+		console.log(`Streaming to OPFS: ${dest}`);
+		// The WasmFS OPFS backend will handle this automatically when you use fopen/fwrite
+		// Just continue with normal streaming but to the /opfs/ path
+	}
 
 	return await fetch(fileUrl)
 		// Retrieve its body as ReadableStream
@@ -122,6 +228,12 @@ Module.fetch_stream_file = async (dest, fileUrl, onProgress) => {
 };
 
 Module.fetch_file = async (dest, fileUrl, onProgress) => {
+	// If OPFS is ready and dest starts with /opfs/, handle it specially
+	if (Module.isOPFSReady() && dest.startsWith('/opfs/')) {
+		console.log(`Downloading to OPFS: ${dest}`);
+		// The WasmFS OPFS backend will handle this automatically when you use fopen/fwrite
+		// Just continue with normal download but to the /opfs/ path
+	}
 
 	return await fetch(fileUrl)
 		// Retrieve its body as ReadableStream

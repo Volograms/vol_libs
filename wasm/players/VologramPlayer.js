@@ -86,10 +86,18 @@ const VologramPlayer = (extensions) => {
 	const _initVologram = () => {
 		let ret = false;
 
+		// Determine file paths based on storage mode
+		const basePath = vologram.useOPFS ? '/opfs/' : '';
+		
 		if (vologram.header.singleFile) {
-			ret = vologram.create_single_file_info("vologram.vols");
+			const vologramPath = basePath + "vologram.vols";
+			console.log(`Creating single file info for: ${vologramPath}`);
+			ret = vologram.create_single_file_info(vologramPath);
 		} else {
-			ret = vologram.create_file_info("header.vols", "sequence.vols");
+			const headerPath = basePath + "header.vols";
+			const sequencePath = basePath + "sequence.vols";
+			console.log(`Creating file info for: ${headerPath}, ${sequencePath}`);
+			ret = vologram.create_file_info(headerPath, sequencePath);
 		}
 
 		if (!ret) {
@@ -160,11 +168,41 @@ const VologramPlayer = (extensions) => {
 
 	const _initWasmSingleFile = async (onProgress) =>
 		VolWeb()
-			.then((wasmInstance) => {
+			.then(async (wasmInstance) => {
 				_wasm = wasmInstance;
 				_wasm.ccall("basis_init", "boolean");
 				_wasm.initVologramFunctions(vologram);
-				return _wasm.fetch_stream_file("vologram.vols", vologram.sequenceUrl, onProgress);
+				
+				// Initialize OPFS if requested and available
+				if (vologram.useOPFS) {
+					console.log('Vologram storage mode: OPFS (disk-based)');
+					console.log('Initializing OPFS for vologram storage...');
+					const opfsInit = await _wasm.initOPFS();
+					if (opfsInit) {
+						const opfsSetup = await _wasm.setupOPFS();
+						if (!opfsSetup) {
+							console.warn('Failed to setup OPFS, falling back to MEMFS');
+							vologram.useOPFS = false;
+						}
+					} else {
+						console.warn('OPFS not available, falling back to MEMFS');
+						vologram.useOPFS = false;
+					}
+				}
+				
+				if (!vologram.useOPFS) {
+					console.log('Vologram storage mode: MEMFS (memory-based)');
+				}
+				
+				// Use appropriate file paths and fetch function based on storage mode
+				const volumeFile = vologram.useOPFS ? "/opfs/vologram.vols" : "vologram.vols";
+				
+				if (vologram.useOPFS) {
+					console.log('Using WasmFS OPFS storage for vologram file');
+					return _wasm.fetch_stream_file(volumeFile, vologram.sequenceUrl, onProgress);
+				} else {
+					return _wasm.fetch_stream_file(volumeFile, vologram.sequenceUrl, onProgress);
+				}
 			})
 			.then((response) => {
 				return new Promise(async (resolve, reject) => {
@@ -182,13 +220,46 @@ const VologramPlayer = (extensions) => {
 
 	const _initWasm = (onProgress) =>
 		VolWeb()
-			.then((wasmInstance) => {
+			.then(async (wasmInstance) => {
 				_wasm = wasmInstance;
 				_wasm.ccall("basis_init", "boolean");
 				_wasm.initVologramFunctions(vologram);
-				return _wasm.fetch_file("header.vols", vologram.headerUrl, onProgress);
+				
+				// Initialize OPFS if requested and available
+				if (vologram.useOPFS) {
+					console.log('Vologram storage mode: OPFS (disk-based)');
+					console.log('Initializing OPFS for vologram storage...');
+					const opfsInit = await _wasm.initOPFS();
+					if (opfsInit) {
+						const opfsSetup = await _wasm.setupOPFS();
+						if (!opfsSetup) {
+							console.warn('Failed to setup OPFS, falling back to MEMFS');
+							vologram.useOPFS = false;
+						}
+					} else {
+						console.warn('OPFS not available, falling back to MEMFS');
+						vologram.useOPFS = false;
+					}
+				}
+				
+				if (!vologram.useOPFS) {
+					console.log('Vologram storage mode: MEMFS (memory-based)');
+				}
+				
+				// Use appropriate file paths based on storage mode
+				const headerFile = vologram.useOPFS ? "/opfs/header.vols" : "header.vols";
+				
+				if (vologram.useOPFS) {
+					console.log('Using WasmFS OPFS storage for vologram files');
+				}
+				
+				return _wasm.fetch_file(headerFile, vologram.headerUrl, onProgress);
 			})
-			.then((response) => _wasm.fetch_file("sequence.vols", vologram.sequenceUrl, onProgress))
+			.then((response) => {
+				// Fetch sequence file with the same storage mode
+				const sequenceFile = vologram.useOPFS ? "/opfs/sequence.vols" : "sequence.vols";
+				return _wasm.fetch_file(sequenceFile, vologram.sequenceUrl, onProgress);
+			})
 			.then((response) => {
 				return new Promise((resolve, reject) => {
 					const initSuccess = _initVologram();
@@ -311,7 +382,7 @@ const VologramPlayer = (extensions) => {
 		vologram.attachedAudio.src = blobUrl;
 	};
 
-	const _open = async ({ headerUrl, sequenceUrl, textureUrl, videoElement, audioElement }, onProgress) => {
+	const _open = async ({ headerUrl, sequenceUrl, textureUrl, videoElement, audioElement, useOPFS = false }, onProgress) => {
 		vologram = {};
 		vologram.header = {};
 		vologram.frame = {};
@@ -319,6 +390,11 @@ const VologramPlayer = (extensions) => {
 		vologram.headerUrl = headerUrl;
 		vologram.sequenceUrl = sequenceUrl;
 		vologram.textureUrl = textureUrl;
+		
+		// Store OPFS preference
+		vologram.useOPFS = useOPFS;
+		console.log(`Vologram storage mode: ${useOPFS ? 'OPFS (disk-based)' : 'MEMFS (memory-based)'}`);
+		
 		if (videoElement && audioElement) {
 			console.warn("Using both video and audio elements is not supported, audio element will be ignored");
 		}

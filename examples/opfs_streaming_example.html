@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OPFS Streaming Vologram Example</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .info-box {
+            background-color: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 20px 0;
+            align-items: center;
+        }
+        .storage-selector {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .storage-option {
+            padding: 10px 15px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background-color: white;
+        }
+        .storage-option.selected {
+            border-color: #2196F3;
+            background-color: #e7f3ff;
+            color: #1976D2;
+        }
+        .storage-option.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background-color: #f5f5f5;
+        }
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            background-color: #2196F3;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s ease;
+        }
+        button:hover:not(:disabled) { 
+            background-color: #1976D2; 
+        }
+        button:disabled { 
+            background-color: #bbb; 
+            cursor: not-allowed; 
+        }
+        .progress-container {
+            margin: 20px 0;
+            display: none;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 25px;
+            background-color: #f0f0f0;
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #45a049);
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+        .progress-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #333;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .canvas-container {
+            margin: 20px 0;
+            text-align: center;
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            padding: 40px;
+            min-height: 400px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+        }
+        canvas {
+            max-width: 100%;
+            max-height: 500px;
+            border-radius: 4px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+        .status.info { background-color: #e7f3ff; color: #1976D2; }
+        .status.success { background-color: #e8f5e8; color: #2e7d32; }
+        .status.error { background-color: #ffebee; color: #c62828; }
+        .status.warning { background-color: #fff3e0; color: #f57c00; }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .stat-label {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+        }
+        .url-input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+            margin: 10px 0;
+        }
+        .url-input:focus {
+            outline: none;
+            border-color: #2196F3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎥 OPFS Streaming Vologram Player</h1>
+        
+        <div class="info-box">
+            <strong>About this example:</strong> This demonstrates how to use OPFS (Origin Private File System) 
+            for streaming large volumetric video files. OPFS stores files on disk instead of memory, 
+            allowing for much larger files and better performance on mobile devices.
+        </div>
+
+        <!-- Storage Mode Selection -->
+        <div class="storage-selector">
+            <span><strong>Storage Mode:</strong></span>
+            <div class="storage-option selected" data-mode="opfs">
+                📁 OPFS (Disk-based)
+                <div style="font-size: 12px; color: #666;">Better for large files & mobile</div>
+            </div>
+            <div class="storage-option" data-mode="memfs">
+                🧠 MEMFS (Memory-based)
+                <div style="font-size: 12px; color: #666;">Traditional method</div>
+            </div>
+        </div>
+
+        <!-- URL Input -->
+        <div>
+            <label for="vologramUrl"><strong>Vologram URL:</strong></label>
+            <input type="text" id="vologramUrl" class="url-input" 
+                   placeholder="https://example.com/vologram.vols"
+                   value="">
+        </div>
+
+        <!-- Controls -->
+        <div class="controls">
+            <button id="loadBtn">📥 Load Vologram</button>
+            <button id="playBtn" disabled>▶️ Play</button>
+            <button id="pauseBtn" disabled>⏸️ Pause</button>
+            <button id="stopBtn" disabled>⏹️ Stop</button>
+            <button id="clearStorageBtn" disabled>🗑️ Clear Storage</button>
+        </div>
+
+        <!-- Progress -->
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+                <div class="progress-text" id="progressText">0%</div>
+            </div>
+        </div>
+
+        <!-- Status -->
+        <div id="status" class="status info">
+            Ready to load vologram. Choose storage mode and enter URL above.
+        </div>
+
+        <!-- Canvas -->
+        <div class="canvas-container" id="canvasContainer">
+            <div>
+                <h3>🎬 Vologram Display</h3>
+                <p>Canvas will appear here once a vologram is loaded</p>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats" id="statsContainer" style="display: none;">
+            <div class="stat">
+                <div class="stat-label">Frame Count</div>
+                <div class="stat-value" id="frameCount">-</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">Storage Used</div>
+                <div class="stat-value" id="storageUsed">-</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">Current Frame</div>
+                <div class="stat-value" id="currentFrame">-</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">FPS</div>
+                <div class="stat-value" id="fps">30</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Include Vologram Libraries -->
+    <script src="../wasm/vol_web.js"></script>
+    <script src="../wasm/players/VologramPlayer.js"></script>
+    <script src="../wasm/players/WebGlPlayerExtension.js"></script>
+
+    <script>
+        // Global variables
+        let vologramPlayer = null;
+        let webglExtension = null;
+        let canvas = null;
+        let gl = null;
+        let isPlaying = false;
+        let selectedStorageMode = 'opfs';
+
+        // DOM elements
+        const elements = {
+            storageOptions: document.querySelectorAll('.storage-option'),
+            urlInput: document.getElementById('vologramUrl'),
+            loadBtn: document.getElementById('loadBtn'),
+            playBtn: document.getElementById('playBtn'),
+            pauseBtn: document.getElementById('pauseBtn'),
+            stopBtn: document.getElementById('stopBtn'),
+            clearStorageBtn: document.getElementById('clearStorageBtn'),
+            status: document.getElementById('status'),
+            progressContainer: document.getElementById('progressContainer'),
+            progressFill: document.getElementById('progressFill'),
+            progressText: document.getElementById('progressText'),
+            canvasContainer: document.getElementById('canvasContainer'),
+            statsContainer: document.getElementById('statsContainer'),
+            frameCount: document.getElementById('frameCount'),
+            storageUsed: document.getElementById('storageUsed'),
+            currentFrame: document.getElementById('currentFrame'),
+            fps: document.getElementById('fps')
+        };
+
+        // Utility functions
+        function updateStatus(message, type = 'info') {
+            elements.status.textContent = message;
+            elements.status.className = `status ${type}`;
+        }
+
+        function updateProgress(progress) {
+            const percentage = Math.round(progress * 100);
+            elements.progressFill.style.width = `${percentage}%`;
+            elements.progressText.textContent = `${percentage}%`;
+            
+            if (progress >= 1) {
+                setTimeout(() => {
+                    elements.progressContainer.style.display = 'none';
+                }, 1000);
+            }
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Storage mode selection
+        elements.storageOptions.forEach(option => {
+            option.addEventListener('click', async () => {
+                const mode = option.dataset.mode;
+                
+                // Check OPFS support if selecting OPFS
+                if (mode === 'opfs') {
+                    if (!navigator.storage || !navigator.storage.getDirectory) {
+                        updateStatus('OPFS is not supported in this browser. Please use a modern browser (Chrome 86+, Firefox 111+, Safari 15.2+)', 'error');
+                        return;
+                    }
+                }
+                
+                // Update UI
+                elements.storageOptions.forEach(opt => opt.classList.remove('selected'));
+                option.classList.add('selected');
+                selectedStorageMode = mode;
+                
+                updateStatus(`Storage mode set to ${mode.toUpperCase()}`, 'info');
+            });
+        });
+
+        // Check OPFS support on page load
+        async function checkOPFSSupport() {
+            if (!navigator.storage || !navigator.storage.getDirectory) {
+                // Disable OPFS option
+                const opfsOption = document.querySelector('[data-mode="opfs"]');
+                opfsOption.classList.add('disabled');
+                opfsOption.style.pointerEvents = 'none';
+                
+                // Select MEMFS by default
+                elements.storageOptions.forEach(opt => opt.classList.remove('selected'));
+                document.querySelector('[data-mode="memfs"]').classList.add('selected');
+                selectedStorageMode = 'memfs';
+                
+                updateStatus('OPFS not supported. Using MEMFS mode.', 'warning');
+            } else {
+                updateStatus('OPFS supported! Recommended for large files and mobile devices.', 'success');
+            }
+        }
+
+        // Initialize WebGL canvas
+        function initWebGL() {
+            canvas = document.createElement('canvas');
+            canvas.width = 800;
+            canvas.height = 600;
+            gl = canvas.getContext('webgl2');
+            
+            if (!gl) {
+                throw new Error('WebGL2 not supported');
+            }
+            
+            // Clear the canvas container and add our canvas
+            elements.canvasContainer.innerHTML = '';
+            elements.canvasContainer.appendChild(canvas);
+            
+            return gl;
+        }
+
+        // Load vologram
+        async function loadVologram() {
+            const url = elements.urlInput.value.trim();
+            if (!url) {
+                updateStatus('Please enter a vologram URL', 'error');
+                return;
+            }
+
+            try {
+                updateStatus('Initializing vologram player...', 'info');
+                elements.progressContainer.style.display = 'block';
+                updateProgress(0);
+
+                // Initialize WebGL
+                const glContext = initWebGL();
+                
+                // Create WebGL extension
+                webglExtension = WebGlPlayerExtension(glContext);
+                
+                // Create vologram player with extension
+                vologramPlayer = VologramPlayer([webglExtension]);
+                
+                updateStatus(`Loading vologram with ${selectedStorageMode.toUpperCase()} storage...`, 'info');
+                
+                // Load the vologram
+                const success = await vologramPlayer.open({
+                    sequenceUrl: url,
+                    useOPFS: selectedStorageMode === 'opfs'
+                }, (progress) => {
+                    updateProgress(progress);
+                    updateStatus(`Downloading: ${Math.round(progress * 100)}%`, 'info');
+                });
+
+                if (success) {
+                    updateStatus('Vologram loaded successfully! ✅', 'success');
+                    
+                    // Update stats
+                    elements.frameCount.textContent = vologramPlayer.vologram.header.frameCount;
+                    elements.fps.textContent = vologramPlayer.vologram.header.fps || 30;
+                    elements.statsContainer.style.display = 'grid';
+                    
+                    // Enable controls
+                    elements.playBtn.disabled = false;
+                    elements.stopBtn.disabled = false;
+                    elements.clearStorageBtn.disabled = false;
+                    
+                    // Setup WebGL rendering
+                    webglExtension.useDefaults();
+                    
+                    updateStatus('Ready to play! Click Play button to start.', 'success');
+                } else {
+                    throw new Error('Failed to load vologram');
+                }
+                
+            } catch (error) {
+                console.error('Load error:', error);
+                updateStatus(`Error: ${error.message}`, 'error');
+                elements.progressContainer.style.display = 'none';
+            }
+        }
+
+        // Play vologram
+        function playVologram() {
+            if (!vologramPlayer) return;
+            
+            vologramPlayer.start();
+            isPlaying = true;
+            
+            elements.playBtn.disabled = true;
+            elements.pauseBtn.disabled = false;
+            
+            updateStatus('Playing vologram...', 'info');
+            
+            // Start rendering loop
+            webglExtension.beginRendering();
+        }
+
+        // Pause vologram
+        function pauseVologram() {
+            if (!vologramPlayer) return;
+            
+            vologramPlayer.pause();
+            isPlaying = false;
+            
+            elements.playBtn.disabled = false;
+            elements.pauseBtn.disabled = true;
+            
+            updateStatus('Paused', 'info');
+        }
+
+        // Stop vologram
+        function stopVologram() {
+            if (!vologramPlayer) return;
+            
+            vologramPlayer.close();
+            vologramPlayer = null;
+            webglExtension = null;
+            isPlaying = false;
+            
+            // Clear canvas
+            elements.canvasContainer.innerHTML = `
+                <div>
+                    <h3>🎬 Vologram Display</h3>
+                    <p>Canvas will appear here once a vologram is loaded</p>
+                </div>
+            `;
+            
+            // Reset UI
+            elements.playBtn.disabled = true;
+            elements.pauseBtn.disabled = true;
+            elements.stopBtn.disabled = true;
+            elements.statsContainer.style.display = 'none';
+            
+            updateStatus('Stopped and cleared', 'info');
+        }
+
+        // Clear storage
+        async function clearStorage() {
+            try {
+                if (selectedStorageMode === 'opfs') {
+                    updateStatus('Clearing OPFS storage...', 'info');
+                    const root = await navigator.storage.getDirectory();
+                    const files = ['vologram.vols', 'header.vols', 'sequence.vols'];
+                    
+                    let cleared = 0;
+                    for (const filename of files) {
+                        try {
+                            await root.removeEntry(filename);
+                            cleared++;
+                        } catch (e) {
+                            // File might not exist, that's ok
+                        }
+                    }
+                    
+                    updateStatus(`Cleared ${cleared} files from OPFS storage`, 'success');
+                } else {
+                    updateStatus('MEMFS storage is automatically cleared when page reloads', 'info');
+                }
+                
+                elements.clearStorageBtn.disabled = true;
+                
+            } catch (error) {
+                updateStatus(`Error clearing storage: ${error.message}`, 'error');
+            }
+        }
+
+        // Event listeners
+        elements.loadBtn.addEventListener('click', loadVologram);
+        elements.playBtn.addEventListener('click', playVologram);
+        elements.pauseBtn.addEventListener('click', pauseVologram);
+        elements.stopBtn.addEventListener('click', stopVologram);
+        elements.clearStorageBtn.addEventListener('click', clearStorage);
+
+        // Initialize
+        checkOPFSSupport();
+        updateStatus('Ready! Enter vologram URL and click Load.', 'info');
+        
+        // Add some example URLs for testing
+        const exampleUrls = [
+            'https://example.com/small_vologram.vols',
+            'https://example.com/large_vologram.vols'
+        ];
+        
+        console.log('Available example URLs for testing:', exampleUrls);
+        console.log('Browser support - OPFS:', !!(navigator.storage && navigator.storage.getDirectory));
+    </script>
+</body>
+</html> 

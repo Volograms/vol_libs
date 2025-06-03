@@ -57,6 +57,53 @@ const vologramWebGl = VologramPlayer([WebGlPlayerExtension(gl)]);
 const vologramThree = VologramPlayer([ThreeJsPlayerExtension(gl)]);
 ```
 
+## Storage Modes
+
+The VologramPlayer supports two different storage modes for handling volumetric video files:
+
+### MEMFS (Default - Memory File System)
+- **Storage**: Files are stored in browser memory (RAM)
+- **Performance**: Fast access, but limited by available memory
+- **Compatibility**: Works in all browsers that support WebAssembly
+- **Use case**: Suitable for smaller files or when memory is not a constraint
+- **Mobile compatibility**: May cause memory issues with large files on mobile devices, especially iOS
+
+### OPFS (Origin Private File System)
+- **Storage**: Files are stored on disk via WasmFS OPFS backend, not in memory  
+- **Implementation**: Uses WasmFS virtual filesystem (`/opfs/`) that maps to browser's actual OPFS storage
+- **C API Access**: Your C code uses standard file operations like `fopen("/opfs/filename", "w")`
+- **Performance**: Better memory efficiency, larger file support
+- **Compatibility**: Requires modern browsers with OPFS support (Chrome 86+, Firefox 111+, Safari 15.2+)
+- **Use case**: Recommended for large volumetric video files, mobile devices, or memory-constrained environments
+- **Mobile compatibility**: Much better performance on mobile devices, especially for large files
+
+#### How OPFS Implementation Works
+The implementation uses **WasmFS OPFS backend** rather than direct JavaScript OPFS API:
+
+1. **WasmFS Backend**: `wasmfs_create_opfs_backend()` creates a bridge to browser's OPFS
+2. **Virtual Directory**: `/opfs/` directory in WasmFS maps to actual browser OPFS storage  
+3. **C File Operations**: Standard `fopen("/opfs/file.vols", "w")` automatically routes to OPFS
+4. **No JavaScript OPFS API**: No need for `navigator.storage.getDirectory()` calls
+5. **Persistent Storage**: Files persist across browser sessions like normal OPFS
+
+#### Browser Support for OPFS
+- ✅ **Chrome/Edge**: 86+ (full support)
+- ✅ **Firefox**: 111+ (full support) 
+- ✅ **Safari**: 15.2+ (full support)
+- ❌ **Older browsers**: Falls back to MEMFS automatically
+
+#### Using OPFS Mode
+```js
+// Enable OPFS storage mode
+const player = VologramPlayer();
+player.open({
+    sequenceUrl: "large_vologram.vols",
+    useOPFS: true  // Enable disk-based storage
+}, (progress) => {
+    console.log(`Download progress: ${progress * 100}%`);
+});
+```
+
 ## `VologramPlayer`
 
 `VologramPlayer(extensions)`: returns an object that provides properties functions to control the vologram playback
@@ -93,6 +140,7 @@ The returned object has the following properties and functions:
   - `textureUrl`: (**_optional_**) url or string to the texture video file
   - `videoElement`: (**_optional_**) HTML video element that will contain the video texture, if null the player will create its own if needed
   - `audioElement`: (**_optional_**) HTML audio element that will contain the vologram audio, if null the player will create its own if needed
+  - `useOPFS`: (**_optional_**) boolean flag to enable OPFS (Origin Private File System) storage instead of MEMFS. Default is `false`. When set to `true`, files are stored on disk instead of memory, providing better performance for large files and reduced memory usage, especially on mobile devices. Requires a compatible browser with OPFS support.
 - Parameter `onProgressCallback`: (**_optional_**) a callback function that accepts a float value between 0 and 1 representing the download progress of the vologram file(s)
 
 `.close()`: closes an open vologram
@@ -541,6 +589,7 @@ The following table shows the correct parameters for ccall-ing the vologram func
 ### Requirements
 
 - [emscripten](https://emscripten.org/docs/getting_started/index.html) is used to build the js modules from c code
+- **Emscripten 3.1.0 or later** is required for WasmFS OPFS backend support. Earlier versions may not have the necessary WasmFS OPFS functionality.
 
 ### Build
 
