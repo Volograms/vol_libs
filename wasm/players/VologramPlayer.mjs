@@ -11,6 +11,9 @@ const VologramPlayer = (extensions) => {
 	let _previousTime;
 	let _timer = 0;
 	let vologram = {};
+	
+	// AbortController for canceling fetch requests
+	let _downloadController = null;
 
 	const PB_TIMER = 0;
 	const PB_VIDEO = 1;
@@ -154,16 +157,30 @@ const VologramPlayer = (extensions) => {
 		});
 	};
 
-	const _initWasmSingleFile = async (onProgress) =>
-		VolWeb()
+	const _initWasmSingleFile = async (onProgress) => {
+		// Create AbortController for this download session
+		_downloadController = new AbortController();
+		const signal = _downloadController.signal;
+		
+		return VolWeb()
 			.then((wasmInstance) => {
+				// Check if download was already cancelled
+				if (signal.aborted) {
+					return false;
+				}
+				
 				_wasm = wasmInstance;
 				_wasm.ccall("basis_init", "boolean");
 				_wasm.initVologramFunctions(vologram);
-				return _wasm.fetch_stream_file("vologram.vols", vologram.sequenceUrl, onProgress);
+				return _wasm.fetch_stream_file("vologram.vols", vologram.sequenceUrl, onProgress, signal);
 			})
 			.then((response) => {
 				return new Promise(async (resolve, reject) => {
+					// Check if download was cancelled during fetch
+					if (signal.aborted) {
+						return false;
+					}
+					
 					// Wait until we have a header and audio donwloaded
 					await _wasm.isHeaderLoaded();
 
@@ -173,19 +190,41 @@ const VologramPlayer = (extensions) => {
 				});
 			})
 			.catch((err) => {
-				console.error(err);
+				// Handle cancellation gracefully
+				if (err.name === 'AbortError') {
+					console.log('Vologram download cancelled by user');
+					return false;
+				}
+				console.error('Vologram download error:', err);
 				return false;
 			});
+	};
 
-	const _initWasm = (onProgress) =>
-		VolWeb()
+	const _initWasm = (onProgress) => {
+		// Create AbortController for this download session  
+		_downloadController = new AbortController();
+		const signal = _downloadController.signal;
+		
+		return VolWeb()
 			.then((wasmInstance) => {
+				// Check if download was already cancelled
+				if (signal.aborted) {
+					return false;
+				}
+				
 				_wasm = wasmInstance;
 				_wasm.ccall("basis_init", "boolean");
 				_wasm.initVologramFunctions(vologram);
-				return _wasm.fetch_file("header.vols", vologram.headerUrl, onProgress);
+				return _wasm.fetch_file("header.vols", vologram.headerUrl, onProgress, signal);
 			})
-			.then((response) => _wasm.fetch_file("sequence.vols", vologram.sequenceUrl, onProgress))
+			.then((response) => {
+				// Check if download was cancelled between header and sequence
+				if (signal.aborted) {
+					return false;
+				}
+				
+				return _wasm.fetch_file("sequence.vols", vologram.sequenceUrl, onProgress, signal);
+			})
 			.then((response) => {
 				return new Promise( (resolve, reject) => {
 					const initSuccess = _initVologram();
@@ -194,9 +233,15 @@ const VologramPlayer = (extensions) => {
 				});
 			})
 			.catch((err) => {
-				console.error(err);
+				// Handle cancellation gracefully
+				if (err.name === 'AbortError') {
+					console.log('Vologram download cancelled by user');
+					return false;
+				}
+				console.error('Vologram download error:', err);
 				return false;
 			});
+	};
 
 	const _getFrameFromSeconds = (seconds) => {
 		_frameFromTime = Math.floor(seconds * vologram.header.fps);
@@ -330,6 +375,19 @@ const VologramPlayer = (extensions) => {
 	const _cleanVologramModule = () => {
 		_wasm.ccall("basis_free", "boolean");
 		vologram.free_file_info();
+		
+		// Clean up OPFS files
+		if (_wasm.FS.analyzePath("/opfs/vologram.vols").exists) {
+			_wasm.FS.unlink("/opfs/vologram.vols");
+		}
+		if (_wasm.FS.analyzePath("/opfs/header.vols").exists) {
+			_wasm.FS.unlink("/opfs/header.vols");
+		}
+		if (_wasm.FS.analyzePath("/opfs/sequence_0.vols").exists) {
+			_wasm.FS.unlink("/opfs/sequence_0.vols");
+		}
+
+		// Clean up MEMFS files
 		if (_wasm.FS.analyzePath("vologram.vols").exists) {
 			_wasm.FS.unlink("vologram.vols");
 		}
@@ -339,6 +397,13 @@ const VologramPlayer = (extensions) => {
 		if (_wasm.FS.analyzePath("sequence_0.vols").exists) {
 			_wasm.FS.unlink("sequence_0.vols");
 		}
+		
+		// This properly cleans up all background workers created by Emscripten
+		if (_wasm.PThread && _wasm.PThread.terminateAllThreads) {
+			console.log('Terminating all WASM pthread workers...');
+			_wasm.PThread.terminateAllThreads();
+		}
+		
 		_wasm = null;
 	};
 
@@ -351,6 +416,13 @@ const VologramPlayer = (extensions) => {
 	};
 
 	const _close = () => {
+		// Cancel any ongoing downloads first
+		if (_downloadController) {
+			console.log('Cancelling ongoing vologram download...');
+			_downloadController.abort();
+			_downloadController = null;
+		}
+		
 		if (_frameRequestId && !vologram.attachedVideo) cancelAnimationFrame(_frameRequestId);
 
 		_timerPaused = true;

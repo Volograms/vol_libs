@@ -79,7 +79,7 @@
     <div id="log"></div>
 
     <!-- Include your vologram player library -->
-    <script src="vol_web.js"></script>
+    <script src="vol_web_opfs.js"></script>
     <script src="players/VologramPlayer.js"></script>
 
     <script>
@@ -178,7 +178,7 @@
 
                 // Test with a small vologram file
                 // Note: You'll need to replace this with an actual vologram URL
-                const testVologramUrl = 'https://public-vms-volograms-storage.s3.eu-west-1.amazonaws.com/testing/Patrick_Horse_ld_1024_ETC1S_BASIS_mp3.vols';
+                const testVologramUrl = 'https://*.vols';
                 
                 log('Attempting to open vologram with OPFS...', 'info');
                 
@@ -224,7 +224,7 @@
                 const player = VologramPlayer();
                 log('✓ Created VologramPlayer instance', 'success');
 
-                const testVologramUrl = 'https://public-vms-volograms-storage.s3.eu-west-1.amazonaws.com/testing/Patrick_Horse_ld_1024_ETC1S_BASIS_mp3.vols';
+                const testVologramUrl = 'https://*.vols';
                 
                 log('Attempting to open vologram with MEMFS...', 'info');
                 
@@ -286,13 +286,13 @@
             const success = await testOPFSSupport();
             if (success) {
                 // Uncomment the next line when you have a test vologram file
-                await testVologramOPFS();
+                // await testVologramOPFS();
                 log('Note: Vologram testing requires a valid vologram file URL', 'warning');
             }
         });
 
         document.getElementById('testMemFS').addEventListener('click', async () => {
-            await testVologramMEMFS();
+            // await testVologramMEMFS();
             log('Note: MEMFS testing requires a valid vologram file URL', 'warning');
         });
 

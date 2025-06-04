@@ -3,6 +3,9 @@ const VologramLoader = (glContext) => {
 	let vologram = {};
 	const header = {};
 	const frame = {};
+	
+	// AbortController for canceling fetch requests
+	let _downloadController = null;
 
 	const _loadMesh = (frameIdx) => {
 		// Ask the vol_geom WASM to read the frame data from the vologram file into `_frame_data`.
@@ -117,35 +120,71 @@ const VologramLoader = (glContext) => {
 		header.ready = true;
 	};
 
-	const _initWasmSingleFile = async (onProgress) =>
-		VolWeb()
+	const _initWasmSingleFile = async (onProgress) => {
+		// Create AbortController for this download session
+		_downloadController = new AbortController();
+		const signal = _downloadController.signal;
+		
+		return VolWeb()
 			.then((wasmInstance) => {
+				// Check if download was already cancelled
+				if (signal.aborted) {
+					return false;
+				}
+				
 				_wasm = wasmInstance;
 				_wasm.ccall("basis_init", "boolean");
 				_wasm.initVologramFunctions(vologram);
-				return _wasm.fetch_file("vologram.vols", vologram.sequenceUrl, onProgress);
+				return _wasm.fetch_file("vologram.vols", vologram.sequenceUrl, onProgress, signal);
 			})
 			.then((response) => {
 				return new Promise((resolve, reject) => {
+					// Check if download was cancelled during fetch
+					if (signal.aborted) {
+						return false;
+					}
+					
 					const initSuccess = _initVologram();
 					if (initSuccess) resolve(initSuccess);
 					else reject(new Error("_initVologram failed to open vologram"));
 				});
 			})
 			.catch((err) => {
-				console.error(err);
+				// Handle cancellation gracefully
+				if (err.name === 'AbortError') {
+					console.log('Vologram download cancelled by user');
+					return false;
+				}
+				console.error('Vologram download error:', err);
 				return false;
 			});
+	};
 
-	const _initWasm = (onProgress) =>
-		VolWeb()
+	const _initWasm = (onProgress) => {
+		// Create AbortController for this download session  
+		_downloadController = new AbortController();
+		const signal = _downloadController.signal;
+		
+		return VolWeb()
 			.then((wasmInstance) => {
+				// Check if download was already cancelled
+				if (signal.aborted) {
+					return false;
+				}
+				
 				_wasm = wasmInstance;
 				_wasm.ccall("basis_init", "boolean");
 				_wasm.initVologramFunctions(vologram);
-				return _wasm.fetch_file("header.vols", vologram.headerUrl, onProgress);
+				return _wasm.fetch_file("header.vols", vologram.headerUrl, onProgress, signal);
 			})
-			.then((response) => _wasm.fetch_file("sequence.vols", vologram.sequenceUrl, onProgress))
+			.then((response) => {
+				// Check if download was cancelled between header and sequence
+				if (signal.aborted) {
+					return false;
+				}
+				
+				return _wasm.fetch_file("sequence.vols", vologram.sequenceUrl, onProgress, signal);
+			})
 			.then((response) => {
 				return new Promise((resolve, reject) => {
 					const initSuccess = _initVologram();
@@ -154,9 +193,15 @@ const VologramLoader = (glContext) => {
 				});
 			})
 			.catch((err) => {
-				console.error(err);
+				// Handle cancellation gracefully
+				if (err.name === 'AbortError') {
+					console.log('Vologram download cancelled by user');
+					return false;
+				}
+				console.error('Vologram download error:', err);
 				return false;
 			});
+	};
 
 	const _getFrameFromSeconds = (seconds) => {
 		return Math.floor(seconds * header.fps) % header.frameCount;
@@ -190,6 +235,13 @@ const VologramLoader = (glContext) => {
 		if (_wasm.FS.analyzePath("sequence_0.vols").exists) {
 			_wasm.FS.unlink("sequence_0.vols");
 		}
+		
+		// This properly cleans up all background workers created by Emscripten
+		if (_wasm.PThread && _wasm.PThread.terminateAllThreads) {
+			console.log('Terminating all WASM pthread workers...');
+			_wasm.PThread.terminateAllThreads();
+		}
+		
 		_wasm = null;
 	};
 
@@ -203,6 +255,13 @@ const VologramLoader = (glContext) => {
 	};
 
 	const _close = () => {
+		// Cancel any ongoing downloads first
+		if (_downloadController) {
+			console.log('Cancelling ongoing vologram download...');
+			_downloadController.abort();
+			_downloadController = null;
+		}
+		
 		_cleanVologramObject();
 		_cleanVologramModule();
 	};

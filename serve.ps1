@@ -2,24 +2,21 @@
 # Run this from the wasm directory: .\serve.ps1
 
 $port = 8000
-$url = "http://localhost:$port/"
+$url = "http://localhost:$port"
 
 Write-Host "Starting HTTP server on $url" -ForegroundColor Green
 Write-Host "Press Ctrl+C to stop the server" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "Test URLs:" -ForegroundColor Cyan
-Write-Host "  OPFS Test: $url/test-opfs.html" -ForegroundColor White
-Write-Host "  Example:   $url/examples/opfs_streaming_example.html" -ForegroundColor White
-Write-Host "  Example:   $url/examples/05_vol_player_wasm/index_three.html" -ForegroundColor White
+Write-Host "  OPFS Test: $url/wasm/test-opfs.html" -ForegroundColor White
+Write-Host "  Example OPFS:   $url/examples/opfs_streaming_example.html" -ForegroundColor White
+Write-Host "  Example MEMFS:   $url/examples/05_vol_player_wasm/index_three.html" -ForegroundColor White
 Write-Host ""
 
 # Create HTTP listener
 $listener = New-Object System.Net.HttpListener
-$listener.Prefixes.Add($url)
+$listener.Prefixes.Add($url+"/")
 $listener.Start()
-
-# Set base path to parent directory (vol_libs) so we can serve examples/
-$basePath = Split-Path (Get-Location) -Parent
 
 # Flag to control the server loop - this gets set by Ctrl+C
 $global:shouldStop = $false
@@ -58,19 +55,11 @@ try {
                 
                 # Get the requested file path
                 $path = $request.Url.LocalPath
-                if ($path -eq "/") { $path = "/test-opfs.html" }
+                if ($path -eq "/") { $path = "/wasm/test-opfs.html" }
                 
                 # Convert URL path to local file path
-                if ($path.StartsWith("/wasm/") -or $path -eq "/test-opfs.html") {
-                    # Serve from wasm directory
-                    $relativePath = $path.Replace("/wasm/", "").Replace("/", "\")
-                    if ($path -eq "/test-opfs.html") { $relativePath = "test-opfs.html" }
-                    $filePath = Join-Path (Get-Location) $relativePath
-                } else {
-                    # Serve from parent directory (for examples/, etc.)
-                    $relativePath = $path.TrimStart('/').Replace("/", "\")
-                    $filePath = Join-Path $basePath $relativePath
-                }
+                $relativePath = $path.Replace("/", "\")
+                $filePath = Join-Path (Get-Location) $relativePath
                 
                 Write-Host "$(Get-Date -Format 'HH:mm:ss') - $($request.HttpMethod) $path" -ForegroundColor Gray
                 

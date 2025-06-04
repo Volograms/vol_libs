@@ -46,8 +46,8 @@ Module.initOPFS = async () => {
 	}
 
 	// Check if we're in a secure context (required for OPFS)
-	if (!window.isSecureContext) {
-		console.warn('OPFS requires a secure context (HTTPS). Falling back to MEMFS.');
+	if (!window.isSecureContext || !window.crossOriginIsolated || !window.SharedArrayBuffer) {
+		console.warn('OPFS requires a secure context (HTTPS), cross-origin isolation, and SharedArrayBuffer support. Falling back to MEMFS.');
 		Module._opfsInitialized = false;
 		return false;
 	}
@@ -83,11 +83,12 @@ Module.setupOPFS = async () => {
 			return false;
 		}
 
-		// Check if OPFS functions are available (only in WASMFS builds)
-		if (typeof Module.ccall('setup_opfs_wasmfs', null, [], []) === 'undefined') {
-			console.warn('OPFS functions not available in this build. Use pthread build for OPFS support.');
-			return false;
-		}
+		// // Check if OPFS functions are available (only in WASMFS builds)
+		// if (typeof Module.ccall('setup_opfs_wasmfs', null, [], []) === 'undefined') {
+		// 	console.warn('OPFS functions not available in this build. Use pthread build for OPFS support.');
+		// 	Module._opfsInitialized = false;
+		// 	return false;
+		// }
 
 		// Call the C++ function to setup OPFS backend via WasmFS
 		console.log('Setting up WasmFS OPFS backend...');
@@ -146,7 +147,7 @@ Module.isHeaderLoaded = () => {
 	  return new Promise(poll);
 }
 
-Module.fetch_stream_file = async (dest, fileUrl, onProgress) => {
+Module.fetch_stream_file = async (dest, fileUrl, onProgress, abortSignal = null) => {
 	// If OPFS is ready and dest starts with /opfs/, handle it specially
 	if (Module.isOPFSReady() && dest.startsWith('/opfs/')) {
 		console.log(`Streaming to OPFS: ${dest}`);
@@ -154,7 +155,13 @@ Module.fetch_stream_file = async (dest, fileUrl, onProgress) => {
 		// Just continue with normal streaming but to the /opfs/ path
 	}
 
-	return await fetch(fileUrl)
+	// Create fetch options with abort signal if provided
+	const fetchOptions = {};
+	if (abortSignal) {
+		fetchOptions.signal = abortSignal;
+	}
+
+	return await fetch(fileUrl, fetchOptions)
 		// Retrieve its body as ReadableStream
 		.then(async (response) => {
 			if (!response.ok) {
@@ -188,6 +195,15 @@ Module.fetch_stream_file = async (dest, fileUrl, onProgress) => {
 				}
 				return reader.read().then(pump);
 			})
+			.catch((err) => {
+				if (err.name === 'AbortError') {
+					console.log('Download aborted.');
+				} else {
+					console.error('Download error:', err);
+				}
+				// Module.FS.close(fileStream);
+				return;
+			});
 
 			// return new ReadableStream({
 			// 	start(controller) {
@@ -210,7 +226,6 @@ Module.fetch_stream_file = async (dest, fileUrl, onProgress) => {
 			// 	},
 			// });
 		})
-		// .then((stream) => new Response(stream))
 		.then((url) => console.log(('Stream ready.')))
 		.catch((err) => console.error(err));
 
@@ -233,7 +248,7 @@ Module.fetch_stream_file = async (dest, fileUrl, onProgress) => {
 	// 	.catch((err) => console.error(err));
 };
 
-Module.fetch_file = async (dest, fileUrl, onProgress) => {
+Module.fetch_file = async (dest, fileUrl, onProgress, abortSignal = null) => {
 	// If OPFS is ready and dest starts with /opfs/, handle it specially
 	if (Module.isOPFSReady() && dest.startsWith('/opfs/')) {
 		console.log(`Downloading to OPFS: ${dest}`);
@@ -241,7 +256,13 @@ Module.fetch_file = async (dest, fileUrl, onProgress) => {
 		// Just continue with normal download but to the /opfs/ path
 	}
 
-	return await fetch(fileUrl)
+	// Create fetch options with abort signal if provided
+	const fetchOptions = {};
+	if (abortSignal) {
+		fetchOptions.signal = abortSignal;
+	}
+
+	return await fetch(fileUrl, fetchOptions)
 		// Retrieve its body as ReadableStream
 		.then(async (response) => {
 			if (!response.ok) {
@@ -271,6 +292,15 @@ Module.fetch_file = async (dest, fileUrl, onProgress) => {
 				// Read some more, and call this function again
 				return await reader.read().then(pump);
 			})
+			.catch((err) => {
+				if (err.name === 'AbortError') {
+					console.log('Download aborted.');
+				} else {
+					console.error('Download error:', err);
+				}
+				// Module.FS.close(fileStream);
+				return;
+			});
 		})
 		// .then((stream) => new Response(stream))
 		.then((url) => console.log(('Stream ready.')))

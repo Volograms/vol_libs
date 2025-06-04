@@ -1,36 +1,40 @@
 @echo off
 setlocal EnableDelayedExpansion
 
-echo Building WebAssembly module (Simple JS version without pthread and OPFS)...
+echo Building WebAssembly module (JS version) with WasmFS OPFS support...
 
 :: Set environment variables
 set CC=gcc
-set CPP=g++ -std=c++11
+set CPP=g++ -std=c++20
 
 :: Create error handling
 set ERRORLEVEL=0
 
-set PATH=%PATH%;C:\work\code\emsdk\upstream\emscripten\
+set PATH=%PATH%;..\..\emsdk\upstream\emscripten\
 
 echo emcc...
 emcc -O3 -fno-strict-aliasing -DBASISD_SUPPORT_KTX2=0 ^
--s "EXPORTED_RUNTIME_METHODS=['ccall','cwrap','FS']" ^
--s "EXPORTED_FUNCTIONS=['_malloc','_free']" ^
+-s "EXPORTED_RUNTIME_METHODS=['ccall','cwrap','FS','PThread']" ^
+-s "EXPORTED_FUNCTIONS=['_malloc','_free','_setup_opfs_wasmfs','_test_opfs_functionality']" ^
 -s SINGLE_FILE ^
--s MALLOC=emmalloc ^
--s INITIAL_MEMORY=33554432 ^
+-s MALLOC=mimalloc ^
+-s INITIAL_MEMORY=52428800 ^
 -s MAXIMUM_MEMORY=1073741824 ^
 -s ALLOW_MEMORY_GROWTH=1 ^
 -s MODULARIZE=1 ^
 -s EXPORT_NAME="VolWeb" ^
--s ENVIRONMENT=web ^
--o vol_web_simple.js ^
+-s WASMFS=1 ^
+-s FORCE_FILESYSTEM=1 ^
+-pthread ^
+-s PTHREAD_POOL_SIZE=2 ^
+-s ENVIRONMENT=web,worker ^
+-o vol_web_opfs.js ^
 --pre-js "pre.js" ^
--g ^
---debug ^
+-g1 ^
 ..\src\vol_basis.cpp ^
 wasm_vol_geom.c ^
 ..\src\vol_geom.c ^
+wasm_opfs_setup.cpp ^
 ..\thirdparty\basis_universal\transcoder\basisu_transcoder.cpp ^
 -I .\ ^
 -I ..\src\ ^
@@ -43,7 +47,7 @@ if %ERRORLEVEL% neq 0 (
     exit /b %ERRORLEVEL%
 )
 
-echo Build completed successfully! Created vol_web_simple.js (no pthread/SharedArrayBuffer/OPFS)
+echo Build completed successfully!
 pause
 
 endlocal
