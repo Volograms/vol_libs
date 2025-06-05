@@ -7,7 +7,7 @@
 [![Issues](https://img.shields.io/github/issues/Volograms/vol_libs)](https://github.com/Volograms/vol_libs/issues)
 [![Pull Requests](https://img.shields.io/github/issues-pr/Volograms/vol_libs)](https://github.com/Volograms/vol_libs/pulls)
 [![Discord](https://img.shields.io/discord/748820653158694942?label=discord)](https://discord.gg/nuDP5jjZ5q)
-[![Platform](https://img.shields.io/badge/platform-c++%20%7C%20wasm-blue)](#)
+<!-- [![Platform](https://img.shields.io/badge/platform-c++%20%7C%20wasm%20%7C%20javascript-blue)](#) -->
 
 **A modular C/C++ library suite for loading, processing, and playing volumetric video (volograms) across native, web, and game engine platforms.**  
 Easily extract mesh, texture, and audio data from vologram files for use in custom players, converters, or real-time applications.
