@@ -1,8 +1,34 @@
 {
 	"name": "@volograms/web_vol_lib",
 	"version": "1.3.0-beta.4",
-	"description": "This is an experimental repo to try using WebASM to convert one of our native libraries to web assembly, and read volograms with it",
-	"main": "vol_player.mjs",
+	"description": "This is a repo using WebASM to convert our native library to web assembly, and play volograms with it",
+	"main": "vol_web.mjs",
+	"exports": {
+		".": {
+			"import": "./vol_web.mjs",
+			"require": "./vol_web.mjs"
+		},
+		"./standard": {
+			"import": "./vol_web.mjs",
+			"require": "./vol_web.mjs"
+		},
+		"./opfs": {
+			"import": "./vol_web_opfs.mjs",
+			"require": "./vol_web_opfs.mjs"
+		},
+		"./players/*": {
+			"import": "./players/*",
+			"require": "./players/*"
+		}
+	},
+	"files": [
+		"vol_web.mjs",
+		"vol_web_opfs.mjs",
+		"players/*.mjs",
+		"players/README.md",
+		"README.md",
+		"LICENSE"
+	],
 	"scripts": {
 		"test": "echo \"Error: no test specified\" && exit 1"
 	},
@@ -13,9 +39,11 @@
 	"keywords": [
 		"volograms",
 		"javascript",
-		"webasm"
+		"webasm",
+		"opfs",
+		"webassembly"
 	],
-	"author": "Patrick Geoghegan and Anton Gerdelan",
+	"author": "Jan Ondrej, Patrick Geoghegan and Anton Gerdelan",
 	"license": "MIT",
 	"bugs": {
 		"url": "https://github.com/Volograms/vol_libs/issues"

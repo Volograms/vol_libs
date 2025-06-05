@@ -91,12 +91,6 @@ Module._useOPFS = false;
     return false;
   }
   try {
-    // Check if OPFS functions are available (only in WASMFS builds)
-    if (typeof Module.ccall("setup_opfs_wasmfs", null, [], []) === "undefined") {
-      console.warn("OPFS functions not available in this build. Use pthread build for OPFS support.");
-      Module._opfsInitialized = false;
-      return false;
-    }
     // Test OPFS access - WasmFS backend will handle actual file operations
     const root = await navigator.storage.getDirectory();
     console.log("OPFS browser support verified - WasmFS backend will handle file operations");
@@ -124,6 +118,12 @@ Module._useOPFS = false;
       console.error("Module not ready. Wait for WASM to load.");
       return false;
     }
+    // // Check if OPFS functions are available (only in WASMFS builds)
+    // if (typeof Module.ccall('setup_opfs_wasmfs', null, [], []) === 'undefined') {
+    // 	console.warn('OPFS functions not available in this build. Use pthread build for OPFS support.');
+    // 	Module._opfsInitialized = false;
+    // 	return false;
+    // }
     // Call the C++ function to setup OPFS backend via WasmFS
     console.log("Setting up WasmFS OPFS backend...");
     Module.ccall("setup_opfs_wasmfs", null, [], []);
@@ -171,12 +171,17 @@ Module.isHeaderLoaded = () => {
   return new Promise(poll);
 };
 
-Module.fetch_stream_file = async (dest, fileUrl, onProgress) => {
+Module.fetch_stream_file = async (dest, fileUrl, onProgress, abortSignal = null) => {
   // If OPFS is ready and dest starts with /opfs/, handle it specially
   if (Module.isOPFSReady() && dest.startsWith("/opfs/")) {
     console.log(`Streaming to OPFS: ${dest}`);
   }
-  return await fetch(fileUrl).then(async response => {
+  // Create fetch options with abort signal if provided
+  const fetchOptions = {};
+  if (abortSignal) {
+    fetchOptions.signal = abortSignal;
+  }
+  return await fetch(fileUrl, fetchOptions).then(async response => {
     if (!response.ok) {
       throw new Error(`HTTP error! Status: ${response.status}`);
     }
@@ -203,16 +208,29 @@ Module.fetch_stream_file = async (dest, fileUrl, onProgress) => {
         Module.headerFetched = true;
       }
       return reader.read().then(pump);
+    }).catch(err => {
+      if (err.name === "AbortError") {
+        console.log("Download aborted.");
+      } else {
+        console.error("Download error:", err);
+      }
+      // Module.FS.close(fileStream);
+      return;
     });
   }).then(url => console.log(("Stream ready."))).catch(err => console.error(err));
 };
 
-Module.fetch_file = async (dest, fileUrl, onProgress) => {
+Module.fetch_file = async (dest, fileUrl, onProgress, abortSignal = null) => {
   // If OPFS is ready and dest starts with /opfs/, handle it specially
   if (Module.isOPFSReady() && dest.startsWith("/opfs/")) {
     console.log(`Downloading to OPFS: ${dest}`);
   }
-  return await fetch(fileUrl).then(async response => {
+  // Create fetch options with abort signal if provided
+  const fetchOptions = {};
+  if (abortSignal) {
+    fetchOptions.signal = abortSignal;
+  }
+  return await fetch(fileUrl, fetchOptions).then(async response => {
     if (!response.ok) {
       throw new Error(`HTTP error! Status: ${response.status}`);
     }
@@ -236,6 +254,14 @@ Module.fetch_file = async (dest, fileUrl, onProgress) => {
       seekLocation += value.length;
       // Read some more, and call this function again
       return await reader.read().then(pump);
+    }).catch(err => {
+      if (err.name === "AbortError") {
+        console.log("Download aborted.");
+      } else {
+        console.error("Download error:", err);
+      }
+      // Module.FS.close(fileStream);
+      return;
     });
   }).then(url => console.log(("Stream ready."))).catch(err => console.error(err));
 };

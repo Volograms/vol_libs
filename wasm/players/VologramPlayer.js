@@ -170,6 +170,7 @@ const VologramPlayer = (extensions) => {
 	};
 
 	const _initWasmSingleFile = async (onProgress) => {
+		// Create AbortController for this download session
 		_downloadController = new AbortController();
 		const signal = _downloadController.signal;
 		
@@ -231,6 +232,7 @@ const VologramPlayer = (extensions) => {
 	};
 
 	const _initWasm = (onProgress) => {
+		// Create AbortController for this download session  
 		_downloadController = new AbortController();
 		const signal = _downloadController.signal;
 		
@@ -445,7 +447,7 @@ const VologramPlayer = (extensions) => {
 		_wasm.ccall("basis_free", "boolean");
 		vologram.free_file_info();
 		
-		// Clean up files
+		// Clean up OPFS files
 		if (_wasm.FS.analyzePath("/opfs/vologram.vols").exists) {
 			_wasm.FS.unlink("/opfs/vologram.vols");
 		}
