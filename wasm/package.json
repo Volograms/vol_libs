@@ -1,8 +1,10 @@
 {
 	"name": "@volograms/web_vol_lib",
-	"version": "1.3.0-beta.4",
-	"description": "This is a repo using WebASM to convert our native library to web assembly, and play volograms with it",
+	"version": "2.0.0",
+	"description": "A WebASM library to play volograms in the browser.",
 	"main": "vol_web.mjs",
+	"module": "vol_web.mjs",
+	"type": "module",
 	"exports": {
 		".": {
 			"import": "./vol_web.mjs",
