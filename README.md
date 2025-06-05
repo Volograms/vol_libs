@@ -12,8 +12,6 @@
 **A modular C/C++ library suite for loading, processing, and playing volumetric video (volograms) across native, web, and game engine platforms.**  
 Easily extract mesh, texture, and audio data from vologram files for use in custom players, converters, or real-time applications.
 
-The libraries here are designed to be used in native plugins for Unity, Unreal and web pages, and can also be used to drive any custom vologram player or converter software. This will give you frame-by-frame triangulated mesh data, with images for the texture, that can be used with any API.
-
 ## 🚀 Quick Start
 
 ### Try the Web Demo (Coming Soon)
