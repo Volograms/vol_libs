@@ -19,43 +19,55 @@ You can import the modules into your projects a number of ways:
 
 - Open your terminal and `cd` into your node project
 - Run the command `npm i @volograms/web_vol_lib`
-- Import the module into your script using:
+- Import the modules into your script using:
 
 ```js
-// Required
+// Core WebAssembly modules - choose your preferred version
+// Both export 'VolWeb' so we need to alias them differently
+import VolWeb from "@volograms/web_vol_lib/standard";                   // Memory-based storage
+import VolWebOPFS from "@volograms/web_vol_lib/opfs";                   // Disk-based storage (requires CORS headers)
+
+// Player (now requires VolWeb module as first parameter)
 import VologramPlayer from "@volograms/web_vol_lib/players/VologramPlayer.mjs";
+
 // Optional (Recommended for WebGL projects)
 import WebGlPlayerExtension from "@volograms/web_vol_lib/players/WebGlPlayerExtension.mjs";
 // Optional (Recommended for Three JS projects)
 import ThreeJsPlayerExtension from "@volograms/web_vol_lib/players/ThreeJsPlayerExtension.mjs";
-// Optional (Recommonded only if you need to directly interface with the wasm module)
-import VolWeb from "@volograms/web_vol_lib/vol_web.mjs";
+
+// Usage examples:
+// Standard version (memory-based)
+const playerStandard = VologramPlayer(VolWeb, [WebGlPlayerExtension(gl)]);
+
+// OPFS version (disk-based, better for large files on mobile)
+const playerOPFS = VologramPlayer(VolWebOPFS, [WebGlPlayerExtension(gl)]);
 ```
 
-### CDN
+### CDN (GitHub)
 
-cdn is hosted by [jsdelivr](https://www.jsdelivr.com)
+CDN is hosted by [jsdelivr](https://www.jsdelivr.com). Note: CDN usage requires accessing the raw repository files since only ES modules (.mjs files) are included in the NPM package.
 
-- In your HTML file you can use a `script` to import the players:
+- In your HTML file with ES modules support:
 
 ```html
-<!-- Required -->
-<script src="https://cdn.jsdelivr.net/gh/Volograms/vol_libs@main/wasm/players/VologramPlayer.js"></script>
-<!-- Optional (Recommended for WebGL projects) -->
-<script src="https://cdn.jsdelivr.net/gh/Volograms/vol_libs@main/wasm/players/WebGlPlayerExtension.js"></script>
-<!-- Optional (Recommended for Three JS projects) -->
-<script src="https://cdn.jsdelivr.net/gh/Volograms/vol_libs@main/wasm/players/ThreeJsPlayerExtension.js"></script>
-<!-- Optional (Recommonded only if you need to directly interface with the wasm module) -->
-<script src="https://cdn.jsdelivr.net/gh/Volograms/vol_libs@main/wasm/vol_web.js"></script>
+<script type="module">
+  // Import VolWeb modules - both export 'VolWeb' so we alias them differently
+  import VolWeb from 'https://cdn.jsdelivr.net/gh/Volograms/vol_libs@main/wasm/vol_web.mjs';
+  import VolWebOPFS from 'https://cdn.jsdelivr.net/gh/Volograms/vol_libs@main/wasm/vol_web_opfs.mjs';
+  
+  // Import player and extensions  
+  import VologramPlayer from 'https://cdn.jsdelivr.net/gh/Volograms/vol_libs@main/wasm/players/VologramPlayer.mjs';
+  import WebGlPlayerExtension from 'https://cdn.jsdelivr.net/gh/Volograms/vol_libs@main/wasm/players/WebGlPlayerExtension.mjs';
+  import ThreeJsPlayerExtension from 'https://cdn.jsdelivr.net/gh/Volograms/vol_libs@main/wasm/players/ThreeJsPlayerExtension.mjs';
+
+  // Usage examples:
+  const vologramPlayerStandard = VologramPlayer(VolWeb, []);
+  const vologramWebGl = VologramPlayer(VolWeb, [WebGlPlayerExtension(gl)]);
+  const vologramThreeOPFS = VologramPlayer(VolWebOPFS, [ThreeJsPlayerExtension(gl)]);
+</script>
 ```
 
-- Now in a javascript you can access the players with:
-
-```js
-const vologramPlayer = VologramPlayer();
-const vologramWebGl = VologramPlayer([WebGlPlayerExtension(gl)]);
-const vologramThree = VologramPlayer([ThreeJsPlayerExtension(gl)]);
-```
+**Note**: For production use, we recommend using the NPM package for better performance and bundling optimization.
 
 ## Storage Modes
 
@@ -71,20 +83,10 @@ The VologramPlayer supports two different storage modes for handling volumetric 
 ### OPFS (Origin Private File System)
 - **Storage**: Files are stored on disk via WasmFS OPFS backend, not in memory  
 - **Implementation**: Uses WasmFS virtual filesystem (`/opfs/`) that maps to browser's actual OPFS storage
-- **C API Access**: Your C code uses standard file operations like `fopen("/opfs/filename", "w")`
 - **Performance**: Better memory efficiency, larger file support
 - **Compatibility**: Requires modern browsers with OPFS support (Chrome 86+, Firefox 111+, Safari 15.2+)
 - **Use case**: Recommended for large volumetric video files, mobile devices, or memory-constrained environments
 - **Mobile compatibility**: Much better performance on mobile devices, especially for large files
-
-#### How OPFS Implementation Works
-The implementation uses **WasmFS OPFS backend** rather than direct JavaScript OPFS API:
-
-1. **WasmFS Backend**: `wasmfs_create_opfs_backend()` creates a bridge to browser's OPFS
-2. **Virtual Directory**: `/opfs/` directory in WasmFS maps to actual browser OPFS storage  
-3. **C File Operations**: Standard `fopen("/opfs/file.vols", "w")` automatically routes to OPFS
-4. **No JavaScript OPFS API**: No need for `navigator.storage.getDirectory()` calls
-5. **Persistent Storage**: Files persist across browser sessions like normal OPFS
 
 #### Browser Support for OPFS
 - ✅ **Chrome/Edge**: 86+ (full support)
@@ -94,8 +96,11 @@ The implementation uses **WasmFS OPFS backend** rather than direct JavaScript OP
 
 #### Using OPFS Mode
 ```js
-// Enable OPFS storage mode
-const player = VologramPlayer();
+import VolWebOPFS from '@volograms/web_vol_lib/opfs';
+import VologramPlayer from '@volograms/web_vol_lib/players/VologramPlayer.mjs';
+
+// Create player with OPFS-enabled VolWeb module
+const player = VologramPlayer(VolWebOPFS, []);
 player.open({
     sequenceUrl: "large_vologram.vols",
     useOPFS: true  // Enable disk-based storage
@@ -106,8 +111,9 @@ player.open({
 
 ## `VologramPlayer`
 
-`VologramPlayer(extensions)`: returns an object that provides properties functions to control the vologram playback
+`VologramPlayer(VolWebModule, extensions)`: returns an object that provides properties functions to control the vologram playback
 
+- Parameter `VolWebModule`: (_**required**_) The VolWeb WebAssembly module to use. Import either the standard version (`@volograms/web_vol_lib/standard`) for memory-based storage or the OPFS version (`@volograms/web_vol_lib/opfs`) for disk-based storage. Both export `VolWeb` so use import aliases to distinguish them.
 - Parameter `extensions`: (_**optional**_) an array of player extensions, for example the [`WebGlPlayerExtension`](#webglplayerextension) or [`ThreeJsPlayerExtension`](#threejsplayerextension)
 
 The returned object has the following properties and functions:
@@ -162,6 +168,16 @@ The returned object has the following properties and functions:
 `WebGlPlayerExtension(glContext)`: returns an extension object that can be passed into the [`VologramPlayer`](#vologramplayer) function
 
 - Parameter `glContext`: (_**required**_) a [`WebGL2RenderingContext`](https://developer.mozilla.org/en-US/docs/Web/API/WebGL2RenderingContext) object
+
+**Usage Example:**
+```js
+import VolWeb from '@volograms/web_vol_lib/standard';
+import VologramPlayer from '@volograms/web_vol_lib/players/VologramPlayer.mjs';
+import WebGlPlayerExtension from '@volograms/web_vol_lib/players/WebGlPlayerExtension.mjs';
+
+const gl = canvas.getContext('webgl2');
+const player = VologramPlayer(VolWeb, [WebGlPlayerExtension(gl)]);
+```
 
 The extension provides the following properties and functions that can be accessed through `vologramPlayer.extensions.webgl`:
 
@@ -218,6 +234,16 @@ The extension provides the following properties and functions that can be access
 `ThreeJsPlayerExtension(glContext)`: returns an extension object that can be passed into the [`VologramPlayer`](#vologramplayer) function
 
 - Parameter `glContext`: (_**required**_) a [`WebGL2RenderingContext`](https://developer.mozilla.org/en-US/docs/Web/API/WebGL2RenderingContext) object
+
+**Usage Example:**
+```js
+import VolWebOPFS from '@volograms/web_vol_lib/opfs';
+import VologramPlayer from '@volograms/web_vol_lib/players/VologramPlayer.mjs';
+import ThreeJsPlayerExtension from '@volograms/web_vol_lib/players/ThreeJsPlayerExtension.mjs';
+
+const gl = canvas.getContext('webgl2');
+const player = VologramPlayer(VolWebOPFS, [ThreeJsPlayerExtension(gl)]);
+```
 
 The extension provides the following properties and functions that can be accessed through `vologramPlayer.extensions.threejs`:
 

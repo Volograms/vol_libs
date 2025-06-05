@@ -9,11 +9,11 @@ The `VologramPlayer` now accepts the VolWeb module as its first parameter, givin
 ### Using with Standard Version
 
 ```javascript
-import VolWebStandard from '@volograms/web_vol_lib/standard';
-import { VologramPlayer } from '@volograms/web_vol_lib/players/VologramPlayer.mjs';
+import VolWeb from '@volograms/web_vol_lib/standard';
+import VologramPlayer from '@volograms/web_vol_lib/players/VologramPlayer.mjs';
 
 // Create player with standard VolWeb (memory-based storage)
-const player = VologramPlayer(VolWebStandard, [/* extensions */]);
+const player = VologramPlayer(VolWeb, [/* extensions */]);
 
 await player.open({
     headerUrl: 'path/to/header.vols',
@@ -26,7 +26,7 @@ await player.open({
 
 ```javascript
 import VolWebOPFS from '@volograms/web_vol_lib/opfs';
-import { VologramPlayer } from '@volograms/web_vol_lib/players/VologramPlayer.mjs';
+import VologramPlayer from '@volograms/web_vol_lib/players/VologramPlayer.mjs';
 
 // Create player with OPFS VolWeb (disk-based storage)
 const player = VologramPlayer(VolWebOPFS, [/* extensions */]);
