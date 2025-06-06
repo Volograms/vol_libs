@@ -1,30 +1,3 @@
-// Module.fetch_file = (dest, fileUrl, onProgress) => {
-// 	return new Promise((resolve, reject) => {
-// 		const xhr = new XMLHttpRequest();
-// 		xhr.open("GET", fileUrl, true);
-// 		xhr.responseType = "arraybuffer";
-// 		xhr.onprogress = (e) => {
-// 			if (onProgress) {
-// 				onProgress(e.loaded / e.total);
-// 			}
-// 		};
-// 		xhr.onload = () => {
-// 			if (!xhr.response) {
-// 				reject(new Error("No response received"));
-// 				return;
-// 			}
-// 			const byteArray = new Uint8Array(xhr.response);
-// 			var stream = Module.FS.open(dest, "w");
-// 			Module.FS.write(stream, byteArray, 0, byteArray.length, 0);
-// 			Module.FS.close(stream);
-// 			resolve({ status: xhr.status, responseUrl: xhr.responseURL });
-// 		};
-// 		xhr.onerror = () => reject(new Error("Download failed"));
-// 		xhr.onabort = () => reject(new Error("Download aborted"));
-// 		xhr.send(null);
-// 	});
-// };
-
 Module.fileFetched = false;
 Module.headerFetched = false;
 
@@ -131,23 +104,129 @@ Module.asyncWasm = (fn, ...args) => {
 	});
 };
 
-// Note: File operations are handled by WasmFS OPFS backend in C code
-// using standard fopen("/opfs/filename", "w") operations
-// No need for JavaScript OPFS API file manipulation
 
-Module.isHeaderLoaded = () => {
+/**
+ * Optimized fetch function that uses native APIs when possible
+ * Falls back to Module.FS for compatibility
+ */
+Module.fetch_stream_file = (dest, fileUrl, onProgress, abortSignal = null) => {
+	// Create fetch options with abort signal if provided
+	const fetchOptions = {};
+	if (abortSignal) {
+		fetchOptions.signal = abortSignal;
+	}
 
-	console.log(Module.fileFetched);
+	// Check if we should use native OPFS APIs for better performance
+	if (Module.isOPFSReady() && dest.startsWith('/opfs/')) {
+		return Module.fetch_file_native_opfs(dest, fileUrl, onProgress, abortSignal);
+	} else {
+		// Use Module.FS for MEMFS or fallback
+		return Module.fetch_file_wasmfs(dest, fileUrl, onProgress, abortSignal);
+	}
+};
 
-	const poll = resolve => {
-		if(Module.headerFetched == true) resolve();
-		else setTimeout(_ => poll(resolve), 400);
-	  }
+/**
+ * Native OPFS streaming implementation for maximum performance
+ * This function offloads the download and file writing to a Web Worker
+ * to avoid blocking the main thread. It uses FileSystemSyncAccessHandle inside
+ * the worker for high-performance, synchronous I/O.
+ */
+Module.fetch_file_native_opfs = (dest, fileUrl, onProgress, abortSignal = null) => {
+	console.log(`Using native OPFS worker for: ${dest}`);
 
-	  return new Promise(poll);
-}
+	const worker = new Worker(new URL('./opfs_worker.mjs', import.meta.url), { type: 'module' });
 
-Module.fetch_stream_file = async (dest, fileUrl, onProgress, abortSignal = null) => {
+	let resolveHeaderLoaded;
+	const headerLoadedPromise = new Promise((resolve) => {
+		resolveHeaderLoaded = resolve;
+	});
+
+	let resolveDownloadFinished;
+	let rejectDownloadFinished;
+	const downloadFinishedPromise = new Promise((resolve, reject) => {
+		resolveDownloadFinished = resolve;
+		rejectDownloadFinished = reject;
+	});
+
+	worker.onmessage = (event) => {
+		const { type, error, progress } = event.data;
+		switch (type) {
+			case 'header_ready':
+				console.log("OPFS Worker: Header ready.");
+				Module.verify_opfs_file(dest);
+				resolveHeaderLoaded();
+				break;
+			case 'progress_update':
+				if (onProgress) {
+					onProgress(progress);
+				}
+				break;
+			case 'download_complete':
+				console.log("OPFS Worker: Download complete.");
+				resolveHeaderLoaded();
+				resolveDownloadFinished();
+				worker.terminate();
+				break;
+			case 'error':
+				console.error("OPFS Worker error:", error);
+				rejectDownloadFinished(new Error(error));
+				worker.terminate();
+				break;
+		}
+	};
+    
+    worker.onerror = (error) => {
+        console.error("OPFS Worker failed:", error);
+        rejectDownloadFinished(error);
+        worker.terminate();
+    };
+
+	if (abortSignal) {
+		abortSignal.addEventListener('abort', () => {
+			console.log('Aborting OPFS worker.');
+			worker.terminate();
+			rejectDownloadFinished(new DOMException('Download aborted', 'AbortError'));
+		});
+	}
+
+	worker.postMessage({
+		fileUrl: fileUrl,
+		destinationPath: dest,
+	});
+
+	return {
+		headerLoaded: headerLoadedPromise,
+		downloadFinished: downloadFinishedPromise,
+	};
+};
+
+
+/**
+ * Utility function to verify file exists in WasmFS after native OPFS write
+ * This is just for debugging/verification - not needed for functionality
+ */
+Module.verify_opfs_file = (filename) => {
+	if (!Module.ccall) {
+		console.error('Module not ready');
+		return false;
+	}
+	filename = filename.replace("/opfs/", "")
+	
+	try {
+		const exists = Module.ccall('opfs_file_exists', 'number', ['string'], [filename]) === 1;
+		if (exists) {
+			const size = Module.ccall('opfs_file_size', 'number', ['string'], [filename]);
+			console.log(`OPFS file size: ${size}`);
+		}
+		console.log(`OPFS file exists: ${exists}`);
+		return exists;
+	} catch (error) {
+		console.error('Error verifying OPFS file:', error);
+		return false;
+	}
+};
+
+Module.fetch_file_wasmfs = (dest, fileUrl, onProgress, abortSignal = null) => {
 	// If OPFS is ready and dest starts with /opfs/, handle it specially
 	if (Module.isOPFSReady() && dest.startsWith('/opfs/')) {
 		console.log(`Streaming to OPFS: ${dest}`);
@@ -161,8 +240,12 @@ Module.fetch_stream_file = async (dest, fileUrl, onProgress, abortSignal = null)
 		fetchOptions.signal = abortSignal;
 	}
 
-	return await fetch(fileUrl, fetchOptions)
-		// Retrieve its body as ReadableStream
+	let resolveHeaderLoaded;
+	const headerLoadedPromise = new Promise((resolve) => {
+		resolveHeaderLoaded = resolve;
+	});
+
+	const downloadFinishedPromise = fetch(fileUrl, fetchOptions)
 		.then(async (response) => {
 			if (!response.ok) {
 				throw new Error(`HTTP error! Status: ${response.status}`);
@@ -171,81 +254,51 @@ Module.fetch_stream_file = async (dest, fileUrl, onProgress, abortSignal = null)
 			var fileStream = Module.FS.open(dest, "w");
 			var seekLocation = 0;
 			var fileSize = response.headers.get("content-length");
+			let headerResolved = false;
 
-			reader.read().then(function pump({ done, value }) {
+			await reader.read().then(function pump({ done, value }) {
 				if (onProgress) {
-					onProgress(seekLocation/fileSize);
+					onProgress(seekLocation / fileSize);
 				}
 
 				if (done) {
 					// Do something with last chunk of data then exit reader
-					Module.FS.close(fileStream);
 					Module.fileFetched = true;
-					console.log(('Fetching stream finished.'));
+					console.log("Fetching stream finished.");
+					if (!headerResolved) {
+						resolveHeaderLoaded();
+					}
 					return;
 				}
 				// Otherwise do something here to process current chunk
 				Module.FS.write(fileStream, value, 0, value.length, seekLocation);
 
-				seekLocation += value.length
+				seekLocation += value.length;
 				// Read some more, and call this function again (1048576 ~ 1MB)
-				if (seekLocation > 1048576) {
-					Module.headerFetched = true;
-					// return  reader.read().then(pump);
+				if (!headerResolved && seekLocation > 1048576) {
+					Module.headerFetched = true; // Set for compatibility if used elsewhere
+					headerResolved = true;
+					resolveHeaderLoaded();
 				}
 				return reader.read().then(pump);
-			})
-			.catch((err) => {
-				if (err.name === 'AbortError') {
-					console.log('Download aborted.');
-				} else {
-					console.error('Download error:', err);
-				}
-				// Module.FS.close(fileStream);
-				return;
 			});
-
-			// return new ReadableStream({
-			// 	start(controller) {
-			// 		return pump(0);
-			// 		function pump(start) {
-			// 			return reader.read().then(({ done, value }) => {
-			// 				// When no more data needs to be consumed, close the stream
-			// 				if (done) {
-			// 					Module.FS.close(fileStream);
-			// 					controller.close();
-			// 					console.log(('Fetching stream finished.'));
-			// 					return;
-			// 				}
-			// 				// Enqueue the next data chunk into our target stream
-			// 				Module.FS.write(fileStream, value, start, value.length, 0);
-			// 				controller.enqueue(value);
-			// 				return pump(start + value.length);
-			// 			});
-			// 		}
-			// 	},
-			// });
 		})
-		.then((url) => console.log(('Stream ready.')))
-		.catch((err) => console.error(err));
-
-	// await fetch(fileUrl)
-	// 	// Retrieve its body as ReadableStream
-	// 	.then((response) => {
-	// 		if (!response.ok) {
-	// 			throw new Error(`HTTP error! Status: ${response.status}`);
-	// 		}
-	// 		return response.arrayBuffer();
-	// 	})
-	// 	.then((arrayBuffer) => {
-	// 		const byteArray = new Uint8Array(arrayBuffer);
-	// 		var stream = Module.FS.open(dest, "w");
-	// 		Module.FS.write(stream, byteArray, 0, byteArray.length, 0);
-	// 		Module.FS.close(stream);
-
-	// 	})
-	// 	.then((url) => console.log(('Stream ready.')))
-	// 	.catch((err) => console.error(err));
+		.finally(() => {
+		})
+		.catch((err) => {
+			if (err.name === "AbortError") {
+				console.log("Download aborted.");
+			} else {
+				console.error("Download error:", err);
+			}
+			throw err; // Re-throw to allow promise chain to catch it
+		});
+	
+	console.log("Stream manager created, download starting.");
+	return {
+		headerLoaded: headerLoadedPromise,
+		downloadFinished: downloadFinishedPromise,
+	};
 };
 
 Module.fetch_file = async (dest, fileUrl, onProgress, abortSignal = null) => {
@@ -306,6 +359,7 @@ Module.fetch_file = async (dest, fileUrl, onProgress, abortSignal = null) => {
 		.then((url) => console.log(('Stream ready.')))
 		.catch((err) => console.error(err));
 };
+
 
 Module.initVologramFunctions = (containerObject) => {
 	// Remove the problematic assignment that creates stale references

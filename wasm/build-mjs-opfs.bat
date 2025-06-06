@@ -15,11 +15,8 @@ set PATH=%PATH%;..\..\emsdk\upstream\emscripten\
 echo emcc...
 emcc -O3 -fno-strict-aliasing -DBASISD_SUPPORT_KTX2=0 ^
 -s "EXPORTED_RUNTIME_METHODS=['ccall','cwrap','FS','PThread']" ^
--s "EXPORTED_FUNCTIONS=['_malloc','_free','_setup_opfs_wasmfs','_test_opfs_functionality']" ^
+-s "EXPORTED_FUNCTIONS=['_malloc','_free','_setup_opfs_wasmfs','_test_opfs_functionality','_opfs_file_exists','_opfs_file_size']" ^
 -s SINGLE_FILE ^
--s MALLOC=mimalloc ^
--s INITIAL_MEMORY=52428800 ^
--s MAXIMUM_MEMORY=1073741824 ^
 -s ALLOW_MEMORY_GROWTH=1 ^
 -s MODULARIZE=1 ^
 -s EXPORT_NAME="VolWeb" ^
@@ -27,7 +24,7 @@ emcc -O3 -fno-strict-aliasing -DBASISD_SUPPORT_KTX2=0 ^
 -s WASMFS=1 ^
 -s FORCE_FILESYSTEM=1 ^
 -pthread ^
--s PTHREAD_POOL_SIZE=2 ^
+-s PTHREAD_POOL_SIZE=1 ^
 -s ENVIRONMENT=web,worker ^
 -o vol_web_opfs.mjs ^
 --pre-js "pre.js" ^
@@ -37,6 +34,7 @@ wasm_vol_geom.c ^
 ..\src\vol_geom.c ^
 wasm_opfs_setup.cpp ^
 ..\thirdparty\basis_universal\transcoder\basisu_transcoder.cpp ^
+-lpthread ^
 -I .\ ^
 -I ..\src\ ^
 -I ..\thirdparty\ ^

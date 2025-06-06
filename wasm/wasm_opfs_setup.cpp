@@ -76,4 +76,44 @@ int test_opfs_functionality() {
     }
 }
 
+/**
+ * Check if a file exists in OPFS from WASM side
+ * Useful for verifying sync operations
+ */
+EMSCRIPTEN_KEEPALIVE
+int opfs_file_exists(const char* filename) {
+    char full_path[512];
+    snprintf(full_path, sizeof(full_path), "/opfs/%s", filename);
+    
+    FILE* file = fopen(full_path, "r");
+    if (file) {
+        fclose(file);
+        printf("File exists in WasmFS OPFS: %s\n", full_path);
+        return 1;
+    } else {
+        printf("File not found in WasmFS OPFS: %s\n", full_path);
+        return 0;
+    }
+}
+
+/**
+ * Get file size from OPFS
+ */
+EMSCRIPTEN_KEEPALIVE
+long opfs_file_size(const char* filename) {
+    char full_path[512];
+    snprintf(full_path, sizeof(full_path), "/opfs/%s", filename);
+    
+    FILE* file = fopen(full_path, "r");
+    if (!file) {
+        return -1;
+    }
+    
+    fseek(file, 0, SEEK_END);
+    long size = ftell(file);
+    fclose(file);
+    
+    return size;
+}
+
 } 

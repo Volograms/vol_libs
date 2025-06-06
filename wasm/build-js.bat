@@ -15,11 +15,7 @@ set PATH=%PATH%;..\..\emsdk\upstream\emscripten\
 echo emcc...
 emcc -O3 -fno-strict-aliasing -DBASISD_SUPPORT_KTX2=0 ^
 -s "EXPORTED_RUNTIME_METHODS=['ccall','cwrap','FS']" ^
--s "EXPORTED_FUNCTIONS=['_malloc','_free']" ^
 -s SINGLE_FILE ^
--s MALLOC=mimalloc ^
--s INITIAL_MEMORY=52428800 ^
--s MAXIMUM_MEMORY=1073741824 ^
 -s ALLOW_MEMORY_GROWTH=1 ^
 -s MODULARIZE=1 ^
 -s EXPORT_NAME="VolWeb" ^

@@ -179,18 +179,18 @@ const VologramPlayer = (VolWebModule, extensions) => {
 		// Create AbortController for this download session
 		_downloadController = new AbortController();
 		const signal = _downloadController.signal;
-		
+
 		return VolWeb()
 			.then(async (wasmInstance) => {
 				// Check if download was already cancelled
 				if (signal.aborted) {
 					return false;
 				}
-				
+
 				_wasm = wasmInstance;
 				_wasm.ccall("basis_init", "boolean");
 				_wasm.initVologramFunctions(vologram);
-				
+
 				// Initialize OPFS if requested and available
 				if (vologram.useOPFS) {
 					console.log('Vologram storage mode: OPFS (disk-based)');
@@ -214,17 +214,24 @@ const VologramPlayer = (VolWebModule, extensions) => {
 				
 				// Use appropriate file paths and fetch function based on storage mode
 				const volumeFile = vologram.useOPFS ? "/opfs/vologram.vols" : "vologram.vols";
-				return _wasm.fetch_stream_file(volumeFile, vologram.sequenceUrl, onProgress, signal);
+				const downloadManager = _wasm.fetch_stream_file(volumeFile, vologram.sequenceUrl, onProgress, signal);
 
-			})
-			.then((response) => {
-				return new Promise(async (resolve, reject) => {
-					// Wait until we have a header and audio donwloaded
-					await _wasm.isHeaderLoaded();
-					const initSuccess = _initVologram();
-					if (initSuccess) resolve(initSuccess);
-					else reject(new Error("_initVologram failed to open vologram"));
+				// Await for the header to be loaded.
+				await downloadManager.headerLoaded;
+
+				// The rest of the download can continue in the background. We can log if it fails.
+				downloadManager.downloadFinished.catch((err) => {
+					if (err.name !== "AbortError") {
+						console.error("Full vologram download failed in background:", err);
+					}
 				});
+
+				const initSuccess = _initVologram();
+				if (initSuccess) {
+					return true;
+				} else {
+					throw new Error("_initVologram failed to open vologram");
+				}
 			})
 			.catch((err) => {
 				// Handle cancellation gracefully
