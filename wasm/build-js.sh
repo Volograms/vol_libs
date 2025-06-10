@@ -30,7 +30,7 @@ emcc -O3 -fno-strict-aliasing -DBASISD_SUPPORT_KTX2=0 \
 -s EXPORT_NAME="VolWeb" \
 -o vol_web.js \
 --pre-js "pre.js" \
--g \
+-g1 \
 ../src/vol_basis.cpp \
 wasm_vol_geom.c \
 ../src/vol_geom.c \

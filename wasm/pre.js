@@ -40,9 +40,22 @@ Module.isHeaderLoaded = () => {
 	  return new Promise(poll);
 }
 
-Module.fetch_stream_file = async (dest, fileUrl, onProgress) => {
+Module.fetch_stream_file = (dest, fileUrl, onProgress, abortSignal = null) => {
 
-	return await fetch(fileUrl)
+	// Create fetch options with abort signal if provided
+	const fetchOptions = {};
+	if (abortSignal) {
+		fetchOptions.signal = abortSignal;
+	}
+
+	let resolveHeaderLoaded;
+	const headerLoadedPromise = new Promise((resolve) => {
+		resolveHeaderLoaded = resolve;
+	});
+
+	const bufferSize = 5*1024*1024; 
+
+	const downloadFinishedPromise = fetch(fileUrl, fetchOptions)
 		// Retrieve its body as ReadableStream
 		.then(async (response) => {
 			if (!response.ok) {
@@ -52,78 +65,64 @@ Module.fetch_stream_file = async (dest, fileUrl, onProgress) => {
 			var fileStream = Module.FS.open(dest, "w");
 			var seekLocation = 0;
 			var fileSize = response.headers.get("content-length");
+			let headerResolved = false;
 
-			reader.read().then(function pump({ done, value }) {
+			await reader.read().then(function pump({ done, value }) {
 				if (onProgress) {
 					onProgress(seekLocation/fileSize);
 				}
 
 				if (done) {
 					// Do something with last chunk of data then exit reader
-					Module.FS.close(fileStream);
 					Module.fileFetched = true;
+					Module.FS.close(fileStream);
 					console.log(('Fetching stream finished.'));
+					if (!headerResolved) {
+						resolveHeaderLoaded();
+					}
 					return;
 				}
 				// Otherwise do something here to process current chunk
 				Module.FS.write(fileStream, value, 0, value.length, seekLocation);
 
 				seekLocation += value.length
-				// Read some more, and call this function again (1048576 ~ 1MB)
-				if (seekLocation > 1048576) {
+				// Read header and a few frames before initializing vologram
+				if (!headerResolved && seekLocation > bufferSize) {
 					Module.headerFetched = true;
-					// return  reader.read().then(pump);
+					headerResolved = true;
+					resolveHeaderLoaded();
 				}
 				return reader.read().then(pump);
 			})
 
-			// return new ReadableStream({
-			// 	start(controller) {
-			// 		return pump(0);
-			// 		function pump(start) {
-			// 			return reader.read().then(({ done, value }) => {
-			// 				// When no more data needs to be consumed, close the stream
-			// 				if (done) {
-			// 					Module.FS.close(fileStream);
-			// 					controller.close();
-			// 					console.log(('Fetching stream finished.'));
-			// 					return;
-			// 				}
-			// 				// Enqueue the next data chunk into our target stream
-			// 				Module.FS.write(fileStream, value, start, value.length, 0);
-			// 				controller.enqueue(value);
-			// 				return pump(start + value.length);
-			// 			});
-			// 		}
-			// 	},
-			// });
+			
 		})
-		// .then((stream) => new Response(stream))
-		.then((url) => console.log(('Stream ready.')))
-		.catch((err) => console.error(err));
+		.finally(() => {
+		})
+		.catch((err) => {
+			if (err.name === "AbortError") {
+				console.log("Download aborted.");
+			} else {
+				console.error("Download error:", err);
+			}
+			throw err; // Re-throw to allow promise chain to catch it
+		});
 
-	// await fetch(fileUrl)
-	// 	// Retrieve its body as ReadableStream
-	// 	.then((response) => {
-	// 		if (!response.ok) {
-	// 			throw new Error(`HTTP error! Status: ${response.status}`);
-	// 		}
-	// 		return response.arrayBuffer();
-	// 	})
-	// 	.then((arrayBuffer) => {
-	// 		const byteArray = new Uint8Array(arrayBuffer);
-	// 		var stream = Module.FS.open(dest, "w");
-	// 		Module.FS.write(stream, byteArray, 0, byteArray.length, 0);
-	// 		Module.FS.close(stream);
-
-	// 	})
-	// 	.then((url) => console.log(('Stream ready.')))
-	// 	.catch((err) => console.error(err));
+	console.log("Stream manager created, download starting.");
+	return {
+		headerLoaded: headerLoadedPromise,
+		downloadFinished: downloadFinishedPromise,
+	};
 };
 
-Module.fetch_file = async (dest, fileUrl, onProgress) => {
+Module.fetch_file = async (dest, fileUrl, onProgress, abortSignal = null) => {
+	// Create fetch options with abort signal if provided
+	const fetchOptions = {};
+	if (abortSignal) {
+		fetchOptions.signal = abortSignal;
+	}
 
-	return await fetch(fileUrl)
+	return await fetch(fileUrl, fetchOptions)
 		// Retrieve its body as ReadableStream
 		.then(async (response) => {
 			if (!response.ok) {
@@ -153,8 +152,16 @@ Module.fetch_file = async (dest, fileUrl, onProgress) => {
 				// Read some more, and call this function again
 				return await reader.read().then(pump);
 			})
+			.catch((err) => {
+				if (err.name === 'AbortError') {
+					console.log('Download aborted.');
+				} else {
+					console.error('Download error:', err);
+				}
+				// Module.FS.close(fileStream);
+				return;
+			});
 		})
-		// .then((stream) => new Response(stream))
 		.then((url) => console.log(('Stream ready.')))
 		.catch((err) => console.error(err));
 };

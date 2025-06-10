@@ -12,6 +12,9 @@ const VologramPlayer = (extensions) => {
 	let _timer = 0;
 	let vologram = {};
 
+	// AbortController for canceling fetch requests
+	let _downloadController = null;
+
 	const PB_TIMER = 0;
 	const PB_VIDEO = 1;
 	const PB_AUDIO = 2;
@@ -63,13 +66,13 @@ const VologramPlayer = (extensions) => {
 		}
 
 		let keyframeRequired = vologram.find_previous_keyframe(desiredFrameIndex);
-		if(keyframeRequired === -1) { 
+		if (keyframeRequired === -1) {
 			// We need to update frame directory 
-			if(vologram.update_frames_directory(desiredFrameIndex) === false) {
+			if (vologram.update_frames_directory(desiredFrameIndex) === false) {
 				return false;
 			}
 			keyframeRequired = vologram.find_previous_keyframe(desiredFrameIndex);
-			if(keyframeRequired === -1) {
+			if (keyframeRequired === -1) {
 				_pause();
 				return false;
 			}
@@ -154,49 +157,96 @@ const VologramPlayer = (extensions) => {
 		});
 	};
 
-	const _initWasmSingleFile = async (onProgress) =>
-		VolWeb()
-			.then((wasmInstance) => {
+	const _initWasmSingleFile = async (onProgress) => {
+		// Create AbortController for this download session
+		_downloadController = new AbortController();
+		const signal = _downloadController.signal;
+
+		return VolWeb()
+			.then(async (wasmInstance) => {
+				// Check if download was already cancelled
+				if (signal.aborted) return false;
+
 				_wasm = wasmInstance;
 				_wasm.ccall("basis_init", "boolean");
 				_wasm.initVologramFunctions(vologram);
-				return _wasm.fetch_stream_file("vologram.vols", vologram.sequenceUrl, onProgress);
-			})
-			.then((response) => {
-				return new Promise(async (resolve, reject) => {
-					// Wait until we have a header and audio donwloaded
-					await _wasm.isHeaderLoaded();
 
-					const initSuccess = _initVologram();
-					if (initSuccess) resolve(initSuccess);
-					else reject(new Error("_initVologram failed to open vologram"));
+				const downloadManager = _wasm.fetch_stream_file("vologram.vols", vologram.sequenceUrl, onProgress, signal);
+
+				// Await for the header to be loaded.
+				await downloadManager.headerLoaded;
+
+				console.log(downloadManager)
+				console.log(downloadManager.downloadFinished)
+
+				// The rest of the download can continue in the background. We can log if it fails.
+				downloadManager.downloadFinished.catch((err) => {
+					if (err.name !== "AbortError") {
+						console.error("Full vologram download failed in background:", err);
+					}
 				});
+
+				const initSuccess = _initVologram();
+				if (initSuccess) {
+					return true;
+				} else {
+					throw new Error("_initVologram failed to open vologram");
+				}
 			})
 			.catch((err) => {
-				console.error(err);
+				// Handle cancellation gracefully
+				if (err.name === 'AbortError') {
+					console.log('Vologram download cancelled by user');
+					return false;
+				}
+				console.error('Vologram download error:', err);
 				return false;
 			});
+	};
 
-	const _initWasm = (onProgress) =>
-		VolWeb()
-			.then((wasmInstance) => {
+	const _initWasm = async (onProgress) => {
+		// Create AbortController for this download session
+		_downloadController = new AbortController();
+		const signal = _downloadController.signal;
+
+		return VolWeb()
+			.then(async (wasmInstance) => {
+				// Check if download was already cancelled
+				if (signal.aborted) return false;
+
 				_wasm = wasmInstance;
 				_wasm.ccall("basis_init", "boolean");
 				_wasm.initVologramFunctions(vologram);
-				return _wasm.fetch_file("header.vols", vologram.headerUrl, onProgress);
+
+				await _wasm.fetch_file("header.vols", vologram.headerUrl, onProgress, signal);
 			})
-			.then((response) => _wasm.fetch_file("sequence.vols", vologram.sequenceUrl, onProgress))
+			.then(async (response) => {
+				if (signal.aborted) return false;
+
+				await _wasm.fetch_file("sequence.vols", vologram.sequenceUrl, onProgress, signal)
+			})
 			.then((response) => {
-				return new Promise( (resolve, reject) => {
+				// return new Promise((resolve, reject) => {
+					if (signal.aborted) return false;
+
 					const initSuccess = _initVologram();
-					if (initSuccess) resolve(initSuccess);
-					else reject(new Error("_initVologram failed to open vologram"));
-				});
+					if (initSuccess) {
+						return true;
+					} else {
+						throw new Error("_initVologram failed to open vologram");
+					}
+				// });
 			})
 			.catch((err) => {
-				console.error(err);
+				// Handle cancellation gracefully
+				if (err.name === 'AbortError') {
+					console.log('Vologram download cancelled by user');
+					return false;
+				}
+				console.error('Vologram download error:', err);
 				return false;
 			});
+	};
 
 	const _getFrameFromSeconds = (seconds) => {
 		_frameFromTime = Math.floor(seconds * vologram.header.fps);
@@ -260,7 +310,6 @@ const VologramPlayer = (extensions) => {
 
 	const _attachVideo = (videoElement) => {
 		videoElement.onended = (e) => {
-			console.log(vologram.lastFrameLoaded);
 			_events.onended.forEach((fn) => fn());
 		};
 		vologram.attachedVideo = videoElement;
@@ -351,6 +400,13 @@ const VologramPlayer = (extensions) => {
 	};
 
 	const _close = () => {
+		// Cancel any ongoing downloads first
+		if (_downloadController) {
+			console.log('Cancelling ongoing vologram download...');
+			_downloadController.abort();
+			_downloadController = null;
+		}
+
 		if (_frameRequestId && !vologram.attachedVideo) cancelAnimationFrame(_frameRequestId);
 
 		_timerPaused = true;
@@ -519,6 +575,6 @@ const VologramPlayer = (extensions) => {
 			return _extensionExports;
 		},
 	};
-};
+}; // End of VologramPlayer function
 
 export default VologramPlayer;
