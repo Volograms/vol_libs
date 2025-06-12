@@ -216,9 +216,6 @@ const VologramPlayer = (extensions) => {
 				// Await for the header to be loaded.
 				await downloadManager.headerLoaded;
 
-				console.log(downloadManager)
-				console.log(downloadManager.downloadFinished)
-
 				// The rest of the download can continue in the background. We can log if it fails.
 				downloadManager.downloadFinished.catch((err) => {
 					if (err.name !== "AbortError") {
