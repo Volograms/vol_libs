@@ -18,9 +18,10 @@
  * ----------
  * - allow custom allocator
  * - removes statics to make thread-safe
- *
+ * 
  * History
  * -------
+ * - 0.12.0 (2024/11/02) - Support for streaming, incomplete files, and frame skipping.
  * - 0.11.0 (2022/04/)   - Support for reading single-file volograms.
  * - 0.10.0 (2022/03/22) - Support added for reading >2GB volograms.
  * - 0.9.0  (2022/03/22) - Version bump for parity with vol_av.
@@ -99,6 +100,8 @@ VOL_GEOM_EXPORT typedef struct vol_geom_frame_hdr_t {
    */
   /// Mesh data size in bytes.
   uint32_t mesh_data_sz;
+  /// id of a keyframe. For keyframe this is the same as frame_number.
+  uint32_t keyframe_number;
   /// 0 = tracked frame, 1 = first/key frame, 2 = last tracked frame (for backward traversal, only if Version >= 12)
   uint8_t keyframe;
 } vol_geom_frame_hdr_t;
@@ -134,6 +137,8 @@ VOL_GEOM_EXPORT typedef struct vol_geom_info_t {
   uint8_t* sequence_blob_byte_ptr;
   /// Byte offset of the sequence chunk from the start of file. For separated hdr/seq files this will be 0.
   vol_geom_size_t sequence_offset;
+  /// Frame number that was read the last and is a keayframe. Useful during seek or when skipping frames. 
+  uint32_t last_keyframe;
 } vol_geom_info_t;
 
 /** Meta-data for each from of the Vologram sequence. */
@@ -196,6 +201,9 @@ VOL_GEOM_EXPORT bool vol_geom_read_hdr_from_file( const char* filename, vol_geom
 /** As vol_geom_create_file_info, but for volograms where the contents { header, sequence } are all in one .vols file. */
 VOL_GEOM_EXPORT bool vol_geom_create_file_info_from_file( const char* vols_filename, vol_geom_info_t* info_ptr );
 
+/** Update missing items in frames directory initially created by vol_geom_create_file_info_from_file. */
+VOL_GEOM_EXPORT bool vol_geom_update_frames_directory(  const char* seq_filename, vol_geom_info_t* info_ptr, uint32_t frame_idx );
+
 /** Call this function before playing a vologram sequence.
  * It will build a directory of file and frame information about the VOL sequence, and pre-allocate memory.
  * You only need to call this function once per Vologram - you can keep the vol_geom_info_t struct in memory and re-use it during playback.
@@ -240,7 +248,7 @@ VOL_GEOM_EXPORT int vol_geom_find_previous_keyframe( const vol_geom_info_t* info
  * @param frame_data_ptr Pointer to a `vol_geom_frame_data_t` struct in your application that this function will populate with data.
  * @returns              False on any error including `frame_idx` range validation, File I/O, and memory allocation.
  */
-VOL_GEOM_EXPORT bool vol_geom_read_frame( const char* seq_filename, const vol_geom_info_t* info_ptr, uint32_t frame_idx, vol_geom_frame_data_t* frame_data_ptr );
+VOL_GEOM_EXPORT bool vol_geom_read_frame( const char* seq_filename, vol_geom_info_t* info_ptr, uint32_t frame_idx, vol_geom_frame_data_t* frame_data_ptr );
 
 #ifdef __cplusplus
 }

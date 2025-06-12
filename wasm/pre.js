@@ -1,28 +1,169 @@
-Module.fetch_file = (dest, fileUrl, onProgress) => {
-	return new Promise((resolve, reject) => {
-		const xhr = new XMLHttpRequest();
-		xhr.open("GET", fileUrl, true);
-		xhr.responseType = "arraybuffer";
-		xhr.onprogress = (e) => {
-			if (onProgress) {
-				onProgress(e.loaded / e.total);
-			}
-		};
-		xhr.onload = () => {
-			if (!xhr.response) {
-				reject(new Error("No response received"));
-				return;
-			}
-			const byteArray = new Uint8Array(xhr.response);
-			var stream = Module.FS.open(dest, "w");
-			Module.FS.write(stream, byteArray, 0, byteArray.length, 0);
-			Module.FS.close(stream);
-			resolve({ status: xhr.status, responseUrl: xhr.responseURL });
-		};
-		xhr.onerror = () => reject(new Error("Download failed"));
-		xhr.onabort = () => reject(new Error("Download aborted"));
-		xhr.send(null);
+// Module.fetch_file = (dest, fileUrl, onProgress) => {
+// 	return new Promise((resolve, reject) => {
+// 		const xhr = new XMLHttpRequest();
+// 		xhr.open("GET", fileUrl, true);
+// 		xhr.responseType = "arraybuffer";
+// 		xhr.onprogress = (e) => {
+// 			if (onProgress) {
+// 				onProgress(e.loaded / e.total);
+// 			}
+// 		};
+// 		xhr.onload = () => {
+// 			if (!xhr.response) {
+// 				reject(new Error("No response received"));
+// 				return;
+// 			}
+// 			const byteArray = new Uint8Array(xhr.response);
+// 			var stream = Module.FS.open(dest, "w");
+// 			Module.FS.write(stream, byteArray, 0, byteArray.length, 0);
+// 			Module.FS.close(stream);
+// 			resolve({ status: xhr.status, responseUrl: xhr.responseURL });
+// 		};
+// 		xhr.onerror = () => reject(new Error("Download failed"));
+// 		xhr.onabort = () => reject(new Error("Download aborted"));
+// 		xhr.send(null);
+// 	});
+// };
+
+Module.fileFetched = false;
+Module.headerFetched = false;
+
+Module.isHeaderLoaded = () => {
+
+	console.log(Module.fileFetched);
+
+	const poll = resolve => {
+		if(Module.headerFetched == true) resolve();
+		else setTimeout(_ => poll(resolve), 400);
+	  }
+
+	  return new Promise(poll);
+}
+
+Module.fetch_stream_file = (dest, fileUrl, onProgress, abortSignal = null) => {
+
+	// Create fetch options with abort signal if provided
+	const fetchOptions = {};
+	if (abortSignal) {
+		fetchOptions.signal = abortSignal;
+	}
+
+	let resolveHeaderLoaded;
+	const headerLoadedPromise = new Promise((resolve) => {
+		resolveHeaderLoaded = resolve;
 	});
+
+	const bufferSize = 5*1024*1024; 
+
+	const downloadFinishedPromise = fetch(fileUrl, fetchOptions)
+		// Retrieve its body as ReadableStream
+		.then(async (response) => {
+			if (!response.ok) {
+				throw new Error(`HTTP error! Status: ${response.status}`);
+			}
+			const reader = response.body.getReader();
+			var fileStream = Module.FS.open(dest, "w");
+			var seekLocation = 0;
+			var fileSize = response.headers.get("content-length");
+			let headerResolved = false;
+
+			await reader.read().then(function pump({ done, value }) {
+				if (onProgress) {
+					onProgress(seekLocation/fileSize);
+				}
+
+				if (done) {
+					// Do something with last chunk of data then exit reader
+					Module.fileFetched = true;
+					Module.FS.close(fileStream);
+					console.log(('Fetching stream finished.'));
+					if (!headerResolved) {
+						resolveHeaderLoaded();
+					}
+					return;
+				}
+				// Otherwise do something here to process current chunk
+				Module.FS.write(fileStream, value, 0, value.length, seekLocation);
+
+				seekLocation += value.length
+				// Read header and a few frames before initializing vologram
+				if (!headerResolved && seekLocation > bufferSize) {
+					Module.headerFetched = true;
+					headerResolved = true;
+					resolveHeaderLoaded();
+				}
+				return reader.read().then(pump);
+			})
+
+			
+		})
+		.finally(() => {
+		})
+		.catch((err) => {
+			if (err.name === "AbortError") {
+				console.log("Download aborted.");
+			} else {
+				console.error("Download error:", err);
+			}
+			throw err; // Re-throw to allow promise chain to catch it
+		});
+
+	console.log("Stream manager created, download starting.");
+	return {
+		headerLoaded: headerLoadedPromise,
+		downloadFinished: downloadFinishedPromise,
+	};
+};
+
+Module.fetch_file = async (dest, fileUrl, onProgress, abortSignal = null) => {
+	// Create fetch options with abort signal if provided
+	const fetchOptions = {};
+	if (abortSignal) {
+		fetchOptions.signal = abortSignal;
+	}
+
+	return await fetch(fileUrl, fetchOptions)
+		// Retrieve its body as ReadableStream
+		.then(async (response) => {
+			if (!response.ok) {
+				throw new Error(`HTTP error! Status: ${response.status}`);
+			}
+			const reader = response.body.getReader();
+			var fileStream = Module.FS.open(dest, "w");
+			var seekLocation = 0;
+			var fileSize = response.headers.get("content-length");
+
+			await reader.read().then(async function pump({ done, value }) {
+				if (onProgress) {
+					onProgress(seekLocation/fileSize);
+				}
+
+				if (done) {
+					// Do something with last chunk of data then exit reader
+					Module.FS.close(fileStream);
+					Module.fileFetched = true;
+					console.log(('Fetching stream finished.'));
+					return;
+				}
+				// Otherwise do something here to process current chunk
+				Module.FS.write(fileStream, value, 0, value.length, seekLocation);
+
+				seekLocation += value.length
+				// Read some more, and call this function again
+				return await reader.read().then(pump);
+			})
+			.catch((err) => {
+				if (err.name === 'AbortError') {
+					console.log('Download aborted.');
+				} else {
+					console.error('Download error:', err);
+				}
+				// Module.FS.close(fileStream);
+				return;
+			});
+		})
+		.then((url) => console.log(('Stream ready.')))
+		.catch((err) => console.error(err));
 };
 
 Module.initVologramFunctions = (containerObject) => {
@@ -46,6 +187,7 @@ Module.initVologramFunctions = (containerObject) => {
 	insertObject["frame_count"] = Module.cwrap("frame_count", "number");
 	insertObject["loaded_frame_number"] = Module.cwrap("loaded_frame_number", "number");
 	insertObject["read_frame"] = Module.cwrap("read_frame", "boolean", ["number"]);
+	insertObject["update_frames_directory"] = Module.cwrap("update_frames_directory", "boolean", ["number"]);
 	insertObject["max_blob_sz"] = Module.cwrap("max_blob_sz", "number");
 	insertObject["is_keyframe"] = Module.cwrap("is_keyframe", "boolean", ["number"]);
 	insertObject["find_previous_keyframe"] = Module.cwrap("find_previous_keyframe", "number", ["number"]);

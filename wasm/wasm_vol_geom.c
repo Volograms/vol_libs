@@ -82,6 +82,12 @@ bool read_frame( int frame_idx ) {
 }
 
 EMSCRIPTEN_KEEPALIVE
+bool update_frames_directory( int frame_idx ) {
+  return vol_geom_update_frames_directory( _seq_filename, &_info, frame_idx );
+}
+
+
+EMSCRIPTEN_KEEPALIVE
 int32_t max_blob_sz( void ) {
   return _info.biggest_frame_blob_sz;
 }
