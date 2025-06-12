@@ -11,6 +11,8 @@ const VologramPlayer = (extensions) => {
 	let _previousTime;
 	let _timer = 0;
 	let vologram = {};
+	let _isBuffering = false;
+	let _wasPlayingBeforeBuffering = false;
 
 	// AbortController for canceling fetch requests
 	let _downloadController = null;
@@ -24,6 +26,7 @@ const VologramPlayer = (extensions) => {
 	const _events = {
 		onclose: [],
 		onended: [],
+		onbuffering: [],
 	};
 
 	const _loadMesh = (frameIdx) => {
@@ -58,25 +61,51 @@ const VologramPlayer = (extensions) => {
 	};
 
 	const _updateMeshFrameAllowingSkip = (desiredFrameIndex) => {
-		if (vologram.lastFrameLoaded === desiredFrameIndex) {
+		if (vologram.lastFrameLoaded === desiredFrameIndex && !_isBuffering) {
 			return false;
 		} // Safety catch to avoid reloading the same frame twice.
 		if (desiredFrameIndex < 0 || desiredFrameIndex >= vologram.header.frameCount) {
 			return false;
 		}
 
+		const bufferGoalFrame = Math.min(
+			vologram.header.frameCount - 1,
+			desiredFrameIndex + Math.floor(RESUME_BUFFER_SECONDS * vologram.header.fps)
+		);
+
+		// Always try to update the directory to our buffer goal if buffering, otherwise just for the current frame.
+		vologram.update_frames_directory(_isBuffering ? bufferGoalFrame : desiredFrameIndex);
+
+		// Check if the frame we absolutely need right now is available.
 		let keyframeRequired = vologram.find_previous_keyframe(desiredFrameIndex);
-		if(keyframeRequired === -1) {
-			// We need to update frame directory 
-			if(vologram.update_frames_directory(desiredFrameIndex) === false) {
-				return false;
+
+		if (keyframeRequired === -1) {
+			// Frame not ready, enter/stay in buffering state.
+			if (!_isBuffering) {
+				_isBuffering = true;
+				_wasPlayingBeforeBuffering = _isPlaying();
+				_events.onbuffering.forEach((fn) => fn(true));
 			}
-			keyframeRequired = vologram.find_previous_keyframe(desiredFrameIndex);
-			if(keyframeRequired === -1) {
-				_pause();
+			_internal_pause();
+			return false;
+		}
+
+		// If we were buffering, check if we've met the goal to resume.
+		if (_isBuffering) {
+			const keyframeForBufferGoal = vologram.find_previous_keyframe(bufferGoalFrame);
+			if (keyframeForBufferGoal !== -1) {
+				// Buffer goal is met. Exit buffering state.
+				_isBuffering = false;
+				_events.onbuffering.forEach((fn) => fn(false));
+				if (_wasPlayingBeforeBuffering) {
+					_play(); // This will set _timerPaused = false
+				}
+			} else {
+				// Goal not met. Stay paused and buffering.
 				return false;
 			}
 		}
+
 		// If running slowly we may skip over a keyframe. Grab that now to avoid stale keyframe desync.
 		if (vologram.lastKeyframeLoaded !== keyframeRequired  && keyframeRequired !== desiredFrameIndex) {
 			if (!_loadMesh(keyframeRequired)) {
@@ -279,7 +308,7 @@ const VologramPlayer = (extensions) => {
 				_timer = 0;
 			} else {
 				_frameFromTime = vologram.header.frameCount - 1;
-				_pause();
+				_internal_pause();
 			}
 		}
 	};
@@ -302,7 +331,7 @@ const VologramPlayer = (extensions) => {
 
 	const _updateFrameFromTimer = (now) => {
 		_timeTick(now);
-		if (!_timerPaused && vologram.header && vologram.header.ready) {
+		if ((!_timerPaused || _isBuffering) && vologram.header && vologram.header.ready) {
 			_updateMeshFrameAllowingSkip(_frameFromTime);
 			vologram.lastUpdateTime = _timer / 1000;
 		}
@@ -441,6 +470,8 @@ const VologramPlayer = (extensions) => {
 		vologram.headerUrl = null;
 		vologram.sequenceUrl = null;
 		vologram.textureUrl = null;
+		_isBuffering = false;
+		_wasPlayingBeforeBuffering = false;
 	};
 
 	const _close = () => {
@@ -509,7 +540,7 @@ const VologramPlayer = (extensions) => {
 		_startTimer();
 	};
 
-	const _pause = () => {
+	const _internal_pause = () => {
 		switch (_playbackMode) {
 			case PB_VIDEO:
 				vologram.attachedVideo.pause();
@@ -521,6 +552,11 @@ const VologramPlayer = (extensions) => {
 				break;
 		}
 		_timerPaused = true;
+	};
+
+	const _pause = () => {
+		_wasPlayingBeforeBuffering = false;
+		_internal_pause();
 	};
 
 	const _play = () => {
