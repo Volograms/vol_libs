@@ -37,12 +37,13 @@ Module.fetch_stream_file = ((dest, fileUrl, onProgress, abortSignal = null) => {
   resolveHeaderLoaded = resolve;
  });
  const bufferSize = 5 * 1024 * 1024;
+ var fileStream = null;
  const downloadFinishedPromise = fetch(fileUrl, fetchOptions).then(async response => {
   if (!response.ok) {
    throw new Error(`HTTP error! Status: ${response.status}`);
   }
   const reader = response.body.getReader();
-  var fileStream = Module.FS.open(dest, "w");
+  fileStream = Module.FS.open(dest, "w");
   var seekLocation = 0;
   var fileSize = response.headers.get("content-length");
   let headerResolved = false;
@@ -52,7 +53,6 @@ Module.fetch_stream_file = ((dest, fileUrl, onProgress, abortSignal = null) => {
    }
    if (done) {
     Module.fileFetched = true;
-    Module.FS.close(fileStream);
     console.log("Fetching stream finished.");
     if (!headerResolved) {
      resolveHeaderLoaded();
@@ -68,7 +68,12 @@ Module.fetch_stream_file = ((dest, fileUrl, onProgress, abortSignal = null) => {
    }
    return reader.read().then(pump);
   });
- }).finally(() => {}).catch(err => {
+ }).finally(() => {
+  if (fileStream) {
+   Module.FS.close(fileStream);
+   fileStream = null;
+  }
+ }).catch(err => {
   if (err.name === "AbortError") {
    console.log("Download aborted.");
   } else {

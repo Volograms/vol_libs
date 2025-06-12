@@ -54,6 +54,7 @@ Module.fetch_stream_file = (dest, fileUrl, onProgress, abortSignal = null) => {
 	});
 
 	const bufferSize = 5*1024*1024; 
+	var fileStream = null;
 
 	const downloadFinishedPromise = fetch(fileUrl, fetchOptions)
 		// Retrieve its body as ReadableStream
@@ -62,7 +63,7 @@ Module.fetch_stream_file = (dest, fileUrl, onProgress, abortSignal = null) => {
 				throw new Error(`HTTP error! Status: ${response.status}`);
 			}
 			const reader = response.body.getReader();
-			var fileStream = Module.FS.open(dest, "w");
+			fileStream = Module.FS.open(dest, "w");
 			var seekLocation = 0;
 			var fileSize = response.headers.get("content-length");
 			let headerResolved = false;
@@ -75,7 +76,7 @@ Module.fetch_stream_file = (dest, fileUrl, onProgress, abortSignal = null) => {
 				if (done) {
 					// Do something with last chunk of data then exit reader
 					Module.fileFetched = true;
-					Module.FS.close(fileStream);
+					//Module.FS.close(fileStream); // This will be handled in 'finally'
 					console.log(('Fetching stream finished.'));
 					if (!headerResolved) {
 						resolveHeaderLoaded();
@@ -94,10 +95,12 @@ Module.fetch_stream_file = (dest, fileUrl, onProgress, abortSignal = null) => {
 				}
 				return reader.read().then(pump);
 			})
-
-			
 		})
 		.finally(() => {
+			if (fileStream) {
+				Module.FS.close(fileStream);
+				fileStream = null;
+			}
 		})
 		.catch((err) => {
 			if (err.name === "AbortError") {
