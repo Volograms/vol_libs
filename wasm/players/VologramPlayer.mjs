@@ -306,7 +306,7 @@ const VologramPlayer = (extensions) => {
 				_timer = 0;
 			} else {
 				_frameFromTime = vologram.header.frameCount - 1;
-				_internal_pause(); // should it be just pause();?
+				_internal_pause();
 			}
 		}
 	};
