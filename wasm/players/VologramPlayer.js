@@ -422,6 +422,11 @@ const VologramPlayer = (extensions) => {
 	};
 
 	const _cleanVologramModule = () => {
+		
+		if (_transcoderManager) {
+			_transcoderManager.destroy();
+			_transcoderManager = null;
+		}
 		if (!_useWorker) {
 			_wasm.ccall("basis_free", "boolean");
 		}
@@ -436,32 +441,6 @@ const VologramPlayer = (extensions) => {
 			_wasm.FS.unlink("sequence_0.vols");
 		}
 		_wasm = null;
-
-		if (_transcoderManager) {
-			_transcoderManager.destroy();
-			_transcoderManager = null;
-		}
-
-		if (_frameRequestId && !vologram.attachedVideo) cancelAnimationFrame(_frameRequestId);
-
-		_timerPaused = true;
-		_timerLooping = false;
-		if (vologram.attachedVideo) {
-			vologram.attachedVideo.cancelVideoFrameCallback(_frameRequestId);
-			vologram.attachedVideo.pause();
-			vologram.attachedVideo = null;
-		}
-		if (vologram.attachedAudio) {
-			vologram.attachedAudio.pause();
-			vologram.attachedAudio = null;
-		}
-		extensions.forEach((ext) => {
-			if (ext.close) ext.close();
-		});
-		_events.onclose.forEach((fn) => fn());
-		_cleanVologramObject();
-		_cleanVologramModule();
-		_playbackMode = PB_TIMER;
 	};
 
 	const _cleanVologramObject = () => {
