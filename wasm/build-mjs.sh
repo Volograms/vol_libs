@@ -24,6 +24,8 @@ CPP="g++ -std=c++11"
 
 emcc -O3 -fno-strict-aliasing -DBASISD_SUPPORT_KTX2=0 \
 -s "EXPORTED_RUNTIME_METHODS=['ccall','cwrap','FS']" \
+-s "EXPORTED_FUNCTIONS=['_malloc','_free']" \
+-s MALLOC=emmalloc \
 -s SINGLE_FILE \
 -s ALLOW_MEMORY_GROWTH \
 -s EXPORT_ES6=1 \

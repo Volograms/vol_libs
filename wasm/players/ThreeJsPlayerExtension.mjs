@@ -35,9 +35,22 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 	let _basisFmt;
 	let _callbackId;
 	let vologram;
+	let _useWorker = false;
+	let _manager = null;
+	let _isTranscoding = false;
+	let _cachedTexture = null;
+	let _cachedMesh = null;
+	let _lastLoadedFrame = -1;
+	let _positions = null;
+	let _normals = null;
+	let _uvs = null;
+	let _indices = null;
 
-	const _init = (inVologram) => {
+
+	const _init = (inVologram, { useWorker, manager } = {}) => {
 		vologram = inVologram;
+		_useWorker = useWorker;
+		_manager = manager;
 		const fmts = vologram.find_basis_fmt(glCtx);
 		_glFmt = fmts[0];
 		_basisFmt = fmts[1];
@@ -121,7 +134,7 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 		_createVologramMaterial();
 	};
 
-	const _updateMesh = () => {
+	const _updateMeshBS = () => {
 		if (!objs || !objs.geometry || !objs.mesh) return false;
 		// It seems that calculating bounding sphere does not work
 		// and always returns NaN value for the radius
@@ -136,42 +149,139 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 	};
 
 	const _updateBasisTexture = () => {
-		if (!vologram.run_basis_transcode(_basisFmt)) return false;
-		const texData = vologram.basis_get_data();
-		objs.texture.mipmaps[0].data.set(texData);
-		objs.texture.minFilter = three.LinearFilter;
-		objs.texture.needsUpdate = true;
-		return true;
-	};
+		if (_useWorker) {
+			if (_isTranscoding) {
+				return false; // Don't send a new request if one is already in flight.
+			}
 
-	const _update = () => {
-		if (!_updateMesh()) return false;
-		if (vologram.header.hasBasisTexture) return _updateBasisTexture();
-		// else { Video texture updated automatically }
+			const ptr = vologram.frame_texture_data_ptr();
+			const size = vologram.frame_texture_sz();
+			if (!ptr || !size) { return false; }
+			const basisData = new Uint8Array(vologram.HEAP8.buffer, ptr, size).slice();
+			const frameIndex = vologram.lastFrameLoaded;
+			_isTranscoding = true;
+
+			const cachedMesh = {
+				positions: _positions,
+				normals: _normals,
+				texCoords: _uvs,
+				indices: _indices,
+				frameIndex: frameIndex
+			};
+			
+			_manager.transcode(basisData, _basisFmt, frameIndex)
+				.then(({ transcodedData, width, height, frameIndex: transcodeFrameIndex }) => {
+					// Store the result in the cache.
+					if (cachedMesh && cachedMesh.frameIndex > frameIndex) return true;
+					_cachedTexture = {
+						data: transcodedData,
+						width,
+						height,
+						frameIndex: transcodeFrameIndex
+					};
+					_cachedMesh = cachedMesh;
+					_isTranscoding = false; // Allow new requests to be sent.
+					return true;
+				})
+				.catch(err => {
+					console.error("Vologram transcoding error:", err);
+					_isTranscoding = false; // Reset on error as well.
+					return false;
+				});
+		} else {
+			if (!vologram.run_basis_transcode(_basisFmt)) { return false; }
+			const texData = vologram.basis_get_data();
+			objs.texture.mipmaps[0].data.set(texData);
+			objs.texture.minFilter = three.LinearFilter;
+			objs.texture.needsUpdate = true;
+		}
 		return true;
 	};
 
 	const _renderUpdate = () => {
-		if (!_update() || !objs.geometry) {
-			return false;
-		}
+		// check if we have an existing geometry object
+		if (!objs.geometry) return false;
 
-		// Positions - fetch and upload.\
-		objs.geometry.setAttribute("position", new three.Float32BufferAttribute(vologram.frame.positions, 3));
+		// skip update for already loaded frame
+		if(_lastLoadedFrame === vologram.lastFrameLoaded) return true;
+		let frameID = vologram.lastFrameLoaded
+
+		// update bounding box (should that be done after setting the mesh?)
+		if (!_updateMeshBS()) return false;
+
+		// Get mesh data for current frame to keep it in sync with its texture.
+		if(!_useWorker || !_isTranscoding) {
+			_positions = new three.Float32BufferAttribute(vologram.frame.positions, 3);
+			if (vologram.header.hasNormals) {
+				_normals = new three.Float32BufferAttribute(vologram.frame.normals, 3);
+			}
+			_uvs = new three.Float32BufferAttribute(vologram.frame.texCoords, 2);
+			_indices = new three.Uint16BufferAttribute(vologram.frame.indices, 1)
+		}
+		
+		// Load texture
+		if (vologram.header.hasBasisTexture) {
+			if(!_updateBasisTexture()) return false;
+
+			// Check cache and apply texture if it's ready and matches the current frame.
+			if (_useWorker) {
+				if(!_cachedTexture) return false;
+
+				if(_cachedTexture.frameIndex === _cachedMesh.frameIndex) { // this should always be the case
+					// console.log(_cachedTexture.frameIndex)
+					
+					const { data, width, height } = _cachedTexture;
+					if (objs.texture.image.width !== width || objs.texture.image.height !== height) {
+						objs.texture.image.width = width;
+						objs.texture.image.height = height;
+					}
+					objs.texture.mipmaps[0].data.set(data);
+					objs.texture.minFilter = three.LinearFilter;
+					objs.texture.needsUpdate = true;
+					
+					// set correct mesh data
+					_positions = _cachedMesh.positions;
+					_normals = _cachedMesh.normals;
+					_uvs = _cachedMesh.texCoords;
+					_indices = _cachedMesh.indices;
+
+					// update the frame ID we are going to apply
+					frameID = _cachedTexture.frameIndex;
+
+					// Clear cache once applied.
+					_cachedTexture = null; 
+					_cachedMesh = null
+
+				} else {
+					// Clear wrong cache
+					_cachedTexture = null; 
+					_cachedMesh = null;
+					return false;
+				}
+			}
+			// else {} // loading texture in the main thread is blockig and we don't need to use cache
+		}
+		// else { Video texture updated automatically }
+
+		// Positions - upload.
+		objs.geometry.setAttribute("position", _positions);
 
 		if (vologram.header.hasNormals) {
 			// Not all volograms include normals.
-			// Normals - fetch and upload.
-			objs.geometry.setAttribute("normal", new three.Float32BufferAttribute(vologram.frame.normals, 3));
+			// Normals - upload.
+			objs.geometry.setAttribute("normal", _normals);
 		}
 
-		// Texture Coordinates - fetch and upload.
-		objs.geometry.setAttribute("uv", new three.Float32BufferAttribute(vologram.frame.texCoords, 2));
+		// Texture Coordinates - upload.
+		objs.geometry.setAttribute("uv", _uvs);
 
-		// Indices - fetch and upload.
-		objs.geometry.setIndex(new three.Uint16BufferAttribute(vologram.frame.indices, 1));
+		// Indices - upload.
+		objs.geometry.setIndex(_indices);
 		objs.geometry.needsUpdate = true;
 		objs.mesh.needsUpdate = true;
+
+		// Save latest frame ID
+		_lastLoadedFrame = frameID;
 		return true;
 	};
 

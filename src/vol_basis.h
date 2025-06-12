@@ -44,6 +44,16 @@ VOL_BASIS_EXPORT bool vol_basis_transcode( //
   int* w_ptr, int* h_ptr                   // Output: Dimensions of texture.
 );
 
+VOL_BASIS_EXPORT bool vol_basis_transcode_v2( //
+  int format,
+  void* data_ptr,
+  uint32_t data_sz,
+  uint8_t* output_blocks_ptr,
+  uint32_t output_blocks_sz,
+  int* w_ptr, int* h_ptr,
+  uint32_t* out_transcoded_sz_ptr
+);
+
 #ifdef __cplusplus
 }
 #endif /* CPP */

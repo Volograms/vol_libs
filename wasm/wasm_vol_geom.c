@@ -219,6 +219,28 @@ bool basis_transcode( int format, void* data_ptr, uint32_t data_sz ) {
   return ret;
 }
 
+static int _transcoded_w_v2 = 0;
+static int _transcoded_h_v2 = 0;
+static uint32_t _transcoded_sz_v2 = 0;
+
+EMSCRIPTEN_KEEPALIVE
+bool basis_transcode_v2( int format, void* data_ptr, uint32_t data_sz ) {
+  _transcoded_w_v2 = 0;
+  _transcoded_h_v2 = 0;
+  _transcoded_sz_v2 = 0;
+  bool ret = vol_basis_transcode_v2( format, data_ptr, data_sz, _output_blocks_ptr, _blocks_buf_size_in_blocks_or_pixels, &_transcoded_w_v2, &_transcoded_h_v2, &_transcoded_sz_v2 );
+  return ret;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int basis_get_transcoded_width_v2( void ) { return _transcoded_w_v2; }
+
+EMSCRIPTEN_KEEPALIVE
+int basis_get_transcoded_height_v2( void ) { return _transcoded_h_v2; }
+
+EMSCRIPTEN_KEEPALIVE
+uint32_t basis_get_transcoded_sz_v2( void ) { return _transcoded_sz_v2; }
+
 EMSCRIPTEN_KEEPALIVE
 uint8_t* basis_get_transcoded_ptr( void ) { return _output_blocks_ptr; }
 
