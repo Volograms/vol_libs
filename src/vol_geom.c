@@ -230,12 +230,12 @@ static bool _build_frame_directory_from_file( FILE* f_ptr, vol_geom_info_t* info
   }
 
   if(frame_start_offset + sizeof(vol_geom_frame_hdr_t) > sequence_file_sz) {
-    _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: frame header at frame %i in sequence file was out of file size range.\n", frame_idx );
+    // _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: frame header at frame %i in sequence file was out of file size range.\n", frame_idx );
     goto bfdff_fail;
   }
 
   if ( !fread( &frame_hdr.frame_number, sizeof( uint32_t ), 1, f_ptr ) ) {
-    _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: frame_number at frame %i in sequence file was out of file size range.\n", frame_idx );
+    // _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: frame_number at frame %i in sequence file was out of file size range.\n", frame_idx );
     goto bfdff_fail;
   }
   if ( frame_hdr.frame_number != frame_idx ) {
