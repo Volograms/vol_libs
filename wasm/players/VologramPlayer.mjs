@@ -129,8 +129,14 @@ const VologramPlayer = (extensions) => {
 	};
 
 	const _initAdditionalElements = () => {
+		if (!vologram.textureUrl && vologram.attachedVideo) {
+			vologram.attachedVideo = null;
+		}
 		if (!vologram.header.hasTexture && vologram.textureUrl && !vologram.attachedVideo) {
 			_createVideo();
+		}
+		if (!vologram.header.hasAudio && vologram.attachedAudio) {
+			vologram.attachedAudio = null;
 		}
 		if (vologram.header.hasAudio && !vologram.attachedAudio) {
 			_createAudio();
@@ -282,7 +288,7 @@ const VologramPlayer = (extensions) => {
 	};
 
 	const _updateFrameFromVideo = (now, metadata) => {
-		if (vologram.header && vologram.header.ready) {
+		if (vologram.header && vologram.header.ready && vologram.attachedVideo) {
 			_getFrameFromSeconds(metadata.mediaTime);
 			_updateMeshFrameAllowingSkip(_frameFromTime);
 			vologram.lastUpdateTime = metadata.mediaTime;
@@ -300,7 +306,7 @@ const VologramPlayer = (extensions) => {
 	};
 
 	const _updateFrameFromAudio = () => {
-		if (vologram.header && vologram.header.ready) {
+		if (vologram.header && vologram.header.ready && vologram.attachedAudio) {
 			_getFrameFromSeconds(vologram.attachedAudio.currentTime);
 			_updateMeshFrameAllowingSkip(Math.max(0, _frameFromTime - 1));
 			vologram.lastUpdateTime = vologram.attachedAudio.currentTime;
