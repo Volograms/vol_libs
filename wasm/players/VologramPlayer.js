@@ -133,6 +133,9 @@ const VologramPlayer = (extensions) => {
 		_initAdditionalElements();
 		_initPlayerExtensions();
 
+		// Initialize mesh to frame 0
+		_updateMeshFrameAllowingSkip(0);
+
 		return true;
 	};
 
