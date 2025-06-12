@@ -379,7 +379,6 @@ static bool _build_frames_directory_from_file( const char* seq_filename, vol_geo
       vol_geom_frame_hdr_t frame_hdr = ( vol_geom_frame_hdr_t ){ .mesh_data_sz = 0 };
       info_ptr->frame_headers_ptr[i] = frame_hdr;
     }
-
   }
 
   fclose( f_ptr );
@@ -387,6 +386,7 @@ static bool _build_frames_directory_from_file( const char* seq_filename, vol_geo
   return true;
 
 bfdff_fail:
+  _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: Failed  building directory, deleting info_ptr.\n" );
   if ( f_ptr ) { fclose( f_ptr ); }
   if ( info_ptr->frame_headers_ptr ) {
     free( info_ptr->frame_headers_ptr );
@@ -578,7 +578,7 @@ bool vol_geom_create_file_info( const char* hdr_filename, const char* seq_filena
 
   vol_geom_file_record_t record = ( vol_geom_file_record_t ){ .sz = 0 };
   vol_geom_size_t hdr_sz        = 0;
-  *info_ptr                     = ( vol_geom_info_t ){ .biggest_frame_blob_sz = 0, .last_keyframe = 0 };
+  *info_ptr                     = ( vol_geom_info_t ){ .biggest_frame_blob_sz = 0, .last_keyframe = -1 };
   info_ptr->sequence_offset     = 0; // Using separate files here, so there is no offset.
 
   if ( !vol_geom_read_hdr_from_file( hdr_filename, &info_ptr->hdr, &hdr_sz ) ) { goto cfi_fail; }
@@ -655,6 +655,11 @@ int vol_geom_find_previous_keyframe( const vol_geom_info_t* info_ptr, uint32_t f
 }
 
 bool vol_geom_update_frames_directory( const char* seq_filename, vol_geom_info_t* info_ptr, uint32_t frame_idx) {
+  
+  if(frame_idx < 0) return false;
+
+  // early exit if we have a directory record
+  if(info_ptr->frame_headers_ptr[frame_idx].mesh_data_sz != 0) return true;
 
   // Get file size and check for file size issues before allocating memory or reading
   vol_geom_size_t file_sz = 0;
@@ -680,7 +685,9 @@ bool vol_geom_update_frames_directory( const char* seq_filename, vol_geom_info_t
   }
 
   // move to the end of a known directory record
-  vol_geom_size_t last_offset_end = info_ptr->frames_directory_ptr[last_idx].offset_sz + info_ptr->frames_directory_ptr[last_idx].total_sz;
+  vol_geom_size_t last_offset_end = ((int)last_idx < 0)? info_ptr->sequence_offset : \
+                              info_ptr->frames_directory_ptr[last_idx].offset_sz + info_ptr->frames_directory_ptr[last_idx].total_sz;
+
   if ( 0 != vol_geom_fseeko( f_ptr, last_offset_end, SEEK_SET ) ) {
     _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR seeking frame %i from sequence file - file too small for data.\n", last_idx );
     fclose( f_ptr );
