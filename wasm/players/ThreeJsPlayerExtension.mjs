@@ -317,10 +317,6 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 		if (_frameRequestId && !vologram.attachedVideo) cancelAnimationFrame(_frameRequestId);
 	};
 
-	const _setRenderer = (renderer) => {
-		objs.renderer = renderer;
-	}
-
 	return {
 		get name() {
 			return "threejs";
@@ -344,9 +340,6 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 			get beginRendering() {
 				return _animate;
 			},
-			get setRenderer() {
-				return _setRenderer
-			}
 		},
 	};
 };
