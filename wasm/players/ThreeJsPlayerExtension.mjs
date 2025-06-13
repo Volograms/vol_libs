@@ -85,7 +85,7 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 
 	const _createVologramTexture = () => {
 		if (!vologram.header.hasBasisTexture) {
-			_videoTexture = new three.VideoTexture(vologram.attachedVideo);
+			const _videoTexture = new three.VideoTexture(vologram.attachedVideo);
 			
 			// Create a placeholder DataTexture. It will be resized and updated with video frames later.
 			const placeholderPixels = new Uint8Array([0, 0, 0, 255]); // A single black pixel

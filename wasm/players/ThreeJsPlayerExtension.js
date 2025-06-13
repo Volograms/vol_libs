@@ -85,8 +85,8 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 
 	const _createVologramTexture = () => {
 		if (!vologram.header.hasBasisTexture) {
-			_videoTexture = new three.VideoTexture(vologram.attachedVideo);
-			
+			const _videoTexture = new three.VideoTexture(vologram.attachedVideo);
+
 			// Create a placeholder DataTexture. It will be resized and updated with video frames later.
 			const placeholderPixels = new Uint8Array([0, 0, 0, 255]); // A single black pixel
 			objs.texture = new three.DataTexture(placeholderPixels, 1, 1, three.RGBAFormat);
@@ -94,20 +94,20 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 			objs.texture.magFilter = three.LinearFilter;
 			objs.texture.flipY = true; // Videos need to be flipped vertically to match WebGL coordinates.
 			objs.texture.needsUpdate = true;
-			
+
 			_frameRequestId = vologram.attachedVideo.requestVideoFrameCallback(_updateFrameFromVideo);
 		} else {
-		const texDataSize = vologram.header.textureWidth * vologram.header.textureHeight;
-		const data = new Uint8Array(texDataSize);
-		objs.texture = new three.CompressedTexture(
-			[{ data, width: vologram.header.textureWidth, height: vologram.header.textureHeight }],
-			vologram.header.textureWidth,
-			vologram.header.textureHeight,
-			_glFmt,
-			three.UnsignedByteType
-		);
-		objs.texture.minFilter = three.LinearFilter;
-		objs.texture.needsUpdate = true;
+			const texDataSize = vologram.header.textureWidth * vologram.header.textureHeight;
+			const data = new Uint8Array(texDataSize);
+			objs.texture = new three.CompressedTexture(
+				[{ data, width: vologram.header.textureWidth, height: vologram.header.textureHeight }],
+				vologram.header.textureWidth,
+				vologram.header.textureHeight,
+				_glFmt,
+				three.UnsignedByteType
+			);
+			objs.texture.minFilter = three.LinearFilter;
+			objs.texture.needsUpdate = true;
 		}
 	};
 
@@ -120,15 +120,15 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 	const _createVologramMaterial = () => {
 		objs.material = vologram.header.hasBasisTexture
 			? new three.ShaderMaterial({
-					vertexShader: BASIS_VERT,
-					fragmentShader: BASIS_FRAG,
-					uniforms: {
-						map: { value: objs.texture },
-					},
-			  })
+				vertexShader: BASIS_VERT,
+				fragmentShader: BASIS_FRAG,
+				uniforms: {
+					map: { value: objs.texture },
+				},
+			})
 			: new three.MeshBasicMaterial({
-					map: objs.texture,
-			  });
+				map: objs.texture,
+			});
 		objs.material.needsUpdate = true;
 		objs.mesh.material = objs.material;
 		objs.mesh.needsUpdate = true;
@@ -183,7 +183,7 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 
 	const _updateFrameFromVideo = (now, metadata) => {
 		const video = vologram.attachedVideo;
-		if(!video) return;
+		if (!video) return;
 
 		_frameFromTime = _getFrameFromSeconds(metadata.mediaTime);
 
@@ -209,7 +209,7 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 			height: canvas.height,
 			frameIndex: _frameFromTime
 		};
-		
+
 		// load mesh
 		_updateMeshAttributeArrays();
 
@@ -229,7 +229,7 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 		if (!objs.geometry) return false;
 
 		// skip update for already loaded frame
-		if(_lastLoadedFrame === vologram.lastFrameLoaded) return true;
+		if (_lastLoadedFrame === vologram.lastFrameLoaded) return true;
 		let frameID = vologram.lastFrameLoaded
 
 		// update bounding box (should that be done after setting the mesh?)
@@ -240,15 +240,15 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 			// load mesh
 			_updateMeshAttributeArrays();
 
-			if(!_updateBasisTexture()) return false;
+			if (!_updateBasisTexture()) return false;
 		}
-		else { 
+		else {
 			// Handle non-basis texture (video texture) by applying cached CPU-side frames.
 			if (!_cachedTexture || !_cachedMesh) return false;
-			
+
 			if (_cachedTexture.frameIndex === _cachedMesh.frameIndex) {
 				const { pixels, width, height } = _cachedTexture;
-		
+
 				// If texture dimensions are different, we need to create a new texture.
 				if (!objs.texture || objs.texture.image.width !== width || objs.texture.image.height !== height) {
 					if (objs.texture) {
@@ -266,10 +266,10 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 					objs.texture.image.data.set(pixels);
 				}
 				objs.texture.needsUpdate = true;
-								
+
 				// Update frame ID.
 				frameID = _cachedTexture.frameIndex;
-				
+
 				// Clear cache once applied.
 				_cachedTexture = null;
 			} else {
