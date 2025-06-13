@@ -185,7 +185,7 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 		const video = vologram.attachedVideo;
 		if (!video) return;
 
-		_frameFromTime = _getFrameFromSeconds(metadata.mediaTime);
+		const frameFromTime = _getFrameFromSeconds(metadata.mediaTime);
 
 		// The video dimensions might not be available on the first frame, so we wait.
 		if (!metadata.width || !metadata.height) {
@@ -207,7 +207,7 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 			pixels: imageData.data, // This is a Uint8ClampedArray
 			width: canvas.width,
 			height: canvas.height,
-			frameIndex: _frameFromTime
+			frameIndex: frameFromTime
 		};
 
 		// load mesh

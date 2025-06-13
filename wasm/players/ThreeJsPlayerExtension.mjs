@@ -185,7 +185,7 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 		const video = vologram.attachedVideo;
 		if(!video) return;
 
-		_frameFromTime = _getFrameFromSeconds(metadata.mediaTime);
+		const _frameFromTime = _getFrameFromSeconds(metadata.mediaTime);
 
 		// The video dimensions might not be available on the first frame, so we wait.
 		if (!metadata.width || !metadata.height) {
