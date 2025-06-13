@@ -83,52 +83,6 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 		return Math.round(seconds * vologram.header.fps);
 	};
 
-	const _updateFrameFromVideo = (now, metadata) => {
-		const video = vologram.attachedVideo;
-
-		_frameFromTime = _getFrameFromSeconds(metadata.mediaTime);
-
-		// The video dimensions might not be available on the first frame, so we wait.
-		if (!metadata.width || !metadata.height) {
-			_frameRequestId = vologram.attachedVideo.requestVideoFrameCallback(_updateFrameFromVideo);
-			return;
-		}
-
-		// Use a 2D canvas to get pixel data from the current video frame.
-		// This is a CPU-side operation that avoids needing the WebGL renderer.
-		const canvas = document.createElement('canvas');
-		canvas.width = video.videoWidth;
-		canvas.height = video.videoHeight;
-		const ctx = canvas.getContext('2d');
-		ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-		const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-		// Cache the raw pixel data and dimensions.
-		_cachedTexture = {
-			pixels: imageData.data, // This is a Uint8ClampedArray
-			width: canvas.width,
-			height: canvas.height,
-			frameIndex: _frameFromTime
-		};
-		
-		_positions = new three.Float32BufferAttribute(vologram.frame.positions, 3);
-		if (vologram.header.hasNormals) {
-			_normals = new three.Float32BufferAttribute(vologram.frame.normals, 3);
-		}
-		_uvs = new three.Float32BufferAttribute(vologram.frame.texCoords, 2);
-		_indices = new three.Uint16BufferAttribute(vologram.frame.indices, 1)
-
-		// Cache the corresponding mesh data to ensure they are in sync.
-		_cachedMesh = {
-			positions: _positions,
-			normals: _normals,
-			texCoords: _uvs,
-			indices: _indices,
-			frameIndex: vologram.lastFrameLoaded
-		};
-		_frameRequestId = vologram.attachedVideo.requestVideoFrameCallback(_updateFrameFromVideo);
-	}
-
 	const _createVologramTexture = () => {
 		if (!vologram.header.hasBasisTexture) {
 			_videoTexture = new three.VideoTexture(vologram.attachedVideo);
@@ -142,20 +96,19 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 			objs.texture.needsUpdate = true;
 			
 			_frameRequestId = vologram.attachedVideo.requestVideoFrameCallback(_updateFrameFromVideo);
-			return;
+		} else {
+			const texDataSize = vologram.header.textureWidth * vologram.header.textureHeight;
+			const data = new Uint8Array(texDataSize);
+			objs.texture = new three.CompressedTexture(
+				[{ data, width: vologram.header.textureWidth, height: vologram.header.textureHeight }],
+				vologram.header.textureWidth,
+				vologram.header.textureHeight,
+				_glFmt,
+				three.UnsignedByteType
+			);
+			objs.texture.minFilter = three.LinearFilter;
+			objs.texture.needsUpdate = true;
 		}
-
-		const texDataSize = vologram.header.textureWidth * vologram.header.textureHeight;
-		const data = new Uint8Array(texDataSize);
-		objs.texture = new three.CompressedTexture(
-			[{ data, width: vologram.header.textureWidth, height: vologram.header.textureHeight }],
-			vologram.header.textureWidth,
-			vologram.header.textureHeight,
-			_glFmt,
-			three.UnsignedByteType
-		);
-		objs.texture.minFilter = three.LinearFilter;
-		objs.texture.needsUpdate = true;
 	};
 
 	const _createVologramMesh = () => {
@@ -189,7 +142,7 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 		_createVologramMaterial();
 	};
 
-	const _updateMeshBS = () => {
+	const _updateMeshBoundingBox = () => {
 		if (!objs || !objs.geometry || !objs.mesh) return false;
 		// It seems that calculating bounding sphere does not work
 		// and always returns NaN value for the radius
@@ -203,14 +156,73 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 		return true;
 	};
 
+	const _updateMeshAttributeArrays = () => {
+		_positions = new three.Float32BufferAttribute(vologram.frame.positions, 3);
+		if (vologram.header.hasNormals) {
+			_normals = new three.Float32BufferAttribute(vologram.frame.normals, 3);
+		}
+		_uvs = new three.Float32BufferAttribute(vologram.frame.texCoords, 2);
+		_indices = new three.Uint16BufferAttribute(vologram.frame.indices, 1)
+	}
+
 	const _updateBasisTexture = () => {
 		if (!vologram.run_basis_transcode(_basisFmt)) return false;
+		_cachedMesh = {
+			positions: _positions,
+			normals: _normals,
+			texCoords: _uvs,
+			indices: _indices,
+			frameIndex: vologram.lastFrameLoaded
+		};
 		const texData = vologram.basis_get_data();
 		objs.texture.mipmaps[0].data.set(texData);
 		objs.texture.minFilter = three.LinearFilter;
 		objs.texture.needsUpdate = true;
 		return true;
 	};
+
+	const _updateFrameFromVideo = (now, metadata) => {
+		const video = vologram.attachedVideo;
+		if(!video) return;
+
+		_frameFromTime = _getFrameFromSeconds(metadata.mediaTime);
+
+		// The video dimensions might not be available on the first frame, so we wait.
+		if (!metadata.width || !metadata.height) {
+			_frameRequestId = vologram.attachedVideo.requestVideoFrameCallback(_updateFrameFromVideo);
+			return;
+		}
+
+		// Use a 2D canvas to get pixel data from the current video frame.
+		// This is a CPU-side operation that avoids needing the WebGL renderer.
+		const canvas = document.createElement('canvas');
+		canvas.width = video.videoWidth;
+		canvas.height = video.videoHeight;
+		const ctx = canvas.getContext('2d');
+		ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+		const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+		// Cache the raw pixel data and dimensions.
+		_cachedTexture = {
+			pixels: imageData.data, // This is a Uint8ClampedArray
+			width: canvas.width,
+			height: canvas.height,
+			frameIndex: _frameFromTime
+		};
+		
+		// load mesh
+		_updateMeshAttributeArrays();
+
+		// Cache the corresponding mesh data to ensure they are in sync.
+		_cachedMesh = {
+			positions: _positions,
+			normals: _normals,
+			texCoords: _uvs,
+			indices: _indices,
+			frameIndex: vologram.lastFrameLoaded
+		};
+		_frameRequestId = vologram.attachedVideo.requestVideoFrameCallback(_updateFrameFromVideo);
+	}
 
 	const _renderUpdate = () => {
 		// check if we have an existing geometry object
@@ -221,18 +233,13 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 		let frameID = vologram.lastFrameLoaded
 
 		// update bounding box (should that be done after setting the mesh?)
-		if (!_updateMeshBS()) return false;
+		if (!_updateMeshBoundingBox()) return false;
 
-		// Get mesh data for current frame to keep it in sync with its texture.
-		_positions = new three.Float32BufferAttribute(vologram.frame.positions, 3);
-		if (vologram.header.hasNormals) {
-			_normals = new three.Float32BufferAttribute(vologram.frame.normals, 3);
-		}
-		_uvs = new three.Float32BufferAttribute(vologram.frame.texCoords, 2);
-		_indices = new three.Uint16BufferAttribute(vologram.frame.indices, 1)
-		
-		// Load texture
+		// Set texture
 		if (vologram.header.hasBasisTexture) {
+			// load mesh
+			_updateMeshAttributeArrays();
+
 			if(!_updateBasisTexture()) return false;
 		}
 		else { 
@@ -259,41 +266,32 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 					objs.texture.image.data.set(pixels);
 				}
 				objs.texture.needsUpdate = true;
-				
-				// Update mesh data to match the cached frame.
-				_positions = _cachedMesh.positions;
-				_normals = _cachedMesh.normals;
-				_uvs = _cachedMesh.texCoords;
-				_indices = _cachedMesh.indices;
-				
+								
 				// Update frame ID.
 				frameID = _cachedTexture.frameIndex;
 				
 				// Clear cache once applied.
 				_cachedTexture = null;
-				_cachedMesh = null;
 			} else {
 				// Clear wrong cache if mesh and texture are out of sync.
 				_cachedTexture = null;
-				_cachedMesh = null;
 				return false;
 			}
-		 }
-
+		}
 		// Positions - upload.
-		objs.geometry.setAttribute("position", _positions);
+		objs.geometry.setAttribute("position", _cachedMesh.positions);
 
 		if (vologram.header.hasNormals) {
 			// Not all volograms include normals.
 			// Normals - upload.
-			objs.geometry.setAttribute("normal", _normals);
+			objs.geometry.setAttribute("normal", _cachedMesh.normals);
 		}
 
 		// Texture Coordinates - upload.
-		objs.geometry.setAttribute("uv", _uvs);
+		objs.geometry.setAttribute("uv", _cachedMesh.texCoords);
 
 		// Indices - upload.
-		objs.geometry.setIndex(_indices);
+		objs.geometry.setIndex(_cachedMesh.indices);
 		objs.geometry.needsUpdate = true;
 		objs.mesh.needsUpdate = true;
 
