@@ -77,7 +77,7 @@ const VologramPlayer = (extensions) => {
 
 		// Always try to update the directory to our buffer goal if buffering, otherwise just for the current frame.
 		const frameReady = vologram.update_frames_directory(_isBuffering ? bufferGoalFrame : desiredFrameIndex);
-		if(!frameReady) return false;
+		if (!frameReady) return false;
 
 		// Check if the frame we absolutely need right now is available.
 		let keyframeRequired = vologram.find_previous_keyframe(desiredFrameIndex);
@@ -209,7 +209,7 @@ const VologramPlayer = (extensions) => {
 				if (signal.aborted) return false;
 
 				_wasm = wasmInstance;
-					_wasm.ccall("basis_init", "boolean");
+				_wasm.ccall("basis_init", "boolean");
 				_wasm.initVologramFunctions(vologram);
 
 				const downloadManager = _wasm.fetch_stream_file("vologram.vols", vologram.sequenceUrl, onProgress, signal);
@@ -253,7 +253,7 @@ const VologramPlayer = (extensions) => {
 				if (signal.aborted) return false;
 
 				_wasm = wasmInstance;
-					_wasm.ccall("basis_init", "boolean");
+				_wasm.ccall("basis_init", "boolean");
 				_wasm.initVologramFunctions(vologram);
 
 				await _wasm.fetch_file("header.vols", vologram.headerUrl, onProgress, signal);
@@ -265,14 +265,14 @@ const VologramPlayer = (extensions) => {
 			})
 			.then((response) => {
 				// return new Promise((resolve, reject) => {
-					if (signal.aborted) return false;
+				if (signal.aborted) return false;
 
-					const initSuccess = _initVologram();
-					if (initSuccess) {
-						return true;
-					} else {
-						throw new Error("_initVologram failed to open vologram");
-					}
+				const initSuccess = _initVologram();
+				if (initSuccess) {
+					return true;
+				} else {
+					throw new Error("_initVologram failed to open vologram");
+				}
 				// });
 			})
 			.catch((err) => {
@@ -415,7 +415,7 @@ const VologramPlayer = (extensions) => {
 	};
 
 	const _cleanVologramModule = () => {
-			_wasm.ccall("basis_free", "boolean");
+		_wasm.ccall("basis_free", "boolean");
 		vologram.free_file_info();
 		if (_wasm.FS.analyzePath("vologram.vols").exists) {
 			_wasm.FS.unlink("vologram.vols");
