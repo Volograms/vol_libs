@@ -79,7 +79,8 @@ const VologramPlayer = (extensions) => {
 		);
 
 		// Always try to update the directory to our buffer goal if buffering, otherwise just for the current frame.
-		vologram.update_frames_directory(_isBuffering ? bufferGoalFrame : desiredFrameIndex);
+		const frameReady = vologram.update_frames_directory(_isBuffering ? bufferGoalFrame : desiredFrameIndex);
+		if (!frameReady) return false;
 
 		// Check if the frame we absolutely need right now is available.
 		let keyframeRequired = vologram.find_previous_keyframe(desiredFrameIndex);
@@ -271,14 +272,14 @@ const VologramPlayer = (extensions) => {
 			})
 			.then((response) => {
 				// return new Promise((resolve, reject) => {
-					if (signal.aborted) return false;
+				if (signal.aborted) return false;
 
-					const initSuccess = _initVologram();
-					if (initSuccess) {
-						return true;
-					} else {
-						throw new Error("_initVologram failed to open vologram");
-					}
+				const initSuccess = _initVologram();
+				if (initSuccess) {
+					return true;
+				} else {
+					throw new Error("_initVologram failed to open vologram");
+				}
 				// });
 			})
 			.catch((err) => {

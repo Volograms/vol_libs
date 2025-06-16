@@ -212,34 +212,37 @@ bool basis_init( void ) {
   return true;
 }
 
+static int _transcoded_w = 0;
+static int _transcoded_h = 0;
+static uint32_t _transcoded_sz = 0;
+
 EMSCRIPTEN_KEEPALIVE
 bool basis_transcode( int format, void* data_ptr, uint32_t data_sz ) {
-  int w = 0, h = 0;
-  bool ret = vol_basis_transcode( format, data_ptr, data_sz, _output_blocks_ptr, _blocks_buf_size_in_blocks_or_pixels, &w, &h );
+  _transcoded_w = 0;
+  _transcoded_h = 0;
+  _transcoded_sz = 0;
+  bool ret = vol_basis_transcode_v2( format, data_ptr, data_sz, _output_blocks_ptr, _blocks_buf_size_in_blocks_or_pixels, &_transcoded_w, &_transcoded_h, &_transcoded_sz );
   return ret;
 }
 
-static int _transcoded_w_v2 = 0;
-static int _transcoded_h_v2 = 0;
-static uint32_t _transcoded_sz_v2 = 0;
 
 EMSCRIPTEN_KEEPALIVE
 bool basis_transcode_v2( int format, void* data_ptr, uint32_t data_sz ) {
-  _transcoded_w_v2 = 0;
-  _transcoded_h_v2 = 0;
-  _transcoded_sz_v2 = 0;
-  bool ret = vol_basis_transcode_v2( format, data_ptr, data_sz, _output_blocks_ptr, _blocks_buf_size_in_blocks_or_pixels, &_transcoded_w_v2, &_transcoded_h_v2, &_transcoded_sz_v2 );
+  _transcoded_w = 0;
+  _transcoded_h = 0;
+  _transcoded_sz = 0;
+  bool ret = vol_basis_transcode_v2( format, data_ptr, data_sz, _output_blocks_ptr, _blocks_buf_size_in_blocks_or_pixels, &_transcoded_w, &_transcoded_h, &_transcoded_sz );
   return ret;
 }
 
 EMSCRIPTEN_KEEPALIVE
-int basis_get_transcoded_width_v2( void ) { return _transcoded_w_v2; }
+int basis_get_transcoded_width( void ) { return _transcoded_w; }
 
 EMSCRIPTEN_KEEPALIVE
-int basis_get_transcoded_height_v2( void ) { return _transcoded_h_v2; }
+int basis_get_transcoded_height( void ) { return _transcoded_h; }
 
 EMSCRIPTEN_KEEPALIVE
-uint32_t basis_get_transcoded_sz_v2( void ) { return _transcoded_sz_v2; }
+uint32_t basis_get_transcoded_sz_v2( void ) { return _transcoded_sz; }
 
 EMSCRIPTEN_KEEPALIVE
 uint8_t* basis_get_transcoded_ptr( void ) { return _output_blocks_ptr; }
@@ -249,10 +252,12 @@ uint32_t basis_get_transcoded_sz( void ) { return _blocks_buf_size_in_blocks_or_
 
 EMSCRIPTEN_KEEPALIVE
 bool run_basis_transcode( int format ) {
-  int w = 0, h = 0;
+  _transcoded_w = 0;
+  _transcoded_h = 0;
+  _transcoded_sz = 0;
   uint8_t* data_ptr = &_frame_data.block_data_ptr[_frame_data.texture_offset];
   int32_t data_sz = _frame_data.texture_sz;
-  bool ret = vol_basis_transcode( format, data_ptr, data_sz, _output_blocks_ptr, _blocks_buf_size_in_blocks_or_pixels, &w, &h );
+  bool ret = vol_basis_transcode_v2( format, data_ptr, data_sz, _output_blocks_ptr, _blocks_buf_size_in_blocks_or_pixels, &_transcoded_w, &_transcoded_h, &_transcoded_sz );
   return ret;
 }
 

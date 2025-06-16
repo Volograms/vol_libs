@@ -5,6 +5,18 @@
 // sends it data, and resolves a promise when the transcoded data is returned.
 // This allows the main thread to offload heavy work without getting bogged down
 // in the details of worker lifecycle and message passing.
+//
+// How it works:
+// 1. Creates a new `vol_worker.js` instance.
+// 2. Maintains a map of `pendingRequests` to track promises for ongoing jobs.
+// 3. The `transcode` method sends a 'transcode' message to the worker, including
+//    the raw .basis data and a unique ID for the request. It returns a Promise
+//    that will be resolved or rejected later.
+// 4. An `onmessage` handler listens for messages from the worker.
+// 5. When a 'transcodeComplete' message arrives, it finds the corresponding
+//    pending promise using the ID and resolves it with the transcoded data.
+// 6. If a 'transcodeError' message is received, it rejects the promise.
+// 7. Provides a `destroy` method to terminate the worker and clean up resources.
 
 const TranscoderManager = () => {
     const worker = new Worker(new URL('./vol_worker.mjs', import.meta.url), { type: 'module' });
@@ -15,6 +27,11 @@ const TranscoderManager = () => {
     worker.onmessage = (event) => {
         const { id, type, payload } = event.data;
         if (!pendingRequests.has(id)) {
+            return; // Ignore if we don't have a pending request for this ID
+        }
+
+        if (type === 'log') {
+            console.log(payload.message);
             return;
         }
 
@@ -31,6 +48,7 @@ const TranscoderManager = () => {
     // Handle any errors that might occur in the worker itself.
     worker.onerror = (error) => {
         console.error('TranscoderManager: Worker error:', error);
+        // Reject all pending requests because the worker has crashed.
         pendingRequests.forEach(({ reject }) => {
             reject(new Error('Worker encountered an unrecoverable error.'));
         });

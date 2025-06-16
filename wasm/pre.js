@@ -214,8 +214,8 @@ Module.initVologramFunctions = (containerObject) => {
 	insertObject["basis_get_transcoded_ptr"] = Module.cwrap("basis_get_transcoded_ptr", "number");
 	insertObject["basis_get_transcoded_sz"] = Module.cwrap("basis_get_transcoded_sz", "number");
 	insertObject["basis_get_transcoded_sz_v2"] = Module.cwrap("basis_get_transcoded_sz_v2", "number");
-	insertObject["basis_get_transcoded_width_v2"] = Module.cwrap("basis_get_transcoded_width_v2", "number");
-	insertObject["basis_get_transcoded_height_v2"] = Module.cwrap("basis_get_transcoded_height_v2", "number");
+	insertObject["basis_get_transcoded_width"] = Module.cwrap("basis_get_transcoded_width", "number");
+	insertObject["basis_get_transcoded_height"] = Module.cwrap("basis_get_transcoded_height", "number");
 
 	insertObject["run_basis_transcode"] = Module.cwrap("run_basis_transcode", "boolean", ["number"]);
 

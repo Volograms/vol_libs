@@ -16,7 +16,7 @@
 //    and sent back to the main thread in a 'transcodeComplete' message.
 // 7. Includes error handling to notify the main thread if transcoding fails.
 
-self.importScripts('VolWeb.js');
+import VolWeb from '../vol_web.js';
 
 let wasmModule;
 
@@ -38,6 +38,16 @@ const initialize = async () => {
 // Promise to ensure initialization is complete before handling messages.
 const initializationPromise = initialize();
 
+self.sendlog = (id, message) => {
+    self.postMessage({
+        id,
+        type: 'log',
+        payload: {
+            message: message
+        }
+    });
+}
+
 // Main message handler for the worker.
 self.onmessage = async (event) => {
     const { id, type, payload } = event.data;
@@ -50,7 +60,9 @@ self.onmessage = async (event) => {
         // Wait for Wasm module to be ready
         await initializationPromise;
 
-        const { basisData, format } = payload;
+        const { basisData, format, frameIndex } = payload;
+
+        // self.sendlog(id, "Payload received");
 
         // Allocate memory inside the Wasm module for the input basis data.
         const dataPtr = wasmModule._malloc(basisData.length);
@@ -77,8 +89,8 @@ self.onmessage = async (event) => {
         // Retrieve the results of the transcoding.
         const resultPtr = wasmModule.ccall('basis_get_transcoded_ptr', 'number');
         const resultSize = wasmModule.ccall('basis_get_transcoded_sz_v2', 'number');
-        const width = wasmModule.ccall('basis_get_transcoded_width_v2', 'number');
-        const height = wasmModule.ccall('basis_get_transcoded_height_v2', 'number');
+        const width = wasmModule.ccall('basis_get_transcoded_width', 'number');
+        const height = wasmModule.ccall('basis_get_transcoded_height', 'number');
 
         if (resultSize === 0) {
             throw new Error('Worker: Transcoded data size is 0.');
@@ -94,7 +106,8 @@ self.onmessage = async (event) => {
             payload: {
                 transcodedData,
                 width,
-                height
+                height,
+                frameIndex
             }
         }, [transcodedData.buffer]); // Transfer the buffer for efficiency
 

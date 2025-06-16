@@ -31,6 +31,11 @@ const TranscoderManager = () => {
             return; // Ignore if we don't have a pending request for this ID
         }
 
+        if (type === 'log') {
+            console.log(payload.message);
+            return;
+        }
+
         const { resolve, reject } = pendingRequests.get(id);
         pendingRequests.delete(id);
 
@@ -55,10 +60,11 @@ const TranscoderManager = () => {
      * Sends basis data to the worker for transcoding.
      * @param {Uint8Array} basisData - The raw .basis file data.
      * @param {number} format - The target GPU texture format.
+     * @param {number} frameIndex - The index of the frame to be transcoded.
      * @returns {Promise<{transcodedData: Uint8Array, width: number, height: number}>}
      *          A promise that resolves with the transcoded texture data.
      */
-    const transcode = (basisData, format) => {
+    const transcode = (basisData, format, frameIndex) => {
         const id = nextRequestId++;
         const promise = new Promise((resolve, reject) => {
             pendingRequests.set(id, { resolve, reject });
@@ -67,8 +73,8 @@ const TranscoderManager = () => {
         worker.postMessage({
             id,
             type: 'transcode',
-            payload: { basisData, format }
-        }, [basisData.buffer]); // Transfer the buffer for efficiency
+            payload: { basisData, format, frameIndex }
+        }, [basisData.buffer]);
 
         return promise;
     };

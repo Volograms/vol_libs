@@ -1,9 +1,11 @@
+const RESUME_BUFFER_SECONDS = 2.0;
+
 const VologramPlayer = (extensions) => {
 	extensions = extensions || [];
 	const _extensionExports = {};
 	let _wasm = {};
 	let _transcoderManager;
-	let _useWorker = true;
+	let _useWorker = false;
 	let _frameRequestId;
 	let _frameFromTime = 0;
 	let _timerPaused;
@@ -74,7 +76,8 @@ const VologramPlayer = (extensions) => {
 		);
 
 		// Always try to update the directory to our buffer goal if buffering, otherwise just for the current frame.
-		vologram.update_frames_directory(_isBuffering ? bufferGoalFrame : desiredFrameIndex);
+		const frameReady = vologram.update_frames_directory(_isBuffering ? bufferGoalFrame : desiredFrameIndex);
+		if (!frameReady) return false;
 
 		// Check if the frame we absolutely need right now is available.
 		let keyframeRequired = vologram.find_previous_keyframe(desiredFrameIndex);
@@ -107,7 +110,7 @@ const VologramPlayer = (extensions) => {
 		}
 
 		// If running slowly we may skip over a keyframe. Grab that now to avoid stale keyframe desync.
-		if (vologram.lastKeyframeLoaded !== keyframeRequired  && keyframeRequired !== desiredFrameIndex) {
+		if (vologram.lastKeyframeLoaded !== keyframeRequired && keyframeRequired !== desiredFrameIndex) {
 			if (!_loadMesh(keyframeRequired)) {
 				return false;
 			}
@@ -266,14 +269,14 @@ const VologramPlayer = (extensions) => {
 			})
 			.then((response) => {
 				// return new Promise((resolve, reject) => {
-					if (signal.aborted) return false;
+				if (signal.aborted) return false;
 
-					const initSuccess = _initVologram();
-					if (initSuccess) {
-						return true;
-					} else {
-						throw new Error("_initVologram failed to open vologram");
-					}
+				const initSuccess = _initVologram();
+				if (initSuccess) {
+					return true;
+				} else {
+					throw new Error("_initVologram failed to open vologram");
+				}
 				// });
 			})
 			.catch((err) => {
