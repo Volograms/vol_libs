@@ -379,7 +379,6 @@ static bool _build_frames_directory_from_file( const char* seq_filename, vol_geo
       vol_geom_frame_hdr_t frame_hdr = ( vol_geom_frame_hdr_t ){ .mesh_data_sz = 0 };
       info_ptr->frame_headers_ptr[i] = frame_hdr;
     }
-
   }
 
   fclose( f_ptr );
