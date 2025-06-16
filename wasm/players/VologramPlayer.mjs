@@ -403,7 +403,7 @@ const VologramPlayer = (extensions) => {
 		vologram.attachedAudio.src = blobUrl;
 	};
 
-	const _open = async ({ headerUrl, sequenceUrl, textureUrl, videoElement, audioElement, useWorker = true }, onProgress) => {
+	const _open = async ({ headerUrl, sequenceUrl, textureUrl, videoElement, audioElement, useWorker = false }, onProgress) => {
 		vologram = {};
 		vologram.header = {};
 		vologram.frame = {};
