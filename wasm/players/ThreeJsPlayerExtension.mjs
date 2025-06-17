@@ -35,17 +35,19 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 	let _basisFmt;
 	let _callbackId;
 	let vologram;
+	let _useWorker = false;
+	let _manager = null;
+	let _isTranscoding = false;
 	let _cachedTexture = null;
 	let _cachedMesh = null;
 	let _lastLoadedFrame = -1;
-	let _positions = null;
-	let _normals = null;
-	let _uvs = null;
-	let _indices = null;
 	let _frameRequestId;
 
-	const _init = (inVologram) => {
+
+	const _init = (inVologram, { useWorker, manager } = {}) => {
 		vologram = inVologram;
+		_useWorker = useWorker;
+		_manager = manager;
 		const fmts = vologram.find_basis_fmt(glCtx);
 		_glFmt = fmts[0];
 		_basisFmt = fmts[1];
@@ -95,7 +97,7 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 			objs.texture.flipY = true; // Videos need to be flipped vertically to match WebGL coordinates.
 			objs.texture.needsUpdate = true;
 			
-			_frameRequestId = vologram.attachedVideo.requestVideoFrameCallback(_updateFrameFromVideo);
+			_frameRequestId = vologram.attachedVideo.requestVideoFrameCallback(_updateVideoTexture);
 		} else {
 			const texDataSize = vologram.header.textureWidth * vologram.header.textureHeight;
 			const data = new Uint8Array(texDataSize);
@@ -157,42 +159,101 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 	};
 
 	const _updateMeshAttributeArrays = () => {
-		_positions = new three.Float32BufferAttribute(vologram.frame.positions, 3);
+		let normals = null;
+		const positions = new three.Float32BufferAttribute(vologram.frame.positions, 3);
 		if (vologram.header.hasNormals) {
-			_normals = new three.Float32BufferAttribute(vologram.frame.normals, 3);
+			normals = new three.Float32BufferAttribute(vologram.frame.normals, 3);
 		}
-		_uvs = new three.Float32BufferAttribute(vologram.frame.texCoords, 2);
-		_indices = new three.Uint16BufferAttribute(vologram.frame.indices, 1)
+		const uvs = new three.Float32BufferAttribute(vologram.frame.texCoords, 2);
+		const indices = new three.Uint16BufferAttribute(vologram.frame.indices, 1)
+		return {positions, normals, uvs, indices}
 	}
 
 	const _updateBasisTexture = () => {
-		if (!vologram.run_basis_transcode(_basisFmt)) return false;
-		_cachedMesh = {
-			positions: _positions,
-			normals: _normals,
-			texCoords: _uvs,
-			indices: _indices,
-			frameIndex: vologram.lastFrameLoaded
-		};
-		const texData = vologram.basis_get_data();
-		objs.texture.mipmaps[0].data.set(texData);
-		objs.texture.minFilter = three.LinearFilter;
-		objs.texture.needsUpdate = true;
+
+		if (_isTranscoding) {
+			return false; // Don't send a new request if one is already in flight.
+		}
+		_isTranscoding = true;
+
+		// load mesh and set _cachedMesh
+		const {positions, normals, uvs, indices} = _updateMeshAttributeArrays();
+		const frameIndex = vologram.lastFrameLoaded;
+
+		if (_useWorker) {
+			const ptr = vologram.frame_texture_data_ptr();
+			const size = vologram.frame_texture_sz();
+			if (!ptr || !size) { return false; }
+			const basisData = new Uint8Array(vologram.HEAP8.buffer, ptr, size).slice();
+
+			_manager.transcode(basisData, _basisFmt, frameIndex)
+				.then(({ transcodedData, width, height, frameIndex: transcodeFrameIndex }) => {
+					// Store the result in the cache.
+					// if (cachedMesh && cachedMesh.frameIndex > frameIndex) return true;
+					_cachedTexture = {
+						pixels: transcodedData,
+						width,
+						height,
+						frameIndex: transcodeFrameIndex
+					};
+					// Cache the corresponding mesh data to ensure they are in sync.
+					_cachedMesh = {
+						positions: positions,
+						normals: normals,
+						texCoords: uvs,
+						indices: indices,
+						frameIndex: transcodeFrameIndex
+					};
+					// _cachedMesh = cachedMesh;
+					_isTranscoding = false; // Allow new requests to be sent.
+					return true;
+				})
+				.catch(err => {
+					console.error("Vologram transcoding error:", err);
+					_isTranscoding = false; // Reset on error as well.
+					return false;
+				});
+		} else {
+			if (!vologram.run_basis_transcode(_basisFmt)) {  // this blocks the main thread
+				_isTranscoding = false; 
+				return false; 
+			}
+			const transcodedData = vologram.basis_get_data();
+			const width = vologram.basis_get_transcoded_width();
+        	const height = vologram.basis_get_transcoded_height();
+			
+			// Store the result in the cache.
+			_cachedTexture = {
+				pixels: transcodedData,
+				width,
+				height,
+				frameIndex: frameIndex
+			};
+			// Cache the corresponding mesh data to ensure they are in sync.
+			_cachedMesh = {
+				positions: positions,
+				normals: normals,
+				texCoords: uvs,
+				indices: indices,
+				frameIndex: frameIndex
+			};
+			_isTranscoding = false;
+		}
 		return true;
 	};
 
-	const _updateFrameFromVideo = (now, metadata) => {
+	const _updateVideoTexture = (now, metadata) => {
 		const video = vologram.attachedVideo;
-		if(!video) return;
+		if (!video) return;
 
-		const _frameFromTime = _getFrameFromSeconds(metadata.mediaTime);
+		const frameFromTime = _getFrameFromSeconds(metadata.mediaTime);
 
 		// The video dimensions might not be available on the first frame, so we wait.
 		if (!metadata.width || !metadata.height) {
-			_frameRequestId = vologram.attachedVideo.requestVideoFrameCallback(_updateFrameFromVideo);
+			_frameRequestId = vologram.attachedVideo.requestVideoFrameCallback(_updateVideoTexture);
 			return;
 		}
-
+		
 		// Use a 2D canvas to get pixel data from the current video frame.
 		// This is a CPU-side operation that avoids needing the WebGL renderer.
 		const canvas = document.createElement('canvas');
@@ -207,21 +268,21 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 			pixels: imageData.data, // This is a Uint8ClampedArray
 			width: canvas.width,
 			height: canvas.height,
-			frameIndex: _frameFromTime
+			frameIndex: frameFromTime
 		};
 		
-		// load mesh
-		_updateMeshAttributeArrays();
-
+		// load mesh and set _cachedMesh
+		const {positions, normals, uvs, indices} = _updateMeshAttributeArrays();
 		// Cache the corresponding mesh data to ensure they are in sync.
 		_cachedMesh = {
-			positions: _positions,
-			normals: _normals,
-			texCoords: _uvs,
-			indices: _indices,
+			positions: positions,
+			normals: normals,
+			texCoords: uvs,
+			indices: indices,
 			frameIndex: vologram.lastFrameLoaded
 		};
-		_frameRequestId = vologram.attachedVideo.requestVideoFrameCallback(_updateFrameFromVideo);
+
+		_frameRequestId = vologram.attachedVideo.requestVideoFrameCallback(_updateVideoTexture);
 	}
 
 	const _renderUpdate = () => {
@@ -229,55 +290,60 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 		if (!objs.geometry) return false;
 
 		// skip update for already loaded frame
-		if(_lastLoadedFrame === vologram.lastFrameLoaded) return true;
+		if (_lastLoadedFrame === vologram.lastFrameLoaded) return true;
 		let frameID = vologram.lastFrameLoaded
 
 		// update bounding box (should that be done after setting the mesh?)
 		if (!_updateMeshBoundingBox()) return false;
 
-		// Set texture
-		if (vologram.header.hasBasisTexture) {
-			// load mesh
-			_updateMeshAttributeArrays();
-
+		if (vologram.header.hasBasisTexture) {	
 			if(!_updateBasisTexture()) return false;
 		}
-		else { 
-			// Handle non-basis texture (video texture) by applying cached CPU-side frames.
-			if (!_cachedTexture || !_cachedMesh) return false;
-			
-			if (_cachedTexture.frameIndex === _cachedMesh.frameIndex) {
-				const { pixels, width, height } = _cachedTexture;
+
+		// Check cache and apply texture if it's ready and matches the current frame.
+		if (!_cachedTexture) return false;
+		if (_cachedTexture.frameIndex != _cachedMesh.frameIndex) {
+			_cachedTexture = null; 
+			return false;
+		}
+		const { pixels, width, height } = _cachedTexture;
+
+		// Set texture
+		if (vologram.header.hasBasisTexture) {
 		
-				// If texture dimensions are different, we need to create a new texture.
-				if (!objs.texture || objs.texture.image.width !== width || objs.texture.image.height !== height) {
-					if (objs.texture) {
-						objs.texture.dispose();
-					}
-					const newTexture = new three.DataTexture(pixels, width, height, three.RGBAFormat);
-					newTexture.minFilter = three.LinearFilter;
-					newTexture.magFilter = three.LinearFilter;
-					newTexture.flipY = true; // Videos need to be flipped vertically.
-					objs.texture = newTexture;
-					// Make sure the material uses the new texture object.
-					objs.material.map = newTexture;
-				} else {
-					// Otherwise, just update the existing texture's data.
-					objs.texture.image.data.set(pixels);
+			if (objs.texture.image.width !== width || objs.texture.image.height !== height) {
+				objs.texture.image.width = width;
+				objs.texture.image.height = height;
+			}
+			objs.texture.mipmaps[0].data.set(pixels);
+		}
+		else {
+			// If texture dimensions are different, we need to create a new texture.
+			if (!objs.texture || objs.texture.image.width !== width || objs.texture.image.height !== height) {
+				if (objs.texture) {
+					objs.texture.dispose();
 				}
-				objs.texture.needsUpdate = true;
-								
-				// Update frame ID.
-				frameID = _cachedTexture.frameIndex;
-				
-				// Clear cache once applied.
-				_cachedTexture = null;
+				const newTexture = new three.DataTexture(pixels, width, height, three.RGBAFormat);
+				newTexture.minFilter = three.LinearFilter;
+				newTexture.magFilter = three.LinearFilter;
+				newTexture.flipY = true; // Videos need to be flipped vertically.
+				objs.texture = newTexture;
+				// Make sure the material uses the new texture object.
+				objs.material.map = newTexture;
 			} else {
-				// Clear wrong cache if mesh and texture are out of sync.
-				_cachedTexture = null;
-				return false;
+				// Otherwise, just update the existing texture's data.
+				objs.texture.image.data.set(pixels);
 			}
 		}
+		objs.texture.needsUpdate = true;
+
+		// update the frame ID we are going to apply
+		frameID = _cachedTexture.frameIndex;
+
+		// Clear cache once applied.
+		_cachedTexture = null; 
+
+		
 		// Positions - upload.
 		objs.geometry.setAttribute("position", _cachedMesh.positions);
 
@@ -314,7 +380,7 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 			objs.texture = null;
 			objs.material = null;
 		}
-		if (_frameRequestId && !vologram.attachedVideo) cancelAnimationFrame(_frameRequestId);
+		if (_frameRequestId && vologram.attachedVideo) vologram.attachedVideo.cancelVideoFrameCallback(_frameRequestId);
 	};
 
 	return {

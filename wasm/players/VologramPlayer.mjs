@@ -1,4 +1,5 @@
 import VolWeb from "../vol_web.mjs";
+import TranscoderManager from "./TranscoderManager.mjs";
 
 const RESUME_BUFFER_SECONDS = 2.0;
 
@@ -6,6 +7,8 @@ const VologramPlayer = (extensions) => {
 	extensions = extensions || [];
 	const _extensionExports = {};
 	let _wasm = {};
+	let _transcoderManager;
+	let _useWorker = false;
 	let _frameRequestId;
 	let _frameFromTime = 0;
 	let _timerPaused;
@@ -193,7 +196,7 @@ const VologramPlayer = (extensions) => {
 	const _initPlayerExtensions = () => {
 		// Initialise Extensions e.g. ThreeJsPlayer or WebGlPlayer
 		extensions.forEach((ext) => {
-			ext.init(vologram);
+			ext.init(vologram, { useWorker: _useWorker, manager: _transcoderManager });
 			_extensionExports[ext.name] = ext.exports;
 		});
 	};
@@ -209,7 +212,9 @@ const VologramPlayer = (extensions) => {
 				if (signal.aborted) return false;
 
 				_wasm = wasmInstance;
-				_wasm.ccall("basis_init", "boolean");
+				if (!_useWorker) {
+					_wasm.ccall("basis_init", "boolean");
+				}
 				_wasm.initVologramFunctions(vologram);
 
 				const downloadManager = _wasm.fetch_stream_file("vologram.vols", vologram.sequenceUrl, onProgress, signal);
@@ -253,7 +258,9 @@ const VologramPlayer = (extensions) => {
 				if (signal.aborted) return false;
 
 				_wasm = wasmInstance;
-				_wasm.ccall("basis_init", "boolean");
+				if (!_useWorker) {
+					_wasm.ccall("basis_init", "boolean");
+				}
 				_wasm.initVologramFunctions(vologram);
 
 				await _wasm.fetch_file("header.vols", vologram.headerUrl, onProgress, signal);
@@ -396,7 +403,7 @@ const VologramPlayer = (extensions) => {
 		vologram.attachedAudio.src = blobUrl;
 	};
 
-	const _open = async ({ headerUrl, sequenceUrl, textureUrl, videoElement, audioElement }, onProgress) => {
+	const _open = async ({ headerUrl, sequenceUrl, textureUrl, videoElement, audioElement, useWorker = false }, onProgress) => {
 		vologram = {};
 		vologram.header = {};
 		vologram.frame = {};
@@ -404,6 +411,12 @@ const VologramPlayer = (extensions) => {
 		vologram.headerUrl = headerUrl;
 		vologram.sequenceUrl = sequenceUrl;
 		vologram.textureUrl = textureUrl;
+		_useWorker = useWorker;
+		if (_useWorker) {
+			if (!_transcoderManager) {
+				_transcoderManager = TranscoderManager();
+			}
+		}
 		if (videoElement && audioElement) {
 			console.warn("Using both video and audio elements is not supported, audio element will be ignored");
 		}
@@ -415,7 +428,14 @@ const VologramPlayer = (extensions) => {
 	};
 
 	const _cleanVologramModule = () => {
-		_wasm.ccall("basis_free", "boolean");
+		
+		if (_transcoderManager) {
+			_transcoderManager.destroy();
+			_transcoderManager = null;
+		}
+		if (!_useWorker) {
+			_wasm.ccall("basis_free", "boolean");
+		}
 		vologram.free_file_info();
 		if (_wasm.FS.analyzePath("vologram.vols").exists) {
 			_wasm.FS.unlink("vologram.vols");
