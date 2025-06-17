@@ -210,7 +210,6 @@ Module.initVologramFunctions = (containerObject) => {
 	insertObject["frame_indices_copied"] = Module.cwrap("frame_indices_copied", "array");
 
 	insertObject["basis_transcode"] = Module.cwrap("basis_transcode", "boolean", ["number", "number", "number"]);
-	insertObject["basis_transcode_v2"] = Module.cwrap("basis_transcode_v2", "boolean", ["number", "number", "number"]);
 	insertObject["basis_get_transcoded_ptr"] = Module.cwrap("basis_get_transcoded_ptr", "number");
 	insertObject["basis_get_transcoded_sz"] = Module.cwrap("basis_get_transcoded_sz", "number");
 	insertObject["basis_get_transcoded_sz_v2"] = Module.cwrap("basis_get_transcoded_sz_v2", "number");

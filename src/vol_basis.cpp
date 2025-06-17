@@ -28,7 +28,8 @@ bool vol_basis_transcode( //
   uint32_t data_sz,           // Input: Data size in bytes from sequence frame.
   uint8_t* output_blocks_ptr, // Output: Transcoded compressed texture data to use.
   uint32_t output_blocks_sz,  //
-  int* w_ptr, int* h_ptr      // Output: Dimensions of texture.
+  int* w_ptr, int* h_ptr,      // Output: Dimensions of texture.
+  uint32_t* out_transcoded_sz_ptr = NULL
 ) {
   if ( !data_ptr || 0 == data_sz || !output_blocks_ptr || 0 == output_blocks_sz || !w_ptr || !h_ptr ) {
     fprintf( stderr, "ERROR vol_basis_transcode invalid params {%p,%i,%p,%i,%p,%p}\n", (void*)data_ptr, data_sz, (void*)output_blocks_ptr, output_blocks_sz, (void*)w_ptr, (void*)h_ptr ); // TODO: remove
@@ -54,47 +55,6 @@ bool vol_basis_transcode( //
     fprintf( stderr, "ERROR vol_basis_transcode not ready to transcode.\n" );
     return false;
   }
-  if ( !trans.transcode_image_level( data_ptr, data_sz, image_index, level_index, output_blocks_ptr, output_blocks_sz, fmt ) ) {
-    fprintf( stderr, "ERROR vol_basis_transcode transcoding image level failed.\n" );
-    return false;
-  }
-  *w_ptr = level_info.m_width;
-  *h_ptr = level_info.m_height;
-
-  return true;
-}
-
-bool vol_basis_transcode_v2( //
-  int format,
-  void* data_ptr,             // Input: Basis-compressed data from sequence frame.
-  uint32_t data_sz,           // Input: Data size in bytes from sequence frame.
-  uint8_t* output_blocks_ptr, // Output: Transcoded compressed texture data to use.
-  uint32_t output_blocks_sz,  //
-  int* w_ptr, int* h_ptr,      // Output: Dimensions of texture.
-  uint32_t* out_transcoded_sz_ptr
-) {
-  if ( !data_ptr || 0 == data_sz || !output_blocks_ptr || 0 == output_blocks_sz || !w_ptr || !h_ptr || !out_transcoded_sz_ptr) {
-    fprintf( stderr, "ERROR vol_basis_transcode_v2 invalid params\n");
-    return false;
-  }
-
-  basist::basisu_transcoder trans;
-  if ( !trans.start_transcoding( data_ptr, data_sz ) ) {
-    fprintf( stderr, "ERROR vol_basis_transcode_v2 transcoding failed\n" );
-    return false;
-  }
-
-  basist::basisu_image_info image_info;
-  uint32_t image_index = 0;
-  trans.get_image_info( data_ptr, data_sz, image_info, image_index );
-  basist::basisu_image_level_info level_info;
-  uint32_t level_index = 0;
-  trans.get_image_level_info( data_ptr, data_sz, level_info, image_index, level_index );
-  basist::transcoder_texture_format fmt = (basist::transcoder_texture_format)format;
-  if ( !trans.get_ready_to_transcode() ) {
-    fprintf( stderr, "ERROR vol_basis_transcode_v2 not ready to transcode.\n" );
-    return false;
-  }
 
   uint32_t required_sz = level_info.m_total_blocks * basist::basis_get_bytes_per_block_or_pixel(fmt);
   if (output_blocks_sz < required_sz) {
@@ -103,12 +63,13 @@ bool vol_basis_transcode_v2( //
   }
 
   if ( !trans.transcode_image_level( data_ptr, data_sz, image_index, level_index, output_blocks_ptr, output_blocks_sz, fmt ) ) {
-    fprintf( stderr, "ERROR vol_basis_transcode_v2 transcoding image level failed.\n" );
+    fprintf( stderr, "ERROR vol_basis_transcode transcoding image level failed.\n" );
     return false;
   }
   *w_ptr = level_info.m_width;
   *h_ptr = level_info.m_height;
-  *out_transcoded_sz_ptr = required_sz;
+  if(out_transcoded_sz_ptr != NULL)
+    *out_transcoded_sz_ptr = required_sz;
 
   return true;
 }

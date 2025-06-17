@@ -73,7 +73,7 @@ self.onmessage = async (event) => {
 
         // Perform the transcoding by calling the C function.
         const success = wasmModule.ccall(
-            'basis_transcode_v2',
+            'basis_transcode',
             'boolean',
             ['number', 'number', 'number'],
             [format, dataPtr, basisData.length]
@@ -83,7 +83,7 @@ self.onmessage = async (event) => {
         wasmModule._free(dataPtr);
 
         if (!success) {
-            throw new Error('Worker: basis_transcode_v2() failed');
+            throw new Error('Worker: basis_transcode() failed');
         }
 
         // Retrieve the results of the transcoding.
