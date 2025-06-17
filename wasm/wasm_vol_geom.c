@@ -221,7 +221,7 @@ bool basis_transcode( int format, void* data_ptr, uint32_t data_sz ) {
   _transcoded_w = 0;
   _transcoded_h = 0;
   _transcoded_sz = 0;
-  bool ret = vol_basis_transcode( format, data_ptr, data_sz, _output_blocks_ptr, _blocks_buf_size_in_blocks_or_pixels, &_transcoded_w, &_transcoded_h, &_transcoded_sz );
+  bool ret = vol_basis_transcode_v2( format, data_ptr, data_sz, _output_blocks_ptr, _blocks_buf_size_in_blocks_or_pixels, &_transcoded_w, &_transcoded_h, &_transcoded_sz );
   return ret;
 }
 
@@ -247,7 +247,7 @@ bool run_basis_transcode( int format ) {
   _transcoded_sz = 0;
   uint8_t* data_ptr = &_frame_data.block_data_ptr[_frame_data.texture_offset];
   int32_t data_sz = _frame_data.texture_sz;
-  bool ret = vol_basis_transcode( format, data_ptr, data_sz, _output_blocks_ptr, _blocks_buf_size_in_blocks_or_pixels, &_transcoded_w, &_transcoded_h, &_transcoded_sz );
+  bool ret = vol_basis_transcode_v2( format, data_ptr, data_sz, _output_blocks_ptr, _blocks_buf_size_in_blocks_or_pixels, &_transcoded_w, &_transcoded_h, &_transcoded_sz );
   return ret;
 }
 
