@@ -93,6 +93,7 @@ The returned object has the following properties and functions:
   - `textureUrl`: (**_optional_**) url or string to the texture video file
   - `videoElement`: (**_optional_**) HTML video element that will contain the video texture, if null the player will create its own if needed
   - `audioElement`: (**_optional_**) HTML audio element that will contain the vologram audio, if null the player will create its own if needed
+  - `useWorker`: (**_optional_**) If Basis Universal texture should be decoded in a web worker or not, `false` on default.
 - Parameter `onProgressCallback`: (**_optional_**) a callback function that accepts a float value between 0 and 1 representing the download progress of the vologram file(s)
 
 `.close()`: closes an open vologram
@@ -102,6 +103,7 @@ The returned object has the following properties and functions:
 - Parameter `event`: (_**required**_) must on of the following:
   - `"onclose"`: triggered when `close()` is called
   - `"onended"`: triggered when vologram reached the end of the playback
+  - `onbuffering`: triggered when vologram reached the end of available stream and is buffering. `callback` has one input (`true|false`) depending on buffering state.
 - Parameter `callback`: (_**required**_) function that is called when the event is triggered, has no inputs
 
 `.unregisterCallback(event, callback)`: remove a function that was registered to an event with `registerCallback`
