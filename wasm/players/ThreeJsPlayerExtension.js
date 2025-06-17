@@ -380,7 +380,7 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 			objs.texture = null;
 			objs.material = null;
 		}
-		if (_frameRequestId && !vologram.attachedVideo) cancelAnimationFrame(_frameRequestId);
+		if (_frameRequestId && vologram.attachedVideo) vologram.attachedVideo.cancelVideoFrameCallback(_frameRequestId);
 	};
 
 	return {
