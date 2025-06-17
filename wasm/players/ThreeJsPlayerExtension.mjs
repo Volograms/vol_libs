@@ -97,7 +97,7 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 			objs.texture.flipY = true; // Videos need to be flipped vertically to match WebGL coordinates.
 			objs.texture.needsUpdate = true;
 			
-			_frameRequestId = vologram.attachedVideo.requestVideoFrameCallback(_updateFrameFromVideo);
+			_frameRequestId = vologram.attachedVideo.requestVideoFrameCallback(_updateVideoTexture);
 		} else {
 			const texDataSize = vologram.header.textureWidth * vologram.header.textureHeight;
 			const data = new Uint8Array(texDataSize);
@@ -242,7 +242,7 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 		return true;
 	};
 
-	const _updateFrameFromVideo = (now, metadata) => {
+	const _updateVideoTexture = (now, metadata) => {
 		const video = vologram.attachedVideo;
 		if (!video) return;
 
@@ -250,7 +250,7 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 
 		// The video dimensions might not be available on the first frame, so we wait.
 		if (!metadata.width || !metadata.height) {
-			_frameRequestId = vologram.attachedVideo.requestVideoFrameCallback(_updateFrameFromVideo);
+			_frameRequestId = vologram.attachedVideo.requestVideoFrameCallback(_updateVideoTexture);
 			return;
 		}
 		
@@ -282,7 +282,7 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 			frameIndex: vologram.lastFrameLoaded
 		};
 
-		_frameRequestId = vologram.attachedVideo.requestVideoFrameCallback(_updateFrameFromVideo);
+		_frameRequestId = vologram.attachedVideo.requestVideoFrameCallback(_updateVideoTexture);
 	}
 
 	const _renderUpdate = () => {
