@@ -4,16 +4,21 @@
  * @param {Array} extensions - Optional array of player extensions
  * @returns {Object} Player instance with controls and methods
  */
+import TranscoderManager from "./TranscoderManager.mjs";
+
+const RESUME_BUFFER_SECONDS = 2.0;
 const VologramPlayer = (VolWebModule, extensions) => {
 	// Handle backward compatibility - if first param is array, assume old API
 	if (Array.isArray(VolWebModule)) {
 		throw new Error('VologramPlayer now requires a VolWeb module as first parameter. Import your preferred version and pass it in.');
-	}
+	}	
 	
-	const VolWeb = VolWebModule;
 	extensions = extensions || [];
+	const VolWeb = VolWebModule;
 	const _extensionExports = {};
 	let _wasm = {};
+	let _transcoderManager;
+	let _useWorker = false;
 	let _frameRequestId;
 	let _frameFromTime = 0;
 	let _timerPaused;
@@ -21,7 +26,9 @@ const VologramPlayer = (VolWebModule, extensions) => {
 	let _previousTime;
 	let _timer = 0;
 	let vologram = {};
-	
+	let _isBuffering = false;
+	let _wasPlayingBeforeBuffering = false;
+
 	// AbortController for canceling fetch requests
 	let _downloadController = null;
 
@@ -34,6 +41,7 @@ const VologramPlayer = (VolWebModule, extensions) => {
 	const _events = {
 		onclose: [],
 		onended: [],
+		onbuffering: [],
 	};
 
 	const _loadMesh = (frameIdx) => {
@@ -68,25 +76,52 @@ const VologramPlayer = (VolWebModule, extensions) => {
 	};
 
 	const _updateMeshFrameAllowingSkip = (desiredFrameIndex) => {
-		if (vologram.lastFrameLoaded === desiredFrameIndex) {
+		if (vologram.lastFrameLoaded === desiredFrameIndex && !_isBuffering) {
 			return false;
 		} // Safety catch to avoid reloading the same frame twice.
 		if (desiredFrameIndex < 0 || desiredFrameIndex >= vologram.header.frameCount) {
 			return false;
 		}
 
+		const bufferGoalFrame = Math.min(
+			vologram.header.frameCount - 1,
+			desiredFrameIndex + Math.floor(RESUME_BUFFER_SECONDS * vologram.header.fps)
+		);
+
+		// Always try to update the directory to our buffer goal if buffering, otherwise just for the current frame.
+		const frameReady = vologram.update_frames_directory(_isBuffering ? bufferGoalFrame : desiredFrameIndex);
+		if (!frameReady) return false;
+
+		// Check if the frame we absolutely need right now is available.
 		let keyframeRequired = vologram.find_previous_keyframe(desiredFrameIndex);
-		if(keyframeRequired === -1) { 
-			// We need to update frame directory 
-			if(vologram.update_frames_directory(desiredFrameIndex) === false) {
-				return false;
+
+		if (keyframeRequired === -1) {
+			// Frame not ready, enter/stay in buffering state.
+			if (!_isBuffering) {
+				_isBuffering = true;
+				_wasPlayingBeforeBuffering = _isPlaying();
+				_events.onbuffering.forEach((fn) => fn(true));
 			}
-			keyframeRequired = vologram.find_previous_keyframe(desiredFrameIndex);
-			if(keyframeRequired === -1) {
-				_pause();
+			_internal_pause();
+			return false;
+		}
+
+		// If we were buffering, check if we've met the goal to resume.
+		if (_isBuffering) {
+			const keyframeForBufferGoal = vologram.find_previous_keyframe(bufferGoalFrame);
+			if (keyframeForBufferGoal !== -1) {
+				// Buffer goal is met. Exit buffering state.
+				_isBuffering = false;
+				_events.onbuffering.forEach((fn) => fn(false));
+				if (_wasPlayingBeforeBuffering) {
+					_play(); // This will set _timerPaused = false
+				}
+			} else {
+				// Goal not met. Stay paused and buffering.
 				return false;
 			}
 		}
+
 		// If running slowly we may skip over a keyframe. Grab that now to avoid stale keyframe desync.
 		if (vologram.lastKeyframeLoaded !== keyframeRequired && keyframeRequired !== desiredFrameIndex) {
 			if (!_loadMesh(keyframeRequired)) {
@@ -124,6 +159,9 @@ const VologramPlayer = (VolWebModule, extensions) => {
 		_initAdditionalElements();
 		_initPlayerExtensions();
 
+		// Initialize mesh to frame 0
+		_updateMeshFrameAllowingSkip(0);
+
 		return true;
 	};
 
@@ -147,8 +185,14 @@ const VologramPlayer = (VolWebModule, extensions) => {
 	};
 
 	const _initAdditionalElements = () => {
+		if (!vologram.textureUrl && vologram.attachedVideo) {
+			vologram.attachedVideo = null;
+		}
 		if (!vologram.header.hasTexture && vologram.textureUrl && !vologram.attachedVideo) {
 			_createVideo();
+		}
+		if (!vologram.header.hasAudio && vologram.attachedAudio) {
+			vologram.attachedAudio = null;
 		}
 		if (vologram.header.hasAudio && !vologram.attachedAudio) {
 			_createAudio();
@@ -170,7 +214,7 @@ const VologramPlayer = (VolWebModule, extensions) => {
 	const _initPlayerExtensions = () => {
 		// Initialise Extensions e.g. ThreeJsPlayer or WebGlPlayer
 		extensions.forEach((ext) => {
-			ext.init(vologram);
+			ext.init(vologram, { useWorker: _useWorker, manager: _transcoderManager });
 			_extensionExports[ext.name] = ext.exports;
 		});
 	};
@@ -179,16 +223,16 @@ const VologramPlayer = (VolWebModule, extensions) => {
 		// Create AbortController for this download session
 		_downloadController = new AbortController();
 		const signal = _downloadController.signal;
-		
+
 		return VolWeb()
 			.then(async (wasmInstance) => {
 				// Check if download was already cancelled
-				if (signal.aborted) {
-					return false;
-				}
-				
+				if (signal.aborted) return false;
+
 				_wasm = wasmInstance;
-				_wasm.ccall("basis_init", "boolean");
+				if (!_useWorker) {
+					_wasm.ccall("basis_init", "boolean");
+				}
 				_wasm.initVologramFunctions(vologram);
 				
 				// Initialize OPFS if requested and available
@@ -214,17 +258,24 @@ const VologramPlayer = (VolWebModule, extensions) => {
 				
 				// Use appropriate file paths and fetch function based on storage mode
 				const volumeFile = vologram.useOPFS ? "/opfs/vologram.vols" : "vologram.vols";
-				return _wasm.fetch_stream_file(volumeFile, vologram.sequenceUrl, onProgress, signal);
+				const downloadManager = _wasm.fetch_stream_file(volumeFile, vologram.sequenceUrl, onProgress, signal);
 
-			})
-			.then((response) => {
-				return new Promise(async (resolve, reject) => {
-					// Wait until we have a header and audio donwloaded
-					await _wasm.isHeaderLoaded();
-					const initSuccess = _initVologram();
-					if (initSuccess) resolve(initSuccess);
-					else reject(new Error("_initVologram failed to open vologram"));
+				// Await for the header to be loaded.
+				await downloadManager.headerLoaded;
+
+				// The rest of the download can continue in the background. We can log if it fails.
+				downloadManager.downloadFinished.catch((err) => {
+					if (err.name !== "AbortError") {
+						console.error("Full vologram download failed in background:", err);
+					}
 				});
+
+				const initSuccess = _initVologram();
+				if (initSuccess) {
+					return true;
+				} else {
+					throw new Error("_initVologram failed to open vologram");
+				}
 			})
 			.catch((err) => {
 				// Handle cancellation gracefully
@@ -237,20 +288,20 @@ const VologramPlayer = (VolWebModule, extensions) => {
 			});
 	};
 
-	const _initWasm = (onProgress) => {
-		// Create AbortController for this download session  
+	const _initWasm = async (onProgress) => {
+		// Create AbortController for this download session
 		_downloadController = new AbortController();
 		const signal = _downloadController.signal;
-		
+
 		return VolWeb()
 			.then(async (wasmInstance) => {
 				// Check if download was already cancelled
-				if (signal.aborted) {
-					return false;
-				}
-				
+				if (signal.aborted) return false;
+
 				_wasm = wasmInstance;
-				_wasm.ccall("basis_init", "boolean");
+				if (!_useWorker) {
+					_wasm.ccall("basis_init", "boolean");
+				}
 				_wasm.initVologramFunctions(vologram);
 				
 				// Initialize OPFS if requested and available
@@ -281,29 +332,25 @@ const VologramPlayer = (VolWebModule, extensions) => {
 					console.log('Using WasmFS OPFS storage for vologram files');
 				}
 				
-				return _wasm.fetch_file(headerFile, vologram.headerUrl, onProgress, signal);
+				await _wasm.fetch_file(headerFile, vologram.headerUrl, onProgress, signal);
 			})
-			.then((response) => {
-				// Check if download was cancelled between header and sequence
-				if (signal.aborted) {
-					return false;
-				}
-				
+			.then(async (response) => {
+				if (signal.aborted) return false;
+
 				// Fetch sequence file with the same storage mode and abort signal
 				const sequenceFile = vologram.useOPFS ? "/opfs/sequence.vols" : "sequence.vols";
-				return _wasm.fetch_file(sequenceFile, vologram.sequenceUrl, onProgress, signal);
+				await _wasm.fetch_file(sequenceFile, vologram.sequenceUrl, onProgress, signal)
 			})
 			.then((response) => {
-				return new Promise((resolve, reject) => {
-					// Final check if download was cancelled
-					if (signal.aborted) {
-						return false;
-					}
-					
-					const initSuccess = _initVologram();
-					if (initSuccess) resolve(initSuccess);
-					else reject(new Error("_initVologram failed to open vologram"));
-				});
+				// return new Promise((resolve, reject) => {
+				if (signal.aborted) return false;
+
+				const initSuccess = _initVologram();
+				if (initSuccess) {
+					return true;
+				} else {
+					throw new Error("_initVologram failed to open vologram");
+				}
 			})
 			.catch((err) => {
 				// Handle cancellation gracefully
@@ -337,7 +384,7 @@ const VologramPlayer = (VolWebModule, extensions) => {
 				_timer = 0;
 			} else {
 				_frameFromTime = vologram.header.frameCount - 1;
-				_pause();
+				_internal_pause();
 			}
 		}
 	};
@@ -350,7 +397,7 @@ const VologramPlayer = (VolWebModule, extensions) => {
 	};
 
 	const _updateFrameFromVideo = (now, metadata) => {
-		if (vologram.header && vologram.header.ready) {
+		if (vologram.header && vologram.header.ready && vologram.attachedVideo) {
 			_getFrameFromSeconds(metadata.mediaTime);
 			_updateMeshFrameAllowingSkip(_frameFromTime);
 			vologram.lastUpdateTime = metadata.mediaTime;
@@ -360,7 +407,7 @@ const VologramPlayer = (VolWebModule, extensions) => {
 
 	const _updateFrameFromTimer = (now) => {
 		_timeTick(now);
-		if (!_timerPaused && vologram.header && vologram.header.ready) {
+		if ((!_timerPaused || _isBuffering) && vologram.header && vologram.header.ready) {
 			_updateMeshFrameAllowingSkip(_frameFromTime);
 			vologram.lastUpdateTime = _timer / 1000;
 		}
@@ -368,7 +415,7 @@ const VologramPlayer = (VolWebModule, extensions) => {
 	};
 
 	const _updateFrameFromAudio = () => {
-		if (vologram.header && vologram.header.ready) {
+		if (vologram.header && vologram.header.ready && vologram.attachedAudio) {
 			_getFrameFromSeconds(vologram.attachedAudio.currentTime);
 			_updateMeshFrameAllowingSkip(Math.max(0, _frameFromTime - 1));
 			vologram.lastUpdateTime = vologram.attachedAudio.currentTime;
@@ -426,7 +473,7 @@ const VologramPlayer = (VolWebModule, extensions) => {
 		vologram.attachedAudio.src = blobUrl;
 	};
 
-	const _open = async ({ headerUrl, sequenceUrl, textureUrl, videoElement, audioElement, useOPFS = false }, onProgress) => {
+	const _open = async ({ headerUrl, sequenceUrl, textureUrl, videoElement, audioElement, useWorker = false, useOPFS = false }, onProgress) => {
 		vologram = {};
 		vologram.header = {};
 		vologram.frame = {};
@@ -439,6 +486,12 @@ const VologramPlayer = (VolWebModule, extensions) => {
 		vologram.useOPFS = useOPFS;
 		console.log(`Vologram storage mode: ${useOPFS ? 'OPFS (disk-based)' : 'MEMFS (memory-based)'}`);
 		
+		_useWorker = useWorker;
+		if (_useWorker) {
+			if (!_transcoderManager) {
+				_transcoderManager = TranscoderManager();
+			}
+		}
 		if (videoElement && audioElement) {
 			console.warn("Using both video and audio elements is not supported, audio element will be ignored");
 		}
@@ -450,7 +503,14 @@ const VologramPlayer = (VolWebModule, extensions) => {
 	};
 
 	const _cleanVologramModule = () => {
-		_wasm.ccall("basis_free", "boolean");
+		
+		if (_transcoderManager) {
+			_transcoderManager.destroy();
+			_transcoderManager = null;
+		}
+		if (!_useWorker) {
+			_wasm.ccall("basis_free", "boolean");
+		}
 		vologram.free_file_info();
 		
 		// Clean up OPFS files
@@ -490,6 +550,8 @@ const VologramPlayer = (VolWebModule, extensions) => {
 		vologram.headerUrl = null;
 		vologram.sequenceUrl = null;
 		vologram.textureUrl = null;
+		_isBuffering = false;
+		_wasPlayingBeforeBuffering = false;
 	};
 
 	const _close = () => {
@@ -499,7 +561,7 @@ const VologramPlayer = (VolWebModule, extensions) => {
 			_downloadController.abort();
 			_downloadController = null;
 		}
-		
+
 		if (_frameRequestId && !vologram.attachedVideo) cancelAnimationFrame(_frameRequestId);
 
 		_timerPaused = true;
@@ -558,7 +620,7 @@ const VologramPlayer = (VolWebModule, extensions) => {
 		_startTimer();
 	};
 
-	const _pause = () => {
+	const _internal_pause = () => {
 		switch (_playbackMode) {
 			case PB_VIDEO:
 				vologram.attachedVideo.pause();
@@ -570,6 +632,11 @@ const VologramPlayer = (VolWebModule, extensions) => {
 				break;
 		}
 		_timerPaused = true;
+	};
+
+	const _pause = () => {
+		_wasPlayingBeforeBuffering = false;
+		_internal_pause();
 	};
 
 	const _play = () => {
@@ -668,6 +735,6 @@ const VologramPlayer = (VolWebModule, extensions) => {
 			return _extensionExports;
 		},
 	};
-};
+}; // End of VologramPlayer function
 
 export default VologramPlayer;

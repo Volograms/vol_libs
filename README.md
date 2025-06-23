@@ -6,72 +6,12 @@
 [![npm](https://img.shields.io/npm/v/@volograms/web_vol_lib)](https://www.npmjs.com/package/@volograms/web_vol_lib)
 [![Issues](https://img.shields.io/github/issues/Volograms/vol_libs)](https://github.com/Volograms/vol_libs/issues)
 [![Pull Requests](https://img.shields.io/github/issues-pr/Volograms/vol_libs)](https://github.com/Volograms/vol_libs/pulls)
-[![Discord](https://img.shields.io/discord/748820653158694942?label=discord)](https://discord.gg/nuDP5jjZ5q)
-[![Platform](https://img.shields.io/badge/platform-c++%20%7C%20wasm-blue)](#)
+[![Discord](https://img.shields.io/discord/748820653158694942?label=discord)](https://discord.gg/dz5G4bHb)
+<!-- [![Platform](https://img.shields.io/badge/platform-c++%20%7C%20wasm%20%7C%20javascript-blue)](#) -->
 
 **A modular C/C++ library suite for loading, processing, and playing volumetric video (volograms) across native, web, and game engine platforms.**  
+Easily extract mesh, texture, and audio data from vologram files for use in custom players, converters, or real-time applications.
 
-Libraries designed to be used in native plugins for Unity, Unreal and web pages, and can also be used to drive any custom vologram player or converter software. This will give you frame-by-frame triangulated mesh data, with images for the texture, that can be used with any API.
-
-## 🚀 Quick Start
-
-### Try the Web Demo (Coming Soon)
-
-A live web demo will be available soon!  
-You'll be able to load and play vologram files directly in your browser.
-
-#### Run the Web Demo Locally
-
-**Option 1: Using PowerShell (Windows only)**
-```powershell
-# From the project root or wasm directory
-.\serve.ps1
-# Then open http://localhost:8000/examples/05_vol_player_wasm/index_opfs.html in your browser
-```
-
-**Option 2: Using http-server (Cross-platform, requires Node.js)**
-```sh
-npm install -g http-server
-http-server
-# Then open http://localhost:8080/examples/05_vol_player_wasm/index_three.html in your browser
-```
-
-<!--
-Once available, you'll be able to try it here:
-[Live Demo](https://<username>.github.io/<repo>/)
--->
-
----
-
-### Native C++ (Advanced/Custom Use)
-
-1. **Clone and build:**
-   ```sh
-   git clone https://github.com/Volograms/vol_libs.git
-   cd vol_libs
-   make test_programs
-   cd tests/
-   ./geom_test.bin
-   ./av_test.bin
-   ```
-
-2. **See [Set Up](#set-up) below for platform-specific instructions.**
-
-<!-- See individual libraries headers for version history and current features.
-
-| Library  | Version | Files | Description                                         | Fuzzed With                          |
-| -------- | ------- | ----- | --------------------------------------------------- | ------------------------------------ |
-| vol_av   | 0.9     | 2     | Extracts images and audio from videos using FFmpeg. | [AFL](https://github.com/google/AFL) |
-| vol_geom | 0.10    | 2     | Extracts mesh data from header and sequence files.  | [AFL](https://github.com/google/AFL) |
-
-| Tool    | Version | Libraries Used | Description                                                 |
-| ------- | ------- | -------------- | ----------------------------------------------------------- |
-| obj2vol | 0.1     | n/a            | Converts a Wavefront .obj model to a single-frame vologram. | -->
-
-
-<!-- ![vol_geom used to load a simple Vologram and render it in OpenGL](vol_geom.png) -->
-
-<!-- *vol_geom used to load a simple Vologram and render it in OpenGL.* -->
 
 ## Installation
 
@@ -181,7 +121,7 @@ PR Descriptions should include this template:
 
 ## Licences and Dependencies ##
 
-Copyright 2021-2023, Volograms. The MIT License. See the LICENSE file for details.
+Copyright 2021-2025, Volograms. The MIT License. See the LICENSE file for details.
 
 ### Dependencies
 
