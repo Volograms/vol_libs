@@ -1,19 +1,3 @@
-const BASIS_VERT = /*glsl*/ `
-varying vec2 rev_uv;
-void main () {
-	rev_uv = vec2(uv.x, 1.0 - uv.y);
-	gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
-}
-`;
-
-const BASIS_FRAG = /*glsl*/ `
-uniform sampler2D map;
-varying vec2 rev_uv;
-void main () {
-	vec4 color = texture2D( map, rev_uv );
-	gl_FragColor = color;
-}
-`;
 
 const ThreeJsPlayerExtension = (glCtx, options) => {
 	if (!glCtx) {
@@ -95,6 +79,8 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 			objs.texture.minFilter = three.LinearFilter;
 			objs.texture.magFilter = three.LinearFilter;
 			objs.texture.flipY = true; // Videos need to be flipped vertically to match WebGL coordinates.
+			// set inside _renderUpdate as well
+			objs.texture.colorSpace = three.SRGBColorSpace;
 			objs.texture.needsUpdate = true;
 			
 			_frameRequestId = vologram.attachedVideo.requestVideoFrameCallback(_updateVideoTexture);
@@ -108,6 +94,12 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 				_glFmt,
 				three.UnsignedByteType
 			);
+			objs.texture.matrixAutoUpdate = false;
+			let m = new three.Matrix3();
+			m.makeScale(1, -1);
+			m.translate(0, 1);
+			objs.texture.matrix = m;
+			objs.texture.colorSpace = three.SRGBColorSpace;
 			objs.texture.minFilter = three.LinearFilter;
 			objs.texture.needsUpdate = true;
 		}
@@ -120,17 +112,9 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 	};
 
 	const _createVologramMaterial = () => {
-		objs.material = vologram.header.hasBasisTexture
-			? new three.ShaderMaterial({
-					vertexShader: BASIS_VERT,
-					fragmentShader: BASIS_FRAG,
-					uniforms: {
-						map: { value: objs.texture },
-					},
-			  })
-			: new three.MeshBasicMaterial({
-					map: objs.texture,
-			  });
+		objs.material = new three.MeshBasicMaterial({
+			map: objs.texture,
+	  	});
 		objs.material.needsUpdate = true;
 		objs.mesh.material = objs.material;
 		objs.mesh.needsUpdate = true;
@@ -328,6 +312,7 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 				newTexture.magFilter = three.LinearFilter;
 				newTexture.flipY = true; // Videos need to be flipped vertically.
 				objs.texture = newTexture;
+				objs.texture.colorSpace = three.SRGBColorSpace;
 				// Make sure the material uses the new texture object.
 				objs.material.map = newTexture;
 			} else {
