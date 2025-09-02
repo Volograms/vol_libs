@@ -3,7 +3,7 @@
  *
  * vol_geom  | .vol Geometry Decoding API
  * --------- | ---------------------
- * Version   | 0.11
+ * Version   | 0.13
  * Authors   | Anton Gerdelan     <anton@volograms.com>
  *           | Patrick Geoghegan  <patrick@volograms.com>
  * Copyright | 2021, Volograms (http://volograms.com/)
@@ -21,6 +21,7 @@
  * 
  * History
  * -------
+ * - 0.13.0 (2024/12/19) - Enhanced streaming with circular buffer, configurable buffer size, and automatic mode selection.
  * - 0.12.0 (2024/11/02) - Support for streaming, incomplete files, and frame skipping.
  * - 0.11.0 (2022/04/)   - Support for reading single-file volograms.
  * - 0.10.0 (2022/03/22) - Support added for reading >2GB volograms.
@@ -118,6 +119,56 @@ VOL_GEOM_EXPORT typedef struct vol_geom_frame_directory_entry_t {
   vol_geom_size_t corrected_payload_sz;
 } vol_geom_frame_directory_entry_t;
 
+/** Configuration structure for streaming buffer behavior.
+ * This structure defines how the streaming buffer system operates for large files.
+ * Default values are set by vol_geom_init_streaming_config().
+ */
+ VOL_GEOM_EXPORT typedef struct vol_geom_streaming_config_t {
+  /// Maximum size of the circular buffer in bytes. Default: 200MB (200 * 1024 * 1024).
+  vol_geom_size_t max_buffer_size;
+  /// Minimum buffer size before switching to full download mode. Default: 50MB.
+  vol_geom_size_t min_buffer_size;
+  /// Reserved space for first frame and keyframes for loop support. Default: 10MB.
+  vol_geom_size_t reserved_space_size;
+  /// If true, automatically select streaming vs full download based on file size. Default: true.
+  bool auto_select_mode;
+  /// If true, force streaming mode even for small files. Default: false.
+  bool force_streaming_mode;
+  /// How many seconds of content to buffer ahead of current playback position. Default: 2.0.
+  float lookahead_seconds;
+} vol_geom_streaming_config_t;
+
+/** Internal state for managing the circular streaming buffer.
+ * This structure tracks the current state of the streaming buffer and is managed internally.
+ * Do not manually modify these values - use the provided API functions.
+ */
+VOL_GEOM_EXPORT typedef struct vol_geom_buffer_state_t {
+  /// Pointer to the allocated circular buffer memory. NULL if not using streaming mode.
+  uint8_t* buffer_ptr;
+  /// Total size of the circular buffer in bytes.
+  vol_geom_size_t buffer_size;
+  /// Current write position in the circular buffer (where next data will be written).
+  vol_geom_size_t write_pos;
+  /// Start position of valid data in the buffer (oldest valid byte).
+  vol_geom_size_t valid_start;
+  /// End position of valid data in the buffer (newest valid byte + 1).
+  vol_geom_size_t valid_end;
+  /// Current position in the remote file being downloaded.
+  vol_geom_size_t file_pos;
+  /// Total size of the remote file, if known. 0 if unknown.
+  vol_geom_size_t file_size;
+  /// True if currently using circular buffer streaming mode.
+  bool is_streaming_mode;
+  /// Number of complete frames currently available in the buffer.
+  uint32_t frames_in_buffer;
+  /// Frame index of the first complete frame available in buffer.
+  uint32_t first_frame_in_buffer;
+  /// Frame index of the last complete frame available in buffer.
+  uint32_t last_frame_in_buffer;
+  /// Copy of the streaming configuration used for this buffer.
+  vol_geom_streaming_config_t config;
+} vol_geom_buffer_state_t;
+
 /** Meta-data about the whole Vologram sequence. Load this once with `vol_geom_create_file_info()` before using the Vologram. */
 VOL_GEOM_EXPORT typedef struct vol_geom_info_t {
   vol_geom_file_hdr_t hdr;
@@ -139,6 +190,8 @@ VOL_GEOM_EXPORT typedef struct vol_geom_info_t {
   vol_geom_size_t sequence_offset;
   /// Frame number that was read the last and is a keayframe. Useful during seek or when skipping frames. 
   uint32_t last_keyframe;
+  /// Pointer to streaming buffer state. NULL if not using streaming mode. Do not manually allocate or free this memory!
+  vol_geom_buffer_state_t* streaming_buffer_ptr;
 } vol_geom_info_t;
 
 /** Meta-data for each from of the Vologram sequence. */
@@ -249,6 +302,104 @@ VOL_GEOM_EXPORT int vol_geom_find_previous_keyframe( const vol_geom_info_t* info
  * @returns              False on any error including `frame_idx` range validation, File I/O, and memory allocation.
  */
 VOL_GEOM_EXPORT bool vol_geom_read_frame( const char* seq_filename, vol_geom_info_t* info_ptr, uint32_t frame_idx, vol_geom_frame_data_t* frame_data_ptr );
+
+//
+// ===== STREAMING BUFFER API =====
+// These functions provide enhanced streaming capabilities with circular buffer support.
+// They are designed to work alongside the existing API and provide automatic mode selection.
+//
+
+/** Initialize a streaming configuration structure with default values.
+ * This function sets up reasonable defaults for streaming buffer behavior.
+ * @param config_ptr Pointer to a vol_geom_streaming_config_t struct to be initialized. Must not be NULL.
+ * @returns          True on success, false if config_ptr is NULL.
+ */
+VOL_GEOM_EXPORT bool vol_geom_init_streaming_config( vol_geom_streaming_config_t* config_ptr );
+
+/** Determine whether to use streaming mode based on file size and configuration.
+ * This function implements the auto-selection logic for choosing between full download and streaming modes.
+ * @param file_size  Size of the file in bytes. Use 0 if size is unknown (will return true for streaming).
+ * @param config_ptr Pointer to configuration structure. Must not be NULL.
+ * @returns          True if streaming mode should be used, false for full download mode.
+ */
+VOL_GEOM_EXPORT bool vol_geom_should_use_streaming_mode( vol_geom_size_t file_size, const vol_geom_streaming_config_t* config_ptr );
+
+/** Create and initialize a streaming buffer for the vologram.
+ * This function allocates the circular buffer and initializes streaming state.
+ * Call this after reading the header but before starting to download sequence data.
+ * @param info_ptr   Pointer to vol_geom_info_t struct. Must not be NULL.
+ * @param config_ptr Pointer to streaming configuration. Must not be NULL.
+ * @returns          True on success, false on memory allocation failure or invalid parameters.
+ */
+VOL_GEOM_EXPORT bool vol_geom_create_streaming_buffer( vol_geom_info_t* info_ptr, const vol_geom_streaming_config_t* config_ptr );
+
+/** Add downloaded data to the circular streaming buffer.
+ * This function manages the circular buffer, handling wraparound and maintaining frame boundaries.
+ * @param info_ptr  Pointer to vol_geom_info_t with initialized streaming buffer. Must not be NULL.
+ * @param data_ptr  Pointer to new data to add to the buffer. Must not be NULL.
+ * @param data_size Size of the data to add in bytes.
+ * @returns         True on success, false on buffer overflow or invalid parameters.
+ */
+VOL_GEOM_EXPORT bool vol_geom_add_data_to_buffer( vol_geom_info_t* info_ptr, const uint8_t* data_ptr, vol_geom_size_t data_size );
+
+/** Parse a frame header from buffer data.
+ * This function reads and validates frame header information from a buffer location.
+ * @param buffer_ptr     Pointer to buffer containing frame data. Must not be NULL.
+ * @param offset         Byte offset in buffer where frame header starts.
+ * @param header_ptr     Pointer to vol_geom_frame_hdr_t struct to populate. Must not be NULL.  
+ * @param header_size_ptr Pointer to store the size of the parsed header. Must not be NULL.
+ * @returns              True if header was successfully parsed and is valid, false otherwise.
+ */
+VOL_GEOM_EXPORT bool vol_geom_parse_frame_header_from_buffer( const uint8_t* buffer_ptr, vol_geom_size_t offset, vol_geom_frame_hdr_t* header_ptr, vol_geom_size_t* header_size_ptr );
+
+/** Update the frame directory with newly available frames from the buffer.
+ * This function scans the buffer for complete frames and updates the frame directory accordingly.
+ * It should be called after adding new data to the buffer.
+ * @param info_ptr Pointer to vol_geom_info_t with streaming buffer. Must not be NULL.
+ * @returns        True on success, false on parsing errors or invalid parameters.
+ */
+VOL_GEOM_EXPORT bool vol_geom_update_buffer_frame_directory( vol_geom_info_t* info_ptr );
+
+/** Read a frame from the streaming buffer instead of a file.
+ * This function reads frame data from the circular buffer rather than performing file I/O.
+ * @param info_ptr       Pointer to vol_geom_info_t with streaming buffer. Must not be NULL.
+ * @param frame_idx      Index of the frame to read.
+ * @param frame_data_ptr Pointer to vol_geom_frame_data_t struct to populate. Must not be NULL.
+ * @returns              True on success, false if frame is not available or on error.
+ */
+VOL_GEOM_EXPORT bool vol_geom_read_frame_streaming( vol_geom_info_t* info_ptr, uint32_t frame_idx, vol_geom_frame_data_t* frame_data_ptr );
+
+/** Check if a specific frame is currently available in the streaming buffer.
+ * This function can be used to determine if a frame can be read without waiting for more data.
+ * @param info_ptr  Pointer to vol_geom_info_t with streaming buffer. Must not be NULL.
+ * @param frame_idx Index of the frame to check.
+ * @returns         True if frame is available in buffer, false otherwise.
+ */
+VOL_GEOM_EXPORT bool vol_geom_is_frame_available_in_buffer( const vol_geom_info_t* info_ptr, uint32_t frame_idx );
+
+/** Get the current buffer health in bytes.
+ * This function returns how many bytes of valid data are currently in the buffer.
+ * @param info_ptr Pointer to vol_geom_info_t with streaming buffer. Must not be NULL.
+ * @returns        Number of bytes of valid data in buffer, or 0 on error.
+ */
+VOL_GEOM_EXPORT vol_geom_size_t vol_geom_get_buffer_health_bytes( const vol_geom_info_t* info_ptr );
+
+/** Get the current buffer health in seconds of content.
+ * This function estimates how many seconds of playback content are available in the buffer.
+ * @param info_ptr Pointer to vol_geom_info_t with streaming buffer. Must not be NULL.
+ * @param fps      Frames per second for the vologram sequence.
+ * @returns        Estimated seconds of content available in buffer, or 0.0 on error.
+ */
+VOL_GEOM_EXPORT float vol_geom_get_buffer_health_seconds( const vol_geom_info_t* info_ptr, float fps );
+
+/** Determine if download should be resumed based on buffer health and current playback position.
+ * This function implements the lookahead logic to decide when to resume downloading.
+ * @param info_ptr      Pointer to vol_geom_info_t with streaming buffer. Must not be NULL.
+ * @param current_frame Current frame being played.
+ * @param fps           Frames per second for the vologram sequence.
+ * @returns             True if download should be resumed, false if buffer is sufficient.
+ */
+VOL_GEOM_EXPORT bool vol_geom_should_resume_download( const vol_geom_info_t* info_ptr, uint32_t current_frame, float fps );
 
 #ifdef __cplusplus
 }

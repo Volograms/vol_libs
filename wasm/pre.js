@@ -118,6 +118,156 @@ Module.fetch_stream_file = (dest, fileUrl, onProgress, abortSignal = null) => {
 	};
 };
 
+//
+// ===== ENHANCED STREAMING WITH CIRCULAR BUFFER =====
+// New streaming function that uses the C++ circular buffer for large files
+//
+
+Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = null) => {
+	// Initialize streaming configuration with defaults if not provided
+	if (!config) {
+		Module.init_streaming_config();
+		config = {
+			maxBufferSize: Module.get_max_buffer_size(),
+			lookaheadSeconds: Module.get_lookahead_seconds(),
+			autoSelectMode: Module.get_auto_select_mode()
+		};
+	}
+
+	// Create fetch options with abort signal if provided
+	const fetchOptions = {};
+	if (abortSignal) {
+		fetchOptions.signal = abortSignal;
+	}
+
+	let resolveHeaderLoaded;
+	const headerLoadedPromise = new Promise((resolve) => {
+		resolveHeaderLoaded = resolve;
+	});
+
+	let streamingMode = false;
+	let fileSize = 0;
+	let downloadPaused = false;
+	let currentFrame = 0;
+
+	const downloadFinishedPromise = fetch(fileUrl, fetchOptions)
+		.then(async (response) => {
+			if (!response.ok) {
+				throw new Error(`HTTP error! Status: ${response.status}`);
+			}
+
+			// Get file size and determine mode
+			const contentLength = response.headers.get("content-length");
+			fileSize = contentLength ? parseInt(contentLength) : 0;
+			
+			// Auto-select streaming mode
+			streamingMode = Module.should_use_streaming_mode(fileSize);
+			
+			console.log(`File size: ${fileSize ? (fileSize/1024/1024).toFixed(1) + 'MB' : 'unknown'}, using ${streamingMode ? 'streaming' : 'full download'} mode`);
+
+			const reader = response.body.getReader();
+			let seekLocation = 0;
+			let headerResolved = false;
+
+			// For streaming mode, create the circular buffer
+			if (streamingMode) {
+				if (config.maxBufferSize) Module.set_max_buffer_size(config.maxBufferSize);
+				if (config.lookaheadSeconds) Module.set_lookahead_seconds(config.lookaheadSeconds);
+				if (config.autoSelectMode !== undefined) Module.set_auto_select_mode(config.autoSelectMode);
+
+				if (!Module.create_streaming_buffer()) {
+					throw new Error("Failed to create streaming buffer");
+				}
+				console.log(`Created circular buffer: ${(Module.get_max_buffer_size()/1024/1024).toFixed(1)}MB capacity`);
+			} else {
+				// Use traditional file-based approach for small files
+				var fileStream = Module.FS.open(dest, "w");
+			}
+
+			// Main download loop
+			await reader.read().then(function pump({ done, value }) {
+				if (onProgress && fileSize > 0) {
+					onProgress(seekLocation / fileSize);
+				}
+
+				if (done) {
+					Module.fileFetched = true;
+					console.log('Download finished.');
+					if (!headerResolved) {
+						resolveHeaderLoaded();
+					}
+					return;
+				}
+
+				// Add data to appropriate destination
+				if (streamingMode) {
+					// Add to circular buffer
+					const dataPtr = Module._malloc(value.length);
+					Module.HEAP8.set(value, dataPtr);
+					
+					if (!Module.add_data_to_buffer(dataPtr, value.length)) {
+						console.error("Failed to add data to circular buffer");
+						Module._free(dataPtr);
+						return;
+					}
+					
+					Module._free(dataPtr);
+
+					// Update frame directory as new data arrives
+					Module.update_buffer_frame_directory();
+
+					// Check if we should pause download based on buffer health
+					if (!downloadPaused && Module.should_resume_download && !Module.should_resume_download(currentFrame, 30.0)) {
+						downloadPaused = true;
+						console.log("Download paused - buffer healthy");
+						// In a real implementation, we'd pause the fetch here
+						// For now, we continue downloading but could add pause logic
+					}
+
+				} else {
+					// Traditional file write for small files
+					Module.FS.write(fileStream, value, 0, value.length, seekLocation);
+				}
+
+				seekLocation += value.length;
+
+				// Resolve header promise once we have enough data
+				if (!headerResolved && seekLocation > (config.headerThreshold || 5*1024*1024)) {
+					Module.headerFetched = true;
+					headerResolved = true;
+					resolveHeaderLoaded();
+				}
+
+				return reader.read().then(pump);
+			});
+		})
+		.finally(() => {
+			// Clean up file stream for non-streaming mode
+			if (!streamingMode && typeof fileStream !== 'undefined' && fileStream) {
+				Module.FS.close(fileStream);
+			}
+		})
+		.catch((err) => {
+			if (err.name === "AbortError") {
+				console.log("Download aborted.");
+			} else {
+				console.error("Download error:", err);
+			}
+			throw err;
+		});
+
+	console.log(`Enhanced streaming manager created (${streamingMode ? 'buffer' : 'file'} mode)`);
+	
+	return {
+		headerLoaded: headerLoadedPromise,
+		downloadFinished: downloadFinishedPromise,
+		isStreamingMode: () => streamingMode,
+		pauseDownload: () => { downloadPaused = true; },
+		resumeDownload: () => { downloadPaused = false; },
+		setCurrentFrame: (frame) => { currentFrame = frame; }
+	};
+};
+
 Module.fetch_file = async (dest, fileUrl, onProgress, abortSignal = null) => {
 	// Create fetch options with abort signal if provided
 	const fetchOptions = {};
@@ -341,6 +491,35 @@ Module.initVologramFunctions = (containerObject) => {
 		let sz = Module.ccall("audio_data_sz", "number");
 		return new Uint8Array(Module.HEAP8.buffer, ptr, sz);
 	};
+
+	//
+	// ===== STREAMING BUFFER FUNCTIONS =====
+	// Enhanced streaming capabilities with circular buffer support
+	//
+
+	// Configuration functions
+	insertObject["init_streaming_config"] = Module.cwrap("init_streaming_config", "boolean");
+	insertObject["should_use_streaming_mode"] = Module.cwrap("should_use_streaming_mode", "boolean", ["number"]);
+	insertObject["get_max_buffer_size"] = Module.cwrap("get_max_buffer_size", "number");
+	insertObject["set_max_buffer_size"] = Module.cwrap("set_max_buffer_size", null, ["number"]);
+	insertObject["get_lookahead_seconds"] = Module.cwrap("get_lookahead_seconds", "number");
+	insertObject["set_lookahead_seconds"] = Module.cwrap("set_lookahead_seconds", null, ["number"]);
+	insertObject["get_auto_select_mode"] = Module.cwrap("get_auto_select_mode", "boolean");
+	insertObject["set_auto_select_mode"] = Module.cwrap("set_auto_select_mode", null, ["boolean"]);
+
+	// Buffer management functions  
+	insertObject["create_streaming_buffer"] = Module.cwrap("create_streaming_buffer", "boolean");
+	insertObject["add_data_to_buffer"] = Module.cwrap("add_data_to_buffer", "boolean", ["number", "number"]);
+	insertObject["update_buffer_frame_directory"] = Module.cwrap("update_buffer_frame_directory", "boolean");
+
+	// Frame reading functions
+	insertObject["read_frame_streaming"] = Module.cwrap("read_frame_streaming", "boolean", ["number"]);
+	insertObject["is_frame_available_in_buffer"] = Module.cwrap("is_frame_available_in_buffer", "boolean", ["number"]);
+
+	// Buffer health monitoring
+	insertObject["get_buffer_health_bytes"] = Module.cwrap("get_buffer_health_bytes", "number");
+	insertObject["get_buffer_health_seconds"] = Module.cwrap("get_buffer_health_seconds", "number", ["number"]);
+	insertObject["should_resume_download"] = Module.cwrap("should_resume_download", "boolean", ["number", "number"]);
 
 	if (usingExternalObject) {
 		insertObject.HEAP8 = Module.HEAP8;

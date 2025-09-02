@@ -265,6 +265,98 @@ uint8_t* audio_data_ptr( void ) { return _info.audio_data_ptr; }
 EMSCRIPTEN_KEEPALIVE
 uint32_t audio_data_sz( void ) { return _info.audio_data_sz; }
 
+//
+// ===== STREAMING BUFFER WASM EXPORTS =====
+// WASM wrapper functions for the new streaming buffer API
+//
+
+// Static streaming configuration for WASM use
+static vol_geom_streaming_config_t _streaming_config;
+
+EMSCRIPTEN_KEEPALIVE
+bool init_streaming_config( void ) {
+  return vol_geom_init_streaming_config( &_streaming_config );
+}
+
+EMSCRIPTEN_KEEPALIVE
+bool should_use_streaming_mode( int64_t file_size ) {
+  return vol_geom_should_use_streaming_mode( file_size, &_streaming_config );
+}
+
+EMSCRIPTEN_KEEPALIVE
+bool create_streaming_buffer( void ) {
+  return vol_geom_create_streaming_buffer( &_info, &_streaming_config );
+}
+
+EMSCRIPTEN_KEEPALIVE
+bool add_data_to_buffer( uint8_t* data_ptr, int64_t data_size ) {
+  if ( !data_ptr || data_size <= 0 ) {
+    return false;
+  }
+  return vol_geom_add_data_to_buffer( &_info, data_ptr, data_size );
+}
+
+EMSCRIPTEN_KEEPALIVE
+bool update_buffer_frame_directory( void ) {
+  return vol_geom_update_buffer_frame_directory( &_info );
+}
+
+EMSCRIPTEN_KEEPALIVE
+bool read_frame_streaming( int frame_idx ) {
+  return vol_geom_read_frame_streaming( &_info, frame_idx, &_frame_data );
+}
+
+EMSCRIPTEN_KEEPALIVE
+bool is_frame_available_in_buffer( int frame_idx ) {
+  return vol_geom_is_frame_available_in_buffer( &_info, frame_idx );
+}
+
+EMSCRIPTEN_KEEPALIVE
+int64_t get_buffer_health_bytes( void ) {
+  return vol_geom_get_buffer_health_bytes( &_info );
+}
+
+EMSCRIPTEN_KEEPALIVE
+float get_buffer_health_seconds( float fps ) {
+  return vol_geom_get_buffer_health_seconds( &_info, fps );
+}
+
+EMSCRIPTEN_KEEPALIVE
+bool should_resume_download( int current_frame, float fps ) {
+  return vol_geom_should_resume_download( &_info, current_frame, fps );
+}
+
+// Configuration getters/setters for JavaScript access
+EMSCRIPTEN_KEEPALIVE
+int64_t get_max_buffer_size( void ) {
+  return _streaming_config.max_buffer_size;
+}
+
+EMSCRIPTEN_KEEPALIVE
+void set_max_buffer_size( int64_t size ) {
+  _streaming_config.max_buffer_size = size;
+}
+
+EMSCRIPTEN_KEEPALIVE
+float get_lookahead_seconds( void ) {
+  return _streaming_config.lookahead_seconds;
+}
+
+EMSCRIPTEN_KEEPALIVE
+void set_lookahead_seconds( float seconds ) {
+  _streaming_config.lookahead_seconds = seconds;
+}
+
+EMSCRIPTEN_KEEPALIVE
+bool get_auto_select_mode( void ) {
+  return _streaming_config.auto_select_mode;
+}
+
+EMSCRIPTEN_KEEPALIVE
+void set_auto_select_mode( bool enabled ) {
+  _streaming_config.auto_select_mode = enabled;
+}
+
 #ifdef __cplusplus
 }
 #endif /* CPP */

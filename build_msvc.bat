@@ -1,5 +1,5 @@
 REM Volograms build for 1 demo for Visual Studio. Run periodically to check for errors.
-call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvars64.bat"
+call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
 
 REM "we recommend you compile by using either the /W3 or /W4 warning level"
 REM C4221 is nonstandard extension used in struct literals.

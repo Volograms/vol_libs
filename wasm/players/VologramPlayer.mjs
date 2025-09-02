@@ -35,11 +35,28 @@ const VologramPlayer = (extensions) => {
 	};
 
 	const _loadMesh = (frameIdx) => {
-		// Ask the vol_geom WASM to read the frame data from the vologram file into `_frame_data`.
-		const ret = vologram.read_frame(frameIdx);
+		let ret;
+		
+		// Use appropriate frame reading method based on streaming mode
+		if (vologram.isStreamingMode) {
+			// In streaming mode, check if frame is available first
+			if (!vologram.is_frame_available_in_buffer(frameIdx)) {
+				// Frame not available in buffer yet
+				console.log(`Frame ${frameIdx} not available in buffer yet`);
+				return false;
+			}
+			
+			// Use streaming frame reader
+			ret = vologram.read_frame_streaming(frameIdx);
+		} else {
+			// Use traditional frame reader for full download mode
+			ret = vologram.read_frame(frameIdx);
+		}
+
 		if (!ret) {
 			return false;
 		}
+		
 		vologram.frame.isKey = vologram.is_keyframe(frameIdx);
 
 		// Positions - fetch and upload.
@@ -63,6 +80,30 @@ const VologramPlayer = (extensions) => {
 		}
 		vologram.lastFrameLoaded = frameIdx;
 		return true;
+	};
+
+	// Unified buffer health monitoring and download control
+	const _updateBufferHealth = (currentFrame, enableLogging = false) => {
+		if (!vologram.isStreamingMode || !vologram._downloadManager) {
+			return; // Not in streaming mode or no download manager
+		}
+
+		// Update current frame position for download manager
+		vologram._downloadManager.setCurrentFrame(currentFrame);
+		
+		// Check if we should resume download based on buffer health
+		const fps = vologram.header.fps || 30.0;
+		if (vologram.should_resume_download(currentFrame, fps)) {
+			vologram._downloadManager.resumeDownload();
+			
+			// Optional debug logging for buffer health
+			if (enableLogging) {
+				const bufferHealthSeconds = vologram.get_buffer_health_seconds(fps);
+				if (bufferHealthSeconds < 1.0) {
+					console.log(`Low buffer: ${bufferHealthSeconds.toFixed(1)}s remaining`);
+				}
+			}
+		}
 	};
 
 	const _updateMeshFrameAllowingSkip = (desiredFrameIndex) => {
@@ -217,7 +258,27 @@ const VologramPlayer = (extensions) => {
 				}
 				_wasm.initVologramFunctions(vologram);
 
-				const downloadManager = _wasm.fetch_stream_file("vologram.vols", vologram.sequenceUrl, onProgress, signal);
+				// Initialize streaming configuration with enhanced buffer settings
+				_wasm.init_streaming_config();
+				
+				// Optional: Allow custom configuration via vologram options
+				if (vologram.streamingConfig) {
+					if (vologram.streamingConfig.maxBufferSize) {
+						_wasm.set_max_buffer_size(vologram.streamingConfig.maxBufferSize);
+					}
+					if (vologram.streamingConfig.lookaheadSeconds) {
+						_wasm.set_lookahead_seconds(vologram.streamingConfig.lookaheadSeconds);
+					}
+					if (vologram.streamingConfig.autoSelectMode !== undefined) {
+						_wasm.set_auto_select_mode(vologram.streamingConfig.autoSelectMode);
+					}
+				}
+
+				// Use the enhanced streaming function with circular buffer support
+				const downloadManager = _wasm.fetch_stream_buffer("vologram.vols", vologram.sequenceUrl, vologram.streamingConfig, onProgress, signal);
+
+				// Store download manager for buffer management
+				vologram._downloadManager = downloadManager;
 
 				// Await for the header to be loaded.
 				await downloadManager.headerLoaded;
@@ -231,6 +292,13 @@ const VologramPlayer = (extensions) => {
 
 				const initSuccess = _initVologram();
 				if (initSuccess) {
+					// Log which mode we're using
+					const isStreaming = downloadManager.isStreamingMode();
+					console.log(`Vologram initialized in ${isStreaming ? 'streaming buffer' : 'full download'} mode`);
+					
+					// Store streaming mode flag
+					vologram.isStreamingMode = isStreaming;
+					
 					return true;
 				} else {
 					throw new Error("_initVologram failed to open vologram");
@@ -329,6 +397,10 @@ const VologramPlayer = (extensions) => {
 	const _updateFrameFromVideo = (now, metadata) => {
 		if (vologram.header && vologram.header.ready && vologram.attachedVideo) {
 			_getFrameFromSeconds(metadata.mediaTime);
+			
+			// Unified buffer health monitoring
+			_updateBufferHealth(_frameFromTime);
+			
 			_updateMeshFrameAllowingSkip(_frameFromTime);
 			vologram.lastUpdateTime = metadata.mediaTime;
 		}
@@ -338,6 +410,9 @@ const VologramPlayer = (extensions) => {
 	const _updateFrameFromTimer = (now) => {
 		_timeTick(now);
 		if ((!_timerPaused || _isBuffering) && vologram.header && vologram.header.ready) {
+			// Unified buffer health monitoring (with debug logging enabled for timer mode)
+			_updateBufferHealth(_frameFromTime, true);
+			
 			_updateMeshFrameAllowingSkip(_frameFromTime);
 			vologram.lastUpdateTime = _timer / 1000;
 		}
@@ -347,7 +422,12 @@ const VologramPlayer = (extensions) => {
 	const _updateFrameFromAudio = () => {
 		if (vologram.header && vologram.header.ready && vologram.attachedAudio) {
 			_getFrameFromSeconds(vologram.attachedAudio.currentTime);
-			_updateMeshFrameAllowingSkip(Math.max(0, _frameFromTime - 1));
+			
+			// Unified buffer health monitoring (audio uses frame - 1)
+			const targetFrame = Math.max(0, _frameFromTime - 1);
+			_updateBufferHealth(targetFrame);
+			
+			_updateMeshFrameAllowingSkip(targetFrame);
 			vologram.lastUpdateTime = vologram.attachedAudio.currentTime;
 		}
 		if (vologram.attachedAudio) _frameRequestId = requestAnimationFrame(_updateFrameFromAudio);
