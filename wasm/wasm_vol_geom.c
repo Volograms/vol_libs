@@ -357,6 +357,16 @@ void set_auto_select_mode( int enabled ) {
   _streaming_config.auto_select_mode = enabled ? true : false;
 }
 
+EMSCRIPTEN_KEEPALIVE
+int get_force_streaming_mode( void ) {
+  return _streaming_config.force_streaming_mode ? 1 : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+void set_force_streaming_mode( int enabled ) {
+  _streaming_config.force_streaming_mode = enabled ? true : false;
+}
+
 #ifdef __cplusplus
 }
 #endif /* CPP */

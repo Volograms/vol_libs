@@ -903,7 +903,7 @@ bool vol_geom_parse_frame_header_from_buffer( const uint8_t* buffer_ptr, vol_geo
   }
 
   // Calculate the size of a frame header - this matches the existing vol_geom_frame_hdr_t structure
-  const vol_geom_size_t frame_header_size = sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint8_t);
+  const vol_geom_size_t frame_header_size = sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint8_t);
   *header_size_ptr = frame_header_size;
 
   // Parse the frame header from the buffer at the specified offset
@@ -917,9 +917,9 @@ bool vol_geom_parse_frame_header_from_buffer( const uint8_t* buffer_ptr, vol_geo
   header_ptr->mesh_data_sz = *((uint32_t*)read_ptr);
   read_ptr += sizeof(uint32_t);
 
-  // Read keyframe_number (4 bytes, little-endian)
-  header_ptr->keyframe_number = *((uint32_t*)read_ptr);  
-  read_ptr += sizeof(uint32_t);
+  // // Read keyframe_number (4 bytes, little-endian)
+  // header_ptr->keyframe_number = *((uint32_t*)read_ptr);  
+  // read_ptr += sizeof(uint32_t);
 
   // Read keyframe type (1 byte)
   header_ptr->keyframe = *read_ptr;
@@ -973,6 +973,9 @@ bool vol_geom_create_streaming_buffer( vol_geom_info_t* info_ptr, const vol_geom
   // Copy configuration
   buffer_state->config = *config_ptr;
   buffer_state->buffer_size = config_ptr->max_buffer_size;
+  
+  // Initialize sequence_offset to 0 - will be determined when parsing main header
+  info_ptr->sequence_offset = 0;
 
   // Allocate the circular buffer memory
   buffer_state->buffer_ptr = calloc( 1, buffer_state->buffer_size );
@@ -1145,14 +1148,72 @@ bool vol_geom_update_buffer_frame_directory( vol_geom_info_t* info_ptr ) {
 
   vol_geom_buffer_state_t* buffer_state = info_ptr->streaming_buffer_ptr;
   
-  // Start scanning from the last known position in the buffer
+  // First, check if we need to parse the main header to determine sequence_offset
+  if ( info_ptr->sequence_offset == 0 && buffer_state->valid_end > VOL_GEOM_FILE_HDR_V10_MIN_SZ ) {
+    vol_geom_size_t hdr_sz = 0;
+    vol_geom_file_hdr_t temp_hdr;
+    
+    // Create a temporary buffer for header parsing (handle wraparound)
+    uint8_t* header_buffer = malloc( VOL_GEOM_FILE_HDR_V10_MIN_SZ * 4 ); // Extra space for safety
+    if ( !header_buffer ) {
+      _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: Failed to allocate temporary header buffer.\n" );
+      return false;
+    }
+    
+    // Copy header data from circular buffer, handling wraparound
+    vol_geom_size_t copy_size = (buffer_state->valid_end > VOL_GEOM_FILE_HDR_V10_MIN_SZ * 4) ? 
+                                VOL_GEOM_FILE_HDR_V10_MIN_SZ * 4 : buffer_state->valid_end;
+    
+    for ( vol_geom_size_t i = 0; i < copy_size; i++ ) {
+      vol_geom_size_t buffer_pos = (buffer_state->valid_start + i) % buffer_state->buffer_size;
+      header_buffer[i] = buffer_state->buffer_ptr[buffer_pos];
+    }
+    
+    // Try to parse the main header
+    if ( vol_geom_read_hdr_from_mem( header_buffer, copy_size, &temp_hdr, &hdr_sz ) ) {
+      info_ptr->hdr = temp_hdr;
+      info_ptr->sequence_offset = temp_hdr.frame_body_start ? temp_hdr.frame_body_start : hdr_sz;
+      _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Parsed main header from buffer. Sequence starts at offset: %" PRId64 "\n", info_ptr->sequence_offset );
+    } else {
+      _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Main header not yet complete in buffer. Waiting for more data.\n" );
+      free( header_buffer );
+      return true; // Not an error, just need more data
+    }
+    
+    free( header_buffer );
+  }
+  
+  // If we don't have the sequence offset yet, we can't parse frames
+  if ( info_ptr->sequence_offset == 0 ) {
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Sequence offset not determined yet. Skipping frame parsing.\n" );
+    return true;
+  }
+  
+  // Calculate where to start scanning within the buffer
+  vol_geom_size_t scan_start_file_pos = info_ptr->sequence_offset;
+  vol_geom_size_t buffer_start_file_pos = buffer_state->file_pos - buffer_state->valid_end + buffer_state->valid_start;
+  
   vol_geom_size_t scan_pos = buffer_state->valid_start;
+  
+  // If the sequence hasn't started yet in our buffer, adjust scan position
+  if ( scan_start_file_pos > buffer_start_file_pos ) {
+    vol_geom_size_t offset_into_buffer = scan_start_file_pos - buffer_start_file_pos;
+    if ( offset_into_buffer < (buffer_state->valid_end - buffer_state->valid_start) ) {
+      scan_pos = buffer_state->valid_start + offset_into_buffer;
+    } else {
+      // Sequence hasn't started yet in our buffer
+      _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Sequence data not yet in buffer. File pos: %" PRId64 ", Sequence offset: %" PRId64 "\n",
+        buffer_start_file_pos, scan_start_file_pos );
+      return true;
+    }
+  }
+  
   uint32_t frames_found = 0;
   uint32_t first_frame_num = 0;
   uint32_t last_frame_num = 0;
   
-  _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Scanning buffer for frames. Valid range: %" PRId64 "-%" PRId64 "\n",
-    buffer_state->valid_start, buffer_state->valid_end );
+  _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Scanning buffer for frames. Valid range: %" PRId64 "-%" PRId64 ", scan start: %" PRId64 " (file pos: %" PRId64 ", seq offset: %" PRId64 ")\n",
+    buffer_state->valid_start, buffer_state->valid_end, scan_pos, buffer_start_file_pos, scan_start_file_pos );
 
   // Scan the valid data range for complete frames
   while ( scan_pos < buffer_state->valid_end ) {
@@ -1167,7 +1228,8 @@ bool vol_geom_update_buffer_frame_directory( vol_geom_info_t* info_ptr ) {
     }
 
     // Parse frame header from buffer (handling circular buffer wraparound)
-    vol_geom_size_t buffer_offset = scan_pos % buffer_state->buffer_size;
+    // Convert file position to buffer position
+    vol_geom_size_t buffer_offset = (scan_pos - buffer_start_file_pos + buffer_state->valid_start) % buffer_state->buffer_size;
     
     // Handle the case where header spans the wraparound boundary
     if ( buffer_offset + sizeof(vol_geom_frame_hdr_t) > buffer_state->buffer_size ) {

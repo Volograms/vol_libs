@@ -156,11 +156,17 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 				throw new Error(`HTTP error! Status: ${response.status}`);
 			}
 
-			// Get file size and determine mode
+			// Get file size and apply streaming config FIRST
 			const contentLength = response.headers.get("content-length");
 			fileSize = contentLength ? parseInt(contentLength) : 0;
 			
-			// Auto-select streaming mode
+			// Apply streaming configuration BEFORE making the mode decision
+			if (config.maxBufferSize) Module.set_max_buffer_size(config.maxBufferSize);
+			if (config.lookaheadSeconds) Module.set_lookahead_seconds(config.lookaheadSeconds);
+			if (config.autoSelectMode !== undefined) Module.set_auto_select_mode(config.autoSelectMode);
+			if (config.forceStreamingMode !== undefined) Module.set_force_streaming_mode(config.forceStreamingMode);
+			
+			// Now make the streaming mode decision with the correct config applied
 			streamingMode = Module.should_use_streaming_mode(fileSize);
 			
 			console.log(`File size: ${fileSize ? (fileSize/1024/1024).toFixed(1) + 'MB' : 'unknown'}, using ${streamingMode ? 'streaming' : 'full download'} mode`);
@@ -171,9 +177,6 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 
 			// For streaming mode, create the circular buffer
 			if (streamingMode) {
-				if (config.maxBufferSize) Module.set_max_buffer_size(config.maxBufferSize);
-				if (config.lookaheadSeconds) Module.set_lookahead_seconds(config.lookaheadSeconds);
-				if (config.autoSelectMode !== undefined) Module.set_auto_select_mode(config.autoSelectMode);
 
 				if (!Module.create_streaming_buffer()) {
 					throw new Error("Failed to create streaming buffer");
@@ -510,6 +513,10 @@ Module.initVologramFunctions = (containerObject) => {
 		return !!Module.ccall("get_auto_select_mode", "number");
 	};
 	insertObject["set_auto_select_mode"] = Module.cwrap("set_auto_select_mode", null, ["number"]);
+	insertObject["get_force_streaming_mode"] = function() {
+		return !!Module.ccall("get_force_streaming_mode", "number");
+	};
+	insertObject["set_force_streaming_mode"] = Module.cwrap("set_force_streaming_mode", null, ["number"]);
 
 	// Buffer management functions  
 	insertObject["create_streaming_buffer"] = function() {
