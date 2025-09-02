@@ -499,29 +499,64 @@ Module.initVologramFunctions = (containerObject) => {
 
 	// Configuration functions
 	insertObject["init_streaming_config"] = Module.cwrap("init_streaming_config", "boolean");
-	insertObject["should_use_streaming_mode"] = Module.cwrap("should_use_streaming_mode", "boolean", ["number"]);
+	insertObject["should_use_streaming_mode"] = function(fileSize) {
+		return !!Module.ccall("should_use_streaming_mode", "number", ["number"], [fileSize]);
+	};
 	insertObject["get_max_buffer_size"] = Module.cwrap("get_max_buffer_size", "number");
 	insertObject["set_max_buffer_size"] = Module.cwrap("set_max_buffer_size", null, ["number"]);
 	insertObject["get_lookahead_seconds"] = Module.cwrap("get_lookahead_seconds", "number");
 	insertObject["set_lookahead_seconds"] = Module.cwrap("set_lookahead_seconds", null, ["number"]);
-	insertObject["get_auto_select_mode"] = Module.cwrap("get_auto_select_mode", "boolean");
-	insertObject["set_auto_select_mode"] = Module.cwrap("set_auto_select_mode", null, ["boolean"]);
+	insertObject["get_auto_select_mode"] = function() {
+		return !!Module.ccall("get_auto_select_mode", "number");
+	};
+	insertObject["set_auto_select_mode"] = Module.cwrap("set_auto_select_mode", null, ["number"]);
 
 	// Buffer management functions  
-	insertObject["create_streaming_buffer"] = Module.cwrap("create_streaming_buffer", "boolean");
-	insertObject["add_data_to_buffer"] = Module.cwrap("add_data_to_buffer", "boolean", ["number", "number"]);
-	insertObject["update_buffer_frame_directory"] = Module.cwrap("update_buffer_frame_directory", "boolean");
+	insertObject["create_streaming_buffer"] = function() {
+		return !!Module.ccall("create_streaming_buffer", "number");
+	};
+	insertObject["add_data_to_buffer"] = function(dataPtr, dataSize) {
+		return !!Module.ccall("add_data_to_buffer", "number", ["number", "number"], [dataPtr, dataSize]);
+	};
+	insertObject["update_buffer_frame_directory"] = function() {
+		return !!Module.ccall("update_buffer_frame_directory", "number");
+	};
 
 	// Frame reading functions
-	insertObject["read_frame_streaming"] = Module.cwrap("read_frame_streaming", "boolean", ["number"]);
-	insertObject["is_frame_available_in_buffer"] = Module.cwrap("is_frame_available_in_buffer", "boolean", ["number"]);
+	insertObject["read_frame_streaming"] = function(frameIdx) {
+		return !!Module.ccall("read_frame_streaming", "number", ["number"], [frameIdx]);
+	};
+	insertObject["is_frame_available_in_buffer"] = function(frameIdx) {
+		return !!Module.ccall("is_frame_available_in_buffer", "number", ["number"], [frameIdx]);
+	};
 
 	// Buffer health monitoring
 	insertObject["get_buffer_health_bytes"] = Module.cwrap("get_buffer_health_bytes", "number");
 	insertObject["get_buffer_health_seconds"] = Module.cwrap("get_buffer_health_seconds", "number", ["number"]);
-	insertObject["should_resume_download"] = Module.cwrap("should_resume_download", "boolean", ["number", "number"]);
+	insertObject["should_resume_download"] = function(currentFrame, fps) {
+		return !!Module.ccall("should_resume_download", "number", ["number", "number"], [currentFrame, fps]);
+	};
 
 	if (usingExternalObject) {
 		insertObject.HEAP8 = Module.HEAP8;
+		insertObject._malloc = Module._malloc;
+		insertObject._free = Module._free;
 	}
+	
+	// Also expose streaming functions directly on Module for fetch_stream_buffer compatibility
+	Module.init_streaming_config = insertObject.init_streaming_config;
+	Module.get_max_buffer_size = insertObject.get_max_buffer_size;
+	Module.set_max_buffer_size = insertObject.set_max_buffer_size;
+	Module.get_min_buffer_size = insertObject.get_min_buffer_size;
+	Module.set_min_buffer_size = insertObject.set_min_buffer_size;
+	Module.get_lookahead_seconds = insertObject.get_lookahead_seconds;
+	Module.set_lookahead_seconds = insertObject.set_lookahead_seconds;
+	Module.get_auto_select_mode = insertObject.get_auto_select_mode;
+	Module.set_auto_select_mode = insertObject.set_auto_select_mode;
+	Module.get_force_streaming_mode = insertObject.get_force_streaming_mode;
+	Module.set_force_streaming_mode = insertObject.set_force_streaming_mode;
+	Module.should_use_streaming_mode = insertObject.should_use_streaming_mode;
+	Module.create_streaming_buffer = insertObject.create_streaming_buffer;
+	Module.add_data_to_buffer = insertObject.add_data_to_buffer;
+	Module.update_buffer_frame_directory = insertObject.update_buffer_frame_directory;
 };

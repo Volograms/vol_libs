@@ -279,41 +279,41 @@ bool init_streaming_config( void ) {
 }
 
 EMSCRIPTEN_KEEPALIVE
-bool should_use_streaming_mode( int64_t file_size ) {
-  return vol_geom_should_use_streaming_mode( file_size, &_streaming_config );
+int should_use_streaming_mode( int file_size ) {
+  return vol_geom_should_use_streaming_mode( (vol_geom_size_t)file_size, &_streaming_config ) ? 1 : 0;
 }
 
 EMSCRIPTEN_KEEPALIVE
-bool create_streaming_buffer( void ) {
-  return vol_geom_create_streaming_buffer( &_info, &_streaming_config );
+int create_streaming_buffer( void ) {
+  return vol_geom_create_streaming_buffer( &_info, &_streaming_config ) ? 1 : 0;
 }
 
 EMSCRIPTEN_KEEPALIVE
-bool add_data_to_buffer( uint8_t* data_ptr, int64_t data_size ) {
+int add_data_to_buffer( uint8_t* data_ptr, int data_size ) {
   if ( !data_ptr || data_size <= 0 ) {
-    return false;
+    return 0;
   }
-  return vol_geom_add_data_to_buffer( &_info, data_ptr, data_size );
+  return vol_geom_add_data_to_buffer( &_info, data_ptr, (vol_geom_size_t)data_size ) ? 1 : 0;
 }
 
 EMSCRIPTEN_KEEPALIVE
-bool update_buffer_frame_directory( void ) {
-  return vol_geom_update_buffer_frame_directory( &_info );
+int update_buffer_frame_directory( void ) {
+  return vol_geom_update_buffer_frame_directory( &_info ) ? 1 : 0;
 }
 
 EMSCRIPTEN_KEEPALIVE
-bool read_frame_streaming( int frame_idx ) {
-  return vol_geom_read_frame_streaming( &_info, frame_idx, &_frame_data );
+int read_frame_streaming( int frame_idx ) {
+  return vol_geom_read_frame_streaming( &_info, frame_idx, &_frame_data ) ? 1 : 0;
 }
 
 EMSCRIPTEN_KEEPALIVE
-bool is_frame_available_in_buffer( int frame_idx ) {
-  return vol_geom_is_frame_available_in_buffer( &_info, frame_idx );
+int is_frame_available_in_buffer( int frame_idx ) {
+  return vol_geom_is_frame_available_in_buffer( &_info, frame_idx ) ? 1 : 0;
 }
 
 EMSCRIPTEN_KEEPALIVE
-int64_t get_buffer_health_bytes( void ) {
-  return vol_geom_get_buffer_health_bytes( &_info );
+int get_buffer_health_bytes( void ) {
+  return (int)vol_geom_get_buffer_health_bytes( &_info );
 }
 
 EMSCRIPTEN_KEEPALIVE
@@ -322,19 +322,19 @@ float get_buffer_health_seconds( float fps ) {
 }
 
 EMSCRIPTEN_KEEPALIVE
-bool should_resume_download( int current_frame, float fps ) {
-  return vol_geom_should_resume_download( &_info, current_frame, fps );
+int should_resume_download( int current_frame, float fps ) {
+  return vol_geom_should_resume_download( &_info, current_frame, fps ) ? 1 : 0;
 }
 
 // Configuration getters/setters for JavaScript access
 EMSCRIPTEN_KEEPALIVE
-int64_t get_max_buffer_size( void ) {
-  return _streaming_config.max_buffer_size;
+int get_max_buffer_size( void ) {
+  return (int)_streaming_config.max_buffer_size;
 }
 
 EMSCRIPTEN_KEEPALIVE
-void set_max_buffer_size( int64_t size ) {
-  _streaming_config.max_buffer_size = size;
+void set_max_buffer_size( int size ) {
+  _streaming_config.max_buffer_size = (vol_geom_size_t)size;
 }
 
 EMSCRIPTEN_KEEPALIVE
@@ -348,13 +348,13 @@ void set_lookahead_seconds( float seconds ) {
 }
 
 EMSCRIPTEN_KEEPALIVE
-bool get_auto_select_mode( void ) {
-  return _streaming_config.auto_select_mode;
+int get_auto_select_mode( void ) {
+  return _streaming_config.auto_select_mode ? 1 : 0;
 }
 
 EMSCRIPTEN_KEEPALIVE
-void set_auto_select_mode( bool enabled ) {
-  _streaming_config.auto_select_mode = enabled;
+void set_auto_select_mode( int enabled ) {
+  _streaming_config.auto_select_mode = enabled ? true : false;
 }
 
 #ifdef __cplusplus

@@ -259,18 +259,18 @@ const VologramPlayer = (extensions) => {
 				_wasm.initVologramFunctions(vologram);
 
 				// Initialize streaming configuration with enhanced buffer settings
-				_wasm.init_streaming_config();
+				vologram.init_streaming_config();
 				
 				// Optional: Allow custom configuration via vologram options
 				if (vologram.streamingConfig) {
 					if (vologram.streamingConfig.maxBufferSize) {
-						_wasm.set_max_buffer_size(vologram.streamingConfig.maxBufferSize);
+						vologram.set_max_buffer_size(vologram.streamingConfig.maxBufferSize);
 					}
 					if (vologram.streamingConfig.lookaheadSeconds) {
-						_wasm.set_lookahead_seconds(vologram.streamingConfig.lookaheadSeconds);
+						vologram.set_lookahead_seconds(vologram.streamingConfig.lookaheadSeconds);
 					}
 					if (vologram.streamingConfig.autoSelectMode !== undefined) {
-						_wasm.set_auto_select_mode(vologram.streamingConfig.autoSelectMode);
+						vologram.set_auto_select_mode(vologram.streamingConfig.autoSelectMode);
 					}
 				}
 
