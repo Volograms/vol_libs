@@ -367,6 +367,43 @@ void set_force_streaming_mode( int enabled ) {
   _streaming_config.force_streaming_mode = enabled ? true : false;
 }
 
+// ============================================================================
+// SLIDING WINDOW API FUNCTIONS FOR WASM
+// ============================================================================
+
+EMSCRIPTEN_KEEPALIVE
+int set_current_playback_frame( vol_geom_info_t* info_ptr, int current_frame ) {
+  return vol_geom_set_current_playback_frame( info_ptr, (uint32_t)current_frame ) ? 1 : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int get_sliding_window_start_frame( vol_geom_info_t* info_ptr ) {
+  uint32_t start_frame, end_frame;
+  if ( vol_geom_get_sliding_window_range( info_ptr, &start_frame, &end_frame ) ) {
+    return (int)start_frame;
+  }
+  return -1;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int get_sliding_window_end_frame( vol_geom_info_t* info_ptr ) {
+  uint32_t start_frame, end_frame;
+  if ( vol_geom_get_sliding_window_range( info_ptr, &start_frame, &end_frame ) ) {
+    return (int)end_frame;
+  }
+  return -1;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int can_overwrite_frame( vol_geom_info_t* info_ptr, int frame_idx ) {
+  return vol_geom_can_overwrite_frame( info_ptr, (uint32_t)frame_idx ) ? 1 : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int compact_sliding_window( vol_geom_info_t* info_ptr ) {
+  return (int)vol_geom_compact_sliding_window( info_ptr );
+}
+
 #ifdef __cplusplus
 }
 #endif /* CPP */

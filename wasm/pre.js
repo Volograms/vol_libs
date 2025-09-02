@@ -566,4 +566,11 @@ Module.initVologramFunctions = (containerObject) => {
 	Module.create_streaming_buffer = insertObject.create_streaming_buffer;
 	Module.add_data_to_buffer = insertObject.add_data_to_buffer;
 	Module.update_buffer_frame_directory = insertObject.update_buffer_frame_directory;
+	
+	// Sliding window API functions
+	Module.set_current_playback_frame = insertObject.set_current_playback_frame;
+	Module.get_sliding_window_start_frame = insertObject.get_sliding_window_start_frame;
+	Module.get_sliding_window_end_frame = insertObject.get_sliding_window_end_frame;
+	Module.can_overwrite_frame = insertObject.can_overwrite_frame;
+	Module.compact_sliding_window = insertObject.compact_sliding_window;
 };

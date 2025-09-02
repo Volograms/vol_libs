@@ -637,6 +637,9 @@ bool vol_geom_free_file_info( vol_geom_info_t* info_ptr ) {
     if ( info_ptr->streaming_buffer_ptr->buffer_ptr ) {
       free( info_ptr->streaming_buffer_ptr->buffer_ptr );
     }
+    if ( info_ptr->streaming_buffer_ptr->sliding_frames ) {
+      free( info_ptr->streaming_buffer_ptr->sliding_frames );
+    }
     free( info_ptr->streaming_buffer_ptr );
   }
   
@@ -994,9 +997,31 @@ bool vol_geom_create_streaming_buffer( vol_geom_info_t* info_ptr, const vol_geom
   buffer_state->file_pos = 0;
   buffer_state->file_size = 0; // Will be set when known
   buffer_state->is_streaming_mode = true;
-  buffer_state->frames_in_buffer = 0;
-  buffer_state->first_frame_in_buffer = 0;
-  buffer_state->last_frame_in_buffer = 0;
+  
+  // Initialize sliding window management
+  buffer_state->window_start_frame = 0;
+  buffer_state->window_end_frame = 0;
+  buffer_state->current_playback_frame = 0;
+  buffer_state->frames_in_window = 0;
+  buffer_state->safety_margin_frames = 10;  // Keep 10 frames behind playback position
+  
+  // Estimate max frames based on buffer size and average frame size
+  // Assume ~1MB average frame size for initial calculation
+  const vol_geom_size_t estimated_avg_frame_size = 1024 * 1024;  // 1MB
+  buffer_state->max_frames_in_window = (uint32_t)(buffer_state->buffer_size / estimated_avg_frame_size);
+  if ( buffer_state->max_frames_in_window > 1000 ) {
+    buffer_state->max_frames_in_window = 1000;  // Cap at reasonable limit
+  }
+  
+  // Allocate sliding frame directory
+  buffer_state->sliding_frames = calloc( buffer_state->max_frames_in_window, sizeof(vol_geom_sliding_frame_info_t) );
+  if ( !buffer_state->sliding_frames ) {
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: OOM allocating sliding frame directory.\n" );
+    free( buffer_state->buffer_ptr );
+    free( buffer_state );
+    info_ptr->streaming_buffer_ptr = NULL;
+    return false;
+  }
 
   _vol_loggerf( VOL_GEOM_LOG_TYPE_INFO, "Created streaming buffer: %.1fMB capacity, %.1fMB reserved for first frame.\n",
     buffer_state->buffer_size / (1024.0 * 1024.0), 
@@ -1071,13 +1096,20 @@ bool vol_geom_is_frame_available_in_buffer( const vol_geom_info_t* info_ptr, uin
 
   const vol_geom_buffer_state_t* buffer_state = info_ptr->streaming_buffer_ptr;
 
-  // Check if frame is within the available range in the buffer
-  if ( buffer_state->frames_in_buffer == 0 ) {
-    return false; // No frames in buffer yet
+  // Check if we have any frames in sliding window
+  if ( buffer_state->frames_in_window == 0 ) {
+    return false; // No frames in sliding window yet
   }
 
-  // Check if frame is within the available frame range
-  return (frame_idx >= buffer_state->first_frame_in_buffer && frame_idx <= buffer_state->last_frame_in_buffer);
+  // Search for the frame in sliding window
+  for ( uint32_t i = 0; i < buffer_state->frames_in_window; i++ ) {
+    if ( buffer_state->sliding_frames[i].global_frame_idx == frame_idx && 
+         buffer_state->sliding_frames[i].is_available ) {
+      return true;
+    }
+  }
+
+  return false; // Frame not found in sliding window
 }
 
 vol_geom_size_t vol_geom_get_buffer_health_bytes( const vol_geom_info_t* info_ptr ) {
@@ -1100,12 +1132,12 @@ float vol_geom_get_buffer_health_seconds( const vol_geom_info_t* info_ptr, float
 
   const vol_geom_buffer_state_t* buffer_state = info_ptr->streaming_buffer_ptr;
 
-  if ( buffer_state->frames_in_buffer == 0 ) {
+  if ( buffer_state->frames_in_window == 0 ) {
     return 0.0f; // No frames available
   }
 
   // Estimate seconds based on available frames
-  float seconds = (float)buffer_state->frames_in_buffer / fps;
+  float seconds = (float)buffer_state->frames_in_window / fps;
 
   return seconds;
 }
@@ -1124,8 +1156,8 @@ bool vol_geom_should_resume_download( const vol_geom_info_t* info_ptr, uint32_t 
   bool should_resume = buffer_health_seconds < buffer_state->config.lookahead_seconds;
 
   // Also check if current frame is getting close to the end of buffered content
-  if ( buffer_state->frames_in_buffer > 0 ) {
-    uint32_t frames_ahead = buffer_state->last_frame_in_buffer - current_frame;
+  if ( buffer_state->frames_in_window > 0 ) {
+    uint32_t frames_ahead = buffer_state->window_end_frame - current_frame;
     float seconds_ahead = (float)frames_ahead / fps;
     
     if ( seconds_ahead < buffer_state->config.lookahead_seconds ) {
@@ -1133,9 +1165,9 @@ bool vol_geom_should_resume_download( const vol_geom_info_t* info_ptr, uint32_t 
     }
   }
 
-  _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Buffer health: %.1fs, lookahead: %.1fs, current_frame: %u, last_buffered: %u -> %s download\n",
+  _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Buffer health: %.1fs, lookahead: %.1fs, current_frame: %u, window_end: %u -> %s download\n",
     buffer_health_seconds, buffer_state->config.lookahead_seconds, current_frame, 
-    buffer_state->last_frame_in_buffer, should_resume ? "resume" : "pause" );
+    buffer_state->window_end_frame, should_resume ? "resume" : "pause" );
 
   return should_resume;
 }
@@ -1189,34 +1221,21 @@ bool vol_geom_update_buffer_frame_directory( vol_geom_info_t* info_ptr ) {
     return true;
   }
   
-  // Calculate where to start scanning within the buffer
-  vol_geom_size_t scan_start_file_pos = info_ptr->sequence_offset;
+  // SLIDING WINDOW APPROACH: Look for new frames near the end of valid data
   vol_geom_size_t buffer_start_file_pos = buffer_state->file_pos - buffer_state->valid_end + buffer_state->valid_start;
+  vol_geom_size_t search_window_start = buffer_state->valid_end;
+  vol_geom_size_t search_window_size = 10 * 1024 * 1024; // Look in the last 10MB for new frames
   
-  vol_geom_size_t scan_pos = buffer_state->valid_start;
-  
-  // If the sequence hasn't started yet in our buffer, adjust scan position
-  if ( scan_start_file_pos > buffer_start_file_pos ) {
-    vol_geom_size_t offset_into_buffer = scan_start_file_pos - buffer_start_file_pos;
-    if ( offset_into_buffer < (buffer_state->valid_end - buffer_state->valid_start) ) {
-      scan_pos = buffer_state->valid_start + offset_into_buffer;
-    } else {
-      // Sequence hasn't started yet in our buffer
-      _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Sequence data not yet in buffer. File pos: %" PRId64 ", Sequence offset: %" PRId64 "\n",
-        buffer_start_file_pos, scan_start_file_pos );
-      return true;
-    }
+  if ( search_window_start > search_window_size ) {
+    search_window_start -= search_window_size;
+  } else {
+    search_window_start = buffer_state->valid_start;
   }
   
-  uint32_t frames_found = 0;
-  uint32_t first_frame_num = 0;
-  uint32_t last_frame_num = 0;
+  uint32_t new_frames_found = 0;
   
-  _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Scanning buffer for frames. Valid range: %" PRId64 "-%" PRId64 ", scan start: %" PRId64 " (file pos: %" PRId64 ", seq offset: %" PRId64 ")\n",
-    buffer_state->valid_start, buffer_state->valid_end, scan_pos, buffer_start_file_pos, scan_start_file_pos );
-
-  // Scan the valid data range for complete frames
-  while ( scan_pos < buffer_state->valid_end ) {
+  // Scan the search window for new complete frames
+  for ( vol_geom_size_t scan_pos = search_window_start; scan_pos < buffer_state->valid_end; ) {
     vol_geom_size_t bytes_remaining = buffer_state->valid_end - scan_pos;
     
     // Need at least a frame header to continue
@@ -1242,12 +1261,12 @@ bool vol_geom_update_buffer_frame_directory( vol_geom_info_t* info_ptr ) {
       memcpy( temp_header + first_part, buffer_state->buffer_ptr, second_part );
       
       if ( !vol_geom_parse_frame_header_from_buffer( temp_header, 0, &frame_header, &header_size ) ) {
-        break; // Invalid frame header
+        break; // Invalid frame header - stop scanning and wait for more data
       }
     } else {
       // Header fits within buffer boundaries
       if ( !vol_geom_parse_frame_header_from_buffer( buffer_state->buffer_ptr, buffer_offset, &frame_header, &header_size ) ) {
-        break; // Invalid frame header
+        break; // Invalid frame header - stop scanning and wait for more data  
       }
     }
 
@@ -1259,43 +1278,66 @@ bool vol_geom_update_buffer_frame_directory( vol_geom_info_t* info_ptr ) {
       break; // Incomplete frame - wait for more data
     }
 
-    // We have a complete frame! Update the frame directory
-    uint32_t frame_idx = frame_header.frame_number;
-    
-    if ( frame_idx < info_ptr->hdr.frame_count ) {
-      // Update frame directory entry (convert buffer position to file position)
-      info_ptr->frames_directory_ptr[frame_idx].offset_sz = scan_pos;  // Store buffer position for now
-      info_ptr->frames_directory_ptr[frame_idx].total_sz = total_frame_size;
-      info_ptr->frames_directory_ptr[frame_idx].hdr_sz = header_size;
-      info_ptr->frames_directory_ptr[frame_idx].corrected_payload_sz = frame_header.mesh_data_sz + sizeof(uint32_t);
-      
-      // Update frame header
-      info_ptr->frame_headers_ptr[frame_idx] = frame_header;
-      
-      // Track frame range
-      if ( frames_found == 0 ) {
-        first_frame_num = frame_idx;
+    // Check if we already have this frame in sliding window
+    bool already_have_frame = false;
+    for ( uint32_t i = 0; i < buffer_state->frames_in_window; i++ ) {
+      if ( buffer_state->sliding_frames[i].global_frame_idx == frame_header.frame_number ) {
+        already_have_frame = true;
+        break;
       }
-      last_frame_num = frame_idx;
-      frames_found++;
-      
-      _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Found complete frame %u at buffer pos %" PRId64 ", size %" PRId64 "\n",
-        frame_idx, scan_pos, total_frame_size );
     }
-
-    // Move to next potential frame
+    
+    if ( already_have_frame ) {
+      scan_pos += total_frame_size;
+      continue;
+    }
+    
+    // Check if we have space in sliding window
+    if ( buffer_state->frames_in_window >= buffer_state->max_frames_in_window ) {
+      // Remove oldest frame to make space
+      vol_geom_compact_sliding_window( info_ptr );
+      
+      if ( buffer_state->frames_in_window >= buffer_state->max_frames_in_window ) {
+        _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Sliding window full, cannot add frame %u\n", frame_header.frame_number );
+        break;
+      }
+    }
+    
+    // Add frame to sliding window
+    uint32_t slot_idx = buffer_state->frames_in_window;
+    buffer_state->sliding_frames[slot_idx].global_frame_idx = frame_header.frame_number;
+    buffer_state->sliding_frames[slot_idx].buffer_offset = scan_pos;
+    buffer_state->sliding_frames[slot_idx].frame_size = total_frame_size;
+    buffer_state->sliding_frames[slot_idx].mesh_data_size = frame_header.mesh_data_sz;
+    buffer_state->sliding_frames[slot_idx].header_size = header_size;
+    buffer_state->sliding_frames[slot_idx].is_available = true;
+    
+    buffer_state->frames_in_window++;
+    new_frames_found++;
+    
+    // Update window range
+    if ( buffer_state->frames_in_window == 1 ) {
+      buffer_state->window_start_frame = frame_header.frame_number;
+      buffer_state->window_end_frame = frame_header.frame_number;
+    } else {
+      if ( frame_header.frame_number < buffer_state->window_start_frame ) {
+        buffer_state->window_start_frame = frame_header.frame_number;
+      }
+      if ( frame_header.frame_number > buffer_state->window_end_frame ) {
+        buffer_state->window_end_frame = frame_header.frame_number;
+      }
+    }
+    
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Added frame %u to sliding window (slot %u)\n", 
+      frame_header.frame_number, slot_idx );
+    
     scan_pos += total_frame_size;
   }
 
-  // Update buffer state
-  buffer_state->frames_in_buffer = frames_found;
-  if ( frames_found > 0 ) {
-    buffer_state->first_frame_in_buffer = first_frame_num;
-    buffer_state->last_frame_in_buffer = last_frame_num;
+  if ( new_frames_found > 0 ) {
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Sliding window updated: %u new frames found, window now contains %u frames (range %u-%u)\n", 
+      new_frames_found, buffer_state->frames_in_window, buffer_state->window_start_frame, buffer_state->window_end_frame );
   }
-
-  _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Buffer directory updated: %u frames found (range %u-%u)\n",
-    frames_found, first_frame_num, last_frame_num );
 
   return true;
 }
@@ -1314,9 +1356,23 @@ bool vol_geom_read_frame_streaming( vol_geom_info_t* info_ptr, uint32_t frame_id
 
   vol_geom_buffer_state_t* buffer_state = info_ptr->streaming_buffer_ptr;
   
-  // Get frame directory entry (which contains buffer positions)
-  vol_geom_size_t buffer_offset = info_ptr->frames_directory_ptr[frame_idx].offset_sz;
-  vol_geom_size_t total_size = info_ptr->frames_directory_ptr[frame_idx].total_sz;
+  // Find frame in sliding window
+  vol_geom_sliding_frame_info_t* frame_info = NULL;
+  for ( uint32_t i = 0; i < buffer_state->frames_in_window; i++ ) {
+    if ( buffer_state->sliding_frames[i].global_frame_idx == frame_idx && 
+         buffer_state->sliding_frames[i].is_available ) {
+      frame_info = &buffer_state->sliding_frames[i];
+      break;
+    }
+  }
+  
+  if ( !frame_info ) {
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: Frame %u not found in sliding window.\n", frame_idx );
+    return false;
+  }
+  
+  vol_geom_size_t buffer_offset = frame_info->buffer_offset;
+  vol_geom_size_t total_size = frame_info->frame_size;
 
   // Copy frame data from circular buffer to the preallocated frame blob
   vol_geom_size_t buffer_pos = buffer_offset % buffer_state->buffer_size;
@@ -1349,4 +1405,103 @@ bool vol_geom_read_frame_streaming( vol_geom_info_t* info_ptr, uint32_t frame_id
   _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Successfully read frame %u from streaming buffer.\n", frame_idx );
 
   return true;
+}
+
+// ============================================================================
+// SLIDING WINDOW STREAMING API FUNCTIONS
+// ============================================================================
+
+bool vol_geom_set_current_playback_frame( vol_geom_info_t* info_ptr, uint32_t current_frame ) {
+  if ( !info_ptr || !info_ptr->streaming_buffer_ptr ) {
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: vol_geom_set_current_playback_frame() - invalid parameters.\n" );
+    return false;
+  }
+
+  vol_geom_buffer_state_t* buffer_state = info_ptr->streaming_buffer_ptr;
+  buffer_state->current_playback_frame = current_frame;
+
+  _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Set current playback frame to %u\n", current_frame );
+  
+  // Trigger automatic cleanup of old frames
+  vol_geom_compact_sliding_window( info_ptr );
+  
+  return true;
+}
+
+bool vol_geom_get_sliding_window_range( const vol_geom_info_t* info_ptr, uint32_t* start_frame, uint32_t* end_frame ) {
+  if ( !info_ptr || !info_ptr->streaming_buffer_ptr || !start_frame || !end_frame ) {
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: vol_geom_get_sliding_window_range() - invalid parameters.\n" );
+    return false;
+  }
+
+  vol_geom_buffer_state_t* buffer_state = info_ptr->streaming_buffer_ptr;
+  *start_frame = buffer_state->window_start_frame;
+  *end_frame = buffer_state->window_end_frame;
+  
+  return true;
+}
+
+bool vol_geom_can_overwrite_frame( const vol_geom_info_t* info_ptr, uint32_t frame_idx ) {
+  if ( !info_ptr || !info_ptr->streaming_buffer_ptr ) {
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: vol_geom_can_overwrite_frame() - invalid parameters.\n" );
+    return false;
+  }
+
+  vol_geom_buffer_state_t* buffer_state = info_ptr->streaming_buffer_ptr;
+  
+  // Frame can be overwritten if it's far enough behind current playback position
+  if ( buffer_state->current_playback_frame < buffer_state->safety_margin_frames ) {
+    // Early in playback - don't overwrite anything yet
+    return false;
+  }
+  
+  uint32_t safe_overwrite_threshold = buffer_state->current_playback_frame - buffer_state->safety_margin_frames;
+  return frame_idx < safe_overwrite_threshold;
+}
+
+uint32_t vol_geom_compact_sliding_window( vol_geom_info_t* info_ptr ) {
+  if ( !info_ptr || !info_ptr->streaming_buffer_ptr ) {
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: vol_geom_compact_sliding_window() - invalid parameters.\n" );
+    return 0;
+  }
+
+  vol_geom_buffer_state_t* buffer_state = info_ptr->streaming_buffer_ptr;
+  uint32_t frames_removed = 0;
+  
+  // Find frames that can be safely overwritten
+  for ( uint32_t i = 0; i < buffer_state->frames_in_window; i++ ) {
+    vol_geom_sliding_frame_info_t* frame_info = &buffer_state->sliding_frames[i];
+    
+    if ( vol_geom_can_overwrite_frame( info_ptr, frame_info->global_frame_idx ) ) {
+      // Mark frame as no longer available
+      frame_info->is_available = false;
+      frames_removed++;
+    }
+  }
+  
+  // Compact the array by removing unavailable frames
+  uint32_t write_idx = 0;
+  for ( uint32_t read_idx = 0; read_idx < buffer_state->frames_in_window; read_idx++ ) {
+    if ( buffer_state->sliding_frames[read_idx].is_available ) {
+      if ( write_idx != read_idx ) {
+        buffer_state->sliding_frames[write_idx] = buffer_state->sliding_frames[read_idx];
+      }
+      write_idx++;
+    }
+  }
+  
+  buffer_state->frames_in_window = write_idx;
+  
+  // Update window range
+  if ( buffer_state->frames_in_window > 0 ) {
+    buffer_state->window_start_frame = buffer_state->sliding_frames[0].global_frame_idx;
+    buffer_state->window_end_frame = buffer_state->sliding_frames[buffer_state->frames_in_window - 1].global_frame_idx;
+  }
+  
+  if ( frames_removed > 0 ) {
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Compacted sliding window: removed %u frames, now contains %u frames (range %u-%u)\n",
+      frames_removed, buffer_state->frames_in_window, buffer_state->window_start_frame, buffer_state->window_end_frame );
+  }
+  
+  return frames_removed;
 }

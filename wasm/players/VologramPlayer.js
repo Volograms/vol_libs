@@ -43,6 +43,9 @@ const VologramPlayer = (extensions) => {
 				return false;
 			}
 			
+			// Update sliding window with current playback position
+			vologram.set_current_playback_frame(frameIdx);
+			
 			// Use streaming frame reader
 			ret = vologram.read_frame_streaming(frameIdx);
 		} else {
