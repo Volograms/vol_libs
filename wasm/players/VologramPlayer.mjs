@@ -46,8 +46,7 @@ const VologramPlayer = (extensions) => {
 				return false;
 			}
 			
-			// Update sliding window with current playback position
-			vologram.set_current_playback_frame(frameIdx);
+			// Note: Dual buffer system automatically manages frame positions
 			
 			// Use streaming frame reader
 			ret = vologram.read_frame_streaming(frameIdx);
@@ -87,6 +86,7 @@ const VologramPlayer = (extensions) => {
 
 	// Unified buffer health monitoring and download control
 	const _updateBufferHealth = (currentFrame, enableLogging = false) => {
+		console.log("Updating buffer health", currentFrame, enableLogging);
 		if (!vologram.isStreamingMode || !vologram._downloadManager) {
 			return; // Not in streaming mode or no download manager
 		}
@@ -170,14 +170,20 @@ const VologramPlayer = (extensions) => {
 	const _initVologram = () => {
 		let ret = false;
 
-		if (vologram.header.singleFile) {
+		if (vologram.isStreamingMode) {
+			// NEW: Direct streaming initialization from buffer data
+			console.log("Creating streaming file info from buffer data");
+			ret = vologram.create_streaming_file_info();
+		} else if (vologram.header.singleFile) {
+			console.log("Creating single file info from file");
 			ret = vologram.create_single_file_info("vologram.vols");
 		} else {
+			console.log("Creating file info from header and sequence files");
 			ret = vologram.create_file_info("header.vols", "sequence.vols");
 		}
 
 		if (!ret) {
-			console.error("failed to load vologram");
+			console.error("Failed to load vologram");
 			return false;
 		}
 
@@ -293,14 +299,15 @@ const VologramPlayer = (extensions) => {
 					}
 				});
 
+				// Store streaming mode flag
+				const isStreaming = downloadManager.isStreamingMode();
+				vologram.isStreamingMode = isStreaming;
+				console.log(`Vologram initialized in ${isStreaming ? 'streaming buffer' : 'full download'} mode`);
+
 				const initSuccess = _initVologram();
 				if (initSuccess) {
 					// Log which mode we're using
-					const isStreaming = downloadManager.isStreamingMode();
 					console.log(`Vologram initialized in ${isStreaming ? 'streaming buffer' : 'full download'} mode`);
-					
-					// Store streaming mode flag
-					vologram.isStreamingMode = isStreaming;
 					
 					return true;
 				} else {
@@ -398,8 +405,10 @@ const VologramPlayer = (extensions) => {
 	};
 
 	const _updateFrameFromVideo = (now, metadata) => {
+		
 		if (vologram.header && vologram.header.ready && vologram.attachedVideo) {
 			_getFrameFromSeconds(metadata.mediaTime);
+			console.log("Updating frame from video", _frameFromTime);
 			
 			// Unified buffer health monitoring
 			_updateBufferHealth(_frameFromTime);
@@ -411,9 +420,11 @@ const VologramPlayer = (extensions) => {
 	};
 
 	const _updateFrameFromTimer = (now) => {
+		
 		_timeTick(now);
 		if ((!_timerPaused || _isBuffering) && vologram.header && vologram.header.ready) {
 			// Unified buffer health monitoring (with debug logging enabled for timer mode)
+			console.log("Updating frame from timer", _frameFromTime);
 			_updateBufferHealth(_frameFromTime, true);
 			
 			_updateMeshFrameAllowingSkip(_frameFromTime);
@@ -423,9 +434,10 @@ const VologramPlayer = (extensions) => {
 	};
 
 	const _updateFrameFromAudio = () => {
+		
 		if (vologram.header && vologram.header.ready && vologram.attachedAudio) {
 			_getFrameFromSeconds(vologram.attachedAudio.currentTime);
-			
+			console.log("Updating frame from audio", _frameFromTime);
 			// Unified buffer health monitoring (audio uses frame - 1)
 			const targetFrame = Math.max(0, _frameFromTime - 1);
 			_updateBufferHealth(targetFrame);
@@ -486,7 +498,7 @@ const VologramPlayer = (extensions) => {
 		vologram.attachedAudio.src = blobUrl;
 	};
 
-	const _open = async ({ headerUrl, sequenceUrl, textureUrl, videoElement, audioElement, useWorker = false }, onProgress) => {
+	const _open = async ({ headerUrl, sequenceUrl, textureUrl, videoElement, audioElement, streamingConfig = undefined, useWorker = false }, onProgress) => {
 		vologram = {};
 		vologram.header = {};
 		vologram.frame = {};
@@ -494,6 +506,9 @@ const VologramPlayer = (extensions) => {
 		vologram.headerUrl = headerUrl;
 		vologram.sequenceUrl = sequenceUrl;
 		vologram.textureUrl = textureUrl;
+		if (streamingConfig) {
+			vologram.streamingConfig = streamingConfig;
+		}
 		_useWorker = useWorker;
 		if (_useWorker) {
 			if (!_transcoderManager) {

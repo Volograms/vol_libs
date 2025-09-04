@@ -83,7 +83,18 @@ bool read_frame( int frame_idx ) {
 
 EMSCRIPTEN_KEEPALIVE
 bool update_frames_directory( int frame_idx ) {
-  return vol_geom_update_frames_directory( _seq_filename, &_info, frame_idx );
+  // Check if we're in streaming mode
+  if ( _info.streaming_buffer_ptr && _info.streaming_buffer_ptr->is_streaming_mode ) {
+    // In streaming mode: check if frame is available in streaming buffers
+    // First try to update the buffer frame directory to parse any new frames
+    vol_geom_update_buffer_frame_directory( &_info );
+    
+    // Then check if the specific frame is available
+    return vol_geom_is_frame_available_in_buffer( &_info, (uint32_t)frame_idx );
+  } else {
+    // In file mode: use original file-based directory update
+    return vol_geom_update_frames_directory( _seq_filename, &_info, frame_idx );
+  }
 }
 
 
@@ -280,6 +291,12 @@ bool init_streaming_config( void ) {
 
 EMSCRIPTEN_KEEPALIVE
 int should_use_streaming_mode( int file_size ) {
+  printf("File size: %d\n", file_size);
+  printf("Max buffer size: %lld\n", (long long)_streaming_config.max_buffer_size);
+  printf("Lookahead seconds: %f\n", _streaming_config.lookahead_seconds);
+  printf("Auto select mode: %d\n", _streaming_config.auto_select_mode);
+  printf("Force streaming mode: %d\n", _streaming_config.force_streaming_mode);
+  printf("Should use streaming mode: %d\n", vol_geom_should_use_streaming_mode( (vol_geom_size_t)file_size, &_streaming_config ));
   return vol_geom_should_use_streaming_mode( (vol_geom_size_t)file_size, &_streaming_config ) ? 1 : 0;
 }
 
@@ -367,42 +384,32 @@ void set_force_streaming_mode( int enabled ) {
   _streaming_config.force_streaming_mode = enabled ? true : false;
 }
 
-// ============================================================================
-// SLIDING WINDOW API FUNCTIONS FOR WASM
-// ============================================================================
+// ===== DUAL BUFFER MANAGEMENT EXPORTS =====
+// Additional functions for the dual buffer streaming system
 
 EMSCRIPTEN_KEEPALIVE
-int set_current_playback_frame( vol_geom_info_t* info_ptr, int current_frame ) {
-  return vol_geom_set_current_playback_frame( info_ptr, (uint32_t)current_frame ) ? 1 : 0;
+int is_download_buffer_full( void ) {
+  return vol_geom_is_download_buffer_full( &_info ) ? 1 : 0;
 }
 
 EMSCRIPTEN_KEEPALIVE
-int get_sliding_window_start_frame( vol_geom_info_t* info_ptr ) {
-  uint32_t start_frame, end_frame;
-  if ( vol_geom_get_sliding_window_range( info_ptr, &start_frame, &end_frame ) ) {
-    return (int)start_frame;
-  }
-  return -1;
+int swap_buffers( void ) {
+  return vol_geom_swap_buffers( &_info ) ? 1 : 0;
 }
 
 EMSCRIPTEN_KEEPALIVE
-int get_sliding_window_end_frame( vol_geom_info_t* info_ptr ) {
-  uint32_t start_frame, end_frame;
-  if ( vol_geom_get_sliding_window_range( info_ptr, &start_frame, &end_frame ) ) {
-    return (int)end_frame;
-  }
-  return -1;
+int get_playback_buffer_size( void ) {
+  vol_geom_size_t buffer_size = 0;
+  const uint8_t* buffer = vol_geom_get_playback_buffer( &_info, &buffer_size );
+  return buffer ? (int)buffer_size : 0;
 }
 
 EMSCRIPTEN_KEEPALIVE
-int can_overwrite_frame( vol_geom_info_t* info_ptr, int frame_idx ) {
-  return vol_geom_can_overwrite_frame( info_ptr, (uint32_t)frame_idx ) ? 1 : 0;
+int create_streaming_file_info( void ) {
+  return vol_geom_create_streaming_file_info( &_info ) ? 1 : 0;
 }
 
-EMSCRIPTEN_KEEPALIVE
-int compact_sliding_window( vol_geom_info_t* info_ptr ) {
-  return (int)vol_geom_compact_sliding_window( info_ptr );
-}
+
 
 #ifdef __cplusplus
 }

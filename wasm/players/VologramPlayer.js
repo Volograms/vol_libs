@@ -43,8 +43,7 @@ const VologramPlayer = (extensions) => {
 				return false;
 			}
 			
-			// Update sliding window with current playback position
-			vologram.set_current_playback_frame(frameIdx);
+			// Note: Dual buffer system automatically manages frame positions
 			
 			// Use streaming frame reader
 			ret = vologram.read_frame_streaming(frameIdx);
@@ -167,7 +166,10 @@ const VologramPlayer = (extensions) => {
 	const _initVologram = () => {
 		let ret = false;
 
-		if (vologram.header.singleFile) {
+		if (vologram.isStreamingMode) {
+			// NEW: Direct streaming initialization from buffer data
+			ret = vologram.create_streaming_file_info();
+		} else if (vologram.header.singleFile) {
 			ret = vologram.create_single_file_info("vologram.vols");
 		} else {
 			ret = vologram.create_file_info("header.vols", "sequence.vols");
@@ -290,15 +292,14 @@ const VologramPlayer = (extensions) => {
 					}
 				});
 
+				// Store streaming mode flag
+				const isStreaming = downloadManager.isStreamingMode();
+				vologram.isStreamingMode = isStreaming;
+
 				const initSuccess = _initVologram();
 				if (initSuccess) {
 					// Log which mode we're using
-					const isStreaming = downloadManager.isStreamingMode();
 					console.log(`Vologram initialized in ${isStreaming ? 'streaming buffer' : 'full download'} mode`);
-					
-					// Store streaming mode flag
-					vologram.isStreamingMode = isStreaming;
-					
 					return true;
 				} else {
 					throw new Error("_initVologram failed to open vologram");
@@ -483,7 +484,7 @@ const VologramPlayer = (extensions) => {
 		vologram.attachedAudio.src = blobUrl;
 	};
 
-	const _open = async ({ headerUrl, sequenceUrl, textureUrl, videoElement, audioElement, useWorker = false }, onProgress) => {
+	const _open = async ({ headerUrl, sequenceUrl, textureUrl, videoElement, audioElement, streamingConfig = undefined, useWorker = false }, onProgress) => {
 		vologram = {};
 		vologram.header = {};
 		vologram.frame = {};
@@ -491,6 +492,9 @@ const VologramPlayer = (extensions) => {
 		vologram.headerUrl = headerUrl;
 		vologram.sequenceUrl = sequenceUrl;
 		vologram.textureUrl = textureUrl;
+		if (streamingConfig) {
+			vologram.streamingConfig = streamingConfig;
+		}
 		_useWorker = useWorker;
 		if (_useWorker) {
 			if (!_transcoderManager) {

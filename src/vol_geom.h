@@ -138,11 +138,13 @@ VOL_GEOM_EXPORT typedef struct vol_geom_frame_directory_entry_t {
   float lookahead_seconds;
 } vol_geom_streaming_config_t;
 
-/** Sliding window frame information for circular buffer streaming */
-VOL_GEOM_EXPORT typedef struct vol_geom_sliding_frame_info_t {
-  /// Global frame number (e.g., 245 when buffer contains frames 200-400)
-  uint32_t global_frame_idx;
-  /// Where this frame starts in the circular buffer
+/** Simple frame information for dual buffer streaming.
+ * This structure tracks frame locations within a linear buffer - much simpler than circular buffer approach.
+ */
+VOL_GEOM_EXPORT typedef struct vol_geom_buffer_frame_info_t {
+  /// Global frame number (e.g., 245)
+  uint32_t frame_number;
+  /// Offset within the buffer where this frame starts
   vol_geom_size_t buffer_offset;
   /// Total frame size including header and trailing data
   vol_geom_size_t frame_size;
@@ -150,51 +152,42 @@ VOL_GEOM_EXPORT typedef struct vol_geom_sliding_frame_info_t {
   vol_geom_size_t mesh_data_size;
   /// Size of frame header
   vol_geom_size_t header_size;
-  /// True if this frame is completely available in buffer
-  bool is_available;
-} vol_geom_sliding_frame_info_t;
+} vol_geom_buffer_frame_info_t;
 
-/** Internal state for managing the circular streaming buffer.
- * This structure tracks the current state of the streaming buffer and is managed internally.
+
+
+/** Internal state for managing the dual-buffer streaming system.
+ * This structure tracks the current state of the streaming buffers and is managed internally.
  * Do not manually modify these values - use the provided API functions.
  */
 VOL_GEOM_EXPORT typedef struct vol_geom_buffer_state_t {
-  /// Pointer to the allocated circular buffer memory. NULL if not using streaming mode.
-  uint8_t* buffer_ptr;
-  /// Total size of the circular buffer in bytes.
-  vol_geom_size_t buffer_size;
-  /// Current write position in the circular buffer (where next data will be written).
-  vol_geom_size_t write_pos;
-  /// Start position of valid data in the buffer (oldest valid byte).
-  vol_geom_size_t valid_start;
-  /// End position of valid data in the buffer (newest valid byte + 1).
-  vol_geom_size_t valid_end;
-  /// Current position in the remote file being downloaded.
+  /// Single linear buffer used as a sliding window over the stream.
+  uint8_t* ring_buffer;
+  /// Total capacity of the buffer in bytes.
+  vol_geom_size_t ring_capacity;
+  /// Number of valid bytes currently stored in the buffer [0, ring_capacity].
+  vol_geom_size_t data_size;
+  /// Parsing cursor within [0, data_size] used to discover new frames.
+  vol_geom_size_t parse_pos;
+
+  /// Frame directory over the current window.
+  vol_geom_buffer_frame_info_t* frames;
+  /// Number of frames currently tracked in the directory.
+  uint32_t frame_count;
+  /// Maximum frames that can be stored in the directory.
+  uint32_t max_frames_per_buffer;
+
+  /// Current position in the remote file being downloaded (byte offset).
   vol_geom_size_t file_pos;
   /// Total size of the remote file, if known. 0 if unknown.
   vol_geom_size_t file_size;
-  /// True if currently using circular buffer streaming mode.
+  /// True if currently using streaming mode.
   bool is_streaming_mode;
-  
-  // Sliding window frame management
-  /// First frame in current sliding window (e.g., 150)
-  uint32_t window_start_frame;
-  /// Last frame in current sliding window (e.g., 350)  
-  uint32_t window_end_frame;
-  /// Current playback position reported by player
-  uint32_t current_playback_frame;
-  /// Number of frames currently in sliding window
-  uint32_t frames_in_window;
-  /// Maximum frames that can fit in buffer (calculated from buffer_size)
-  uint32_t max_frames_in_window;
-  /// Safety margin: keep this many frames behind playback position
-  uint32_t safety_margin_frames;
-  
-  /// Dynamic frame directory for sliding window (allocated array)
-  vol_geom_sliding_frame_info_t* sliding_frames;
-  
+
   /// Copy of the streaming configuration used for this buffer.
   vol_geom_streaming_config_t config;
+  /// Last playback frame observed (for eviction/compaction decisions).
+  uint32_t last_playback_frame;
 } vol_geom_buffer_state_t;
 
 /** Meta-data about the whole Vologram sequence. Load this once with `vol_geom_create_file_info()` before using the Vologram. */
@@ -387,6 +380,10 @@ VOL_GEOM_EXPORT bool vol_geom_parse_frame_header_from_buffer( const uint8_t* buf
  * @returns        True on success, false on parsing errors or invalid parameters.
  */
 VOL_GEOM_EXPORT bool vol_geom_update_buffer_frame_directory( vol_geom_info_t* info_ptr );
+VOL_GEOM_EXPORT bool vol_geom_update_single_buffer_frames( vol_geom_info_t* info_ptr, uint8_t* buffer_to_parse, 
+                                          vol_geom_size_t buffer_data_size, 
+                                          vol_geom_buffer_frame_info_t* frame_directory, 
+                                          uint32_t* frame_count, const char* buffer_name );
 
 /** Read a frame from the streaming buffer instead of a file.
  * This function reads frame data from the circular buffer rather than performing file I/O.
@@ -429,40 +426,37 @@ VOL_GEOM_EXPORT float vol_geom_get_buffer_health_seconds( const vol_geom_info_t*
  */
 VOL_GEOM_EXPORT bool vol_geom_should_resume_download( const vol_geom_info_t* info_ptr, uint32_t current_frame, float fps );
 
-/** Set the current playback frame position for sliding window management.
- * This function tells the streaming buffer where playback is currently positioned,
- * which is used to determine which frames can be safely overwritten.
- * @param info_ptr      Pointer to vol_geom_info_t with streaming buffer. Must not be NULL.
- * @param current_frame Current frame being played by the player.
- * @returns             True on success, false on error.
- */
-VOL_GEOM_EXPORT bool vol_geom_set_current_playback_frame( vol_geom_info_t* info_ptr, uint32_t current_frame );
-
-/** Get the current sliding window frame range.
- * This function returns the range of frames currently available in the sliding window.
- * @param info_ptr    Pointer to vol_geom_info_t with streaming buffer. Must not be NULL.
- * @param start_frame Pointer to store the first frame in window. Must not be NULL.
- * @param end_frame   Pointer to store the last frame in window. Must not be NULL.
- * @returns           True on success, false on error.
- */
-VOL_GEOM_EXPORT bool vol_geom_get_sliding_window_range( const vol_geom_info_t* info_ptr, uint32_t* start_frame, uint32_t* end_frame );
-
-/** Check if a frame can be safely overwritten based on playback position.
- * This function determines if a frame is far enough behind the current playback position
- * that it can be safely overwritten with new data.
- * @param info_ptr      Pointer to vol_geom_info_t with streaming buffer. Must not be NULL.
- * @param frame_idx     Frame index to check for overwrite safety.
- * @returns             True if frame can be overwritten, false if it should be preserved.
- */
-VOL_GEOM_EXPORT bool vol_geom_can_overwrite_frame( const vol_geom_info_t* info_ptr, uint32_t frame_idx );
-
-/** Compact the sliding window by removing old frames behind playback position.
- * This function cleans up frames that are no longer needed and makes space for new frames.
- * It should be called periodically or when buffer space is needed.
+/** Check if the current download buffer is full and needs to be swapped.
+ * This function determines if the download buffer has reached capacity.
  * @param info_ptr Pointer to vol_geom_info_t with streaming buffer. Must not be NULL.
- * @returns        Number of frames removed from sliding window, or 0 on error.
+ * @returns        True if download buffer is full and ready for playback.
  */
-VOL_GEOM_EXPORT uint32_t vol_geom_compact_sliding_window( vol_geom_info_t* info_ptr );
+VOL_GEOM_EXPORT bool vol_geom_is_download_buffer_full( const vol_geom_info_t* info_ptr );
+
+/** Swap the roles of the two buffers (download becomes playback, playback becomes download).
+ * This function implements the core buffer swapping logic for the dual-buffer system.
+ * @param info_ptr Pointer to vol_geom_info_t with streaming buffer. Must not be NULL.
+ * @returns        True on successful swap, false on error.
+ */
+VOL_GEOM_EXPORT bool vol_geom_swap_buffers( vol_geom_info_t* info_ptr );
+
+/** Get the current playback buffer and its size.
+ * This function returns a pointer to the buffer currently being used for playback.
+ * @param info_ptr    Pointer to vol_geom_info_t with streaming buffer. Must not be NULL.
+ * @param buffer_size Pointer to store the size of valid data in playback buffer. Must not be NULL.
+ * @returns           Pointer to current playback buffer, or NULL on error.
+ */
+VOL_GEOM_EXPORT const uint8_t* vol_geom_get_playback_buffer( const vol_geom_info_t* info_ptr, vol_geom_size_t* buffer_size );
+
+/** Initialize vologram file info directly from streaming buffer data.
+ * This function creates standard vol_geom_info_t structures from streaming buffer data,
+ * allowing existing frame reading functions to work with streaming mode.
+ * @param info_ptr Pointer to vol_geom_info_t that already has streaming buffer data. Must not be NULL.
+ * @returns        True on successful initialization, false on error.
+ */
+VOL_GEOM_EXPORT bool vol_geom_create_streaming_file_info( vol_geom_info_t* info_ptr );
+
+
 
 #ifdef __cplusplus
 }
