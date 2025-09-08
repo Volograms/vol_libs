@@ -167,6 +167,8 @@ VOL_GEOM_EXPORT typedef struct vol_geom_buffer_state_t {
   vol_geom_size_t ring_capacity;
   /// Number of valid bytes currently stored in the buffer [0, ring_capacity].
   vol_geom_size_t data_size;
+  /// Offset of the logical start (head) of valid data within ring [0, ring_capacity).
+  vol_geom_size_t head_offset;
   /// Parsing cursor within [0, data_size] used to discover new frames.
   vol_geom_size_t parse_pos;
 
@@ -179,6 +181,8 @@ VOL_GEOM_EXPORT typedef struct vol_geom_buffer_state_t {
 
   /// Current position in the remote file being downloaded (byte offset).
   vol_geom_size_t file_pos;
+  /// Monotonic file position at the current ring head (bytes already evicted logically).
+  vol_geom_size_t head_file_pos;
   /// Total size of the remote file, if known. 0 if unknown.
   vol_geom_size_t file_size;
   /// True if currently using streaming mode.
@@ -188,6 +192,8 @@ VOL_GEOM_EXPORT typedef struct vol_geom_buffer_state_t {
   vol_geom_streaming_config_t config;
   /// Last playback frame observed (for eviction/compaction decisions).
   uint32_t last_playback_frame;
+  /// Running average of parsed frame sizes (bytes), used for resume heuristics.
+  vol_geom_size_t avg_frame_size;
 } vol_geom_buffer_state_t;
 
 /** Meta-data about the whole Vologram sequence. Load this once with `vol_geom_create_file_info()` before using the Vologram. */
@@ -424,7 +430,7 @@ VOL_GEOM_EXPORT float vol_geom_get_buffer_health_seconds( const vol_geom_info_t*
  * @param fps           Frames per second for the vologram sequence.
  * @returns             True if download should be resumed, false if buffer is sufficient.
  */
-VOL_GEOM_EXPORT bool vol_geom_should_resume_download( const vol_geom_info_t* info_ptr, uint32_t current_frame, float fps );
+VOL_GEOM_EXPORT bool vol_geom_should_resume_download( vol_geom_info_t* info_ptr, uint32_t current_frame, float fps );
 
 /** Check if the current download buffer is full and needs to be swapped.
  * This function determines if the download buffer has reached capacity.
