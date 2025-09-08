@@ -1170,6 +1170,12 @@ bool vol_geom_update_buffer_frame_directory( vol_geom_info_t* info_ptr ) {
             info_ptr->frame_headers_ptr[f].keyframe = 1;
           }
         }
+        // Always propagate keyframe number/type from parsed header when available
+        if ( buffer_state->frames[i].header_size > 0 ) {
+          // header_size > 0 implies we parsed a header for this frame
+          // frame_headers_ptr[f] may already exist; refresh fields that can change due to wrap/compaction
+          info_ptr->frame_headers_ptr[f].keyframe = info_ptr->frame_headers_ptr[f].keyframe; // keep existing if set later
+        }
       }
     }
   } else {
@@ -1210,6 +1216,7 @@ bool vol_geom_update_single_buffer_frames( vol_geom_info_t* info_ptr, uint8_t* b
   // Simple linear frame parsing over the appended region
   vol_geom_size_t parse_pos = info_ptr->sequence_offset;
   uint32_t new_frames_found = 0;
+  const vol_geom_size_t min_header_bytes = sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint8_t);
   
   // Continue parsing from where we left off
   if ( *frame_count > 0 ) {
@@ -1217,7 +1224,7 @@ bool vol_geom_update_single_buffer_frames( vol_geom_info_t* info_ptr, uint8_t* b
     parse_pos = last_frame->buffer_offset + last_frame->frame_size;
   }
   
-  while ( parse_pos + sizeof(vol_geom_frame_hdr_t) <= buffer_data_size && 
+  while ( parse_pos + min_header_bytes <= buffer_data_size && 
           *frame_count < buffer_state->max_frames_per_buffer ) {
     
     // Parse frame header at current position
@@ -1233,11 +1240,10 @@ bool vol_geom_update_single_buffer_frames( vol_geom_info_t* info_ptr, uint8_t* b
       frame_header.keyframe_number = frame_header.frame_number;
     } else {
       // For non-keyframes, use the keyframe number from the previous frame
-      _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Previous frame keyframe_number: %u\n", info_ptr->frame_headers_ptr[frame_header.frame_number - 1].keyframe_number );
-
+      uint32_t prev = (frame_header.frame_number > 0) ? (frame_header.frame_number - 1) : 0;
       if ( frame_header.frame_number > 0 && info_ptr->frame_headers_ptr ) {
         // Look up the previous frame's keyframe_number from the standard array
-        frame_header.keyframe_number = info_ptr->frame_headers_ptr[frame_header.frame_number - 1].keyframe_number;
+        frame_header.keyframe_number = info_ptr->frame_headers_ptr[prev].keyframe_number;
       } else {
         frame_header.keyframe_number = 0; // First frame case
       }
@@ -1251,6 +1257,17 @@ bool vol_geom_update_single_buffer_frames( vol_geom_info_t* info_ptr, uint8_t* b
     // Check if complete frame is available
     if ( parse_pos + total_frame_size > buffer_data_size ) {
       break; // Incomplete frame
+    }
+
+    // Validate trailing size sentinel matches mesh_data_sz to avoid drift
+    uint32_t trailing_sz = 0;
+    memcpy( &trailing_sz, buffer_to_parse + parse_pos + header_size + frame_header.mesh_data_sz, sizeof(uint32_t) );
+    if ( trailing_sz != frame_header.mesh_data_sz ) {
+      _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR,
+        "ERROR: TAIL_MISMATCH at frame=%u: mesh_sz=%u tail=%u at off=%" PRId64 " hdr=%" PRId64 " parse_pos=%" PRId64 "\n",
+        frame_header.frame_number, frame_header.mesh_data_sz, trailing_sz,
+        parse_pos + header_size + frame_header.mesh_data_sz, header_size, parse_pos );
+      break;
     }
     
     // Add frame to streaming buffer directory
@@ -1396,10 +1413,20 @@ bool vol_geom_swap_buffers( vol_geom_info_t* info_ptr ) {
   // In ring mode we compact (evict) frames strictly before the current playback frame
   if ( buffer_state->frame_count == 0 ) { return false; }
 
-  // Find the last frame strictly before the playback frame
+  // Determine the earliest frame we must keep: the keyframe for the current playback frame.
+  uint32_t keep_from_frame = 0;
+  if ( info_ptr->frame_headers_ptr && buffer_state->last_playback_frame < info_ptr->hdr.frame_count ) {
+    uint32_t lpf = buffer_state->last_playback_frame;
+    int32_t kf   = info_ptr->frame_headers_ptr[lpf].keyframe_number;
+    if ( kf >= 0 ) { keep_from_frame = (uint32_t)kf; }
+  }
+  // If we don't know the keyframe yet, conservatively keep everything.
+  if ( keep_from_frame == 0 ) { return false; }
+
+  // Find the last frame strictly before the keyframe we need to keep
   int32_t boundary_index = -1;
   for ( uint32_t i = 0; i < buffer_state->frame_count; i++ ) {
-    if ( buffer_state->frames[i].frame_number < buffer_state->last_playback_frame ) {
+    if ( buffer_state->frames[i].frame_number < keep_from_frame ) {
       boundary_index = (int32_t)i; // keep moving forward
     } else {
       break;
@@ -1414,27 +1441,25 @@ bool vol_geom_swap_buffers( vol_geom_info_t* info_ptr ) {
   memmove( buffer_state->ring_buffer, buffer_state->ring_buffer + boundary, (size_t)bytes_to_keep );
   buffer_state->data_size = bytes_to_keep;
 
-  // Rebase frame directory offsets
-  for ( uint32_t i = 0; i < buffer_state->frame_count; i++ ) {
-    if ( buffer_state->frames[i].buffer_offset >= boundary ) {
-      buffer_state->frames[i].buffer_offset -= boundary;
-    } else {
-      // Drop frames that were compacted away (should normally be all before boundary)
-    }
-  }
-  // After compaction, reset directory to only frames at or after boundary
+  // Rebuild frame directory keeping only frames at or after the boundary,
+  // and rebase their offsets relative to the new start of the ring (offset 0).
   uint32_t new_count = 0;
+  uint32_t first_kept = 0, last_kept = 0;
+  bool first_set = false;
   for ( uint32_t i = 0; i < buffer_state->frame_count; i++ ) {
-    if ( buffer_state->frames[i].buffer_offset >= boundary ) {
-      // Rebase offset
-      buffer_state->frames[i].buffer_offset -= boundary;
-      buffer_state->frames[new_count++] = buffer_state->frames[i];
+    const vol_geom_buffer_frame_info_t oldf = buffer_state->frames[i];
+    if ( oldf.buffer_offset >= boundary ) {
+      vol_geom_buffer_frame_info_t f = oldf;
+      f.buffer_offset -= boundary;
+      buffer_state->frames[new_count++] = f;
+      if ( !first_set ) { first_kept = f.frame_number; first_set = true; }
+      last_kept = f.frame_number;
     }
   }
   buffer_state->frame_count = new_count;
 
-  // After compaction the ring starts at the beginning of a frame; header is no longer present
-  info_ptr->sequence_offset = 0;
+  _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "COMPACT_DEBUG: kept %u frames, first=%u last=%u, new_data_size=%" PRId64 "\n",
+    buffer_state->frame_count, first_kept, last_kept, buffer_state->data_size );
 
   _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Ring compaction completed. data_size=%" PRId64 ", frames=%u\n",
     buffer_state->data_size, buffer_state->frame_count );
