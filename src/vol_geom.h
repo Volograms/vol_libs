@@ -141,18 +141,7 @@ VOL_GEOM_EXPORT typedef struct vol_geom_frame_directory_entry_t {
 /** Simple frame information for dual buffer streaming.
  * This structure tracks frame locations within a linear buffer - much simpler than circular buffer approach.
  */
-VOL_GEOM_EXPORT typedef struct vol_geom_buffer_frame_info_t {
-  /// Global frame number (e.g., 245)
-  uint32_t frame_number;
-  /// Offset within the buffer where this frame starts
-  vol_geom_size_t buffer_offset;
-  /// Total frame size including header and trailing data
-  vol_geom_size_t frame_size;
-  /// Size of mesh data portion only
-  vol_geom_size_t mesh_data_size;
-  /// Size of frame header
-  vol_geom_size_t header_size;
-} vol_geom_buffer_frame_info_t;
+// Note: vol_geom_buffer_frame_info_t removed - using unified vol_geom_frame_directory_entry_t
 
 
 
@@ -172,12 +161,7 @@ VOL_GEOM_EXPORT typedef struct vol_geom_buffer_state_t {
   /// Parsing cursor within [0, data_size] used to discover new frames.
   vol_geom_size_t parse_pos;
 
-  /// Frame directory over the current window.
-  vol_geom_buffer_frame_info_t* frames;
-  /// Number of frames currently tracked in the directory.
-  uint32_t frame_count;
-  /// Maximum frames that can be stored in the directory.
-  uint32_t max_frames_per_buffer;
+  // Note: Frame directory unified with frames_directory_ptr in vol_geom_info_t
 
   /// Current position in the remote file being downloaded (byte offset).
   vol_geom_size_t file_pos;
@@ -388,8 +372,8 @@ VOL_GEOM_EXPORT bool vol_geom_parse_frame_header_from_buffer( const uint8_t* buf
 VOL_GEOM_EXPORT bool vol_geom_update_buffer_frame_directory( vol_geom_info_t* info_ptr );
 VOL_GEOM_EXPORT bool vol_geom_update_single_buffer_frames( vol_geom_info_t* info_ptr, uint8_t* buffer_to_parse, 
                                           vol_geom_size_t buffer_data_size, 
-                                          vol_geom_buffer_frame_info_t* frame_directory, 
-                                          uint32_t* frame_count, const char* buffer_name );
+                                          void* unused_frame_directory, 
+                                          uint32_t* unused_frame_count, const char* buffer_name );
 
 /** Read a frame from the streaming buffer instead of a file.
  * This function reads frame data from the circular buffer rather than performing file I/O.
