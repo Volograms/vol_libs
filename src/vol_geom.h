@@ -353,15 +353,15 @@ VOL_GEOM_EXPORT bool vol_geom_create_streaming_buffer( vol_geom_info_t* info_ptr
  */
 VOL_GEOM_EXPORT bool vol_geom_add_data_to_buffer( vol_geom_info_t* info_ptr, const uint8_t* data_ptr, vol_geom_size_t data_size );
 
-/** Parse a frame header from buffer data.
- * This function reads and validates frame header information from a buffer location.
- * @param buffer_ptr     Pointer to buffer containing frame data. Must not be NULL.
- * @param offset         Byte offset in buffer where frame header starts.
- * @param header_ptr     Pointer to vol_geom_frame_hdr_t struct to populate. Must not be NULL.  
- * @param header_size_ptr Pointer to store the size of the parsed header. Must not be NULL.
- * @returns              True if header was successfully parsed and is valid, false otherwise.
- */
-VOL_GEOM_EXPORT bool vol_geom_parse_frame_header_from_buffer( const uint8_t* buffer_ptr, vol_geom_size_t offset, vol_geom_frame_hdr_t* header_ptr, vol_geom_size_t* header_size_ptr );
+// /** Parse a frame header from buffer data.
+//  * This function reads and validates frame header information from a buffer location.
+//  * @param buffer_ptr     Pointer to buffer containing frame data. Must not be NULL.
+//  * @param offset         Byte offset in buffer where frame header starts.
+//  * @param header_ptr     Pointer to vol_geom_frame_hdr_t struct to populate. Must not be NULL.  
+//  * @param header_size_ptr Pointer to store the size of the parsed header. Must not be NULL.
+//  * @returns              True if header was successfully parsed and is valid, false otherwise.
+//  */
+// VOL_GEOM_EXPORT bool vol_geom_parse_frame_header_from_buffer( const uint8_t* buffer_ptr, vol_geom_size_t offset, vol_geom_frame_hdr_t* header_ptr, vol_geom_size_t* header_size_ptr );
 
 /** Update the frame directory with newly available frames from the buffer.
  * This function scans the buffer for complete frames and updates the frame directory accordingly.
