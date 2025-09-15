@@ -1056,9 +1056,13 @@ bool vol_geom_add_data_to_buffer( vol_geom_info_t* info_ptr, const uint8_t* data
   vol_geom_size_t first_seg   = data_size;
   vol_geom_size_t tail_room   = buffer_state->ring_capacity - tail_offset;
   if ( first_seg > tail_room ) { first_seg = tail_room; }
+
+  _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "WRITE_DEBUG: Writing %" PRId64 " bytes to physical offset %" PRId64 " with data_size %" PRId64 ", tail_room %" PRId64 "\n", first_seg, tail_offset, data_size, tail_room );
+
   memcpy( buffer_state->ring_buffer + tail_offset, data_ptr, (size_t)first_seg );
   vol_geom_size_t remaining = data_size - first_seg;
   if ( remaining > 0 ) {
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "WRITE_DEBUG: Wrapping around. Writing remaining %" PRId64 " bytes to physical offset 0\n", remaining );
     memcpy( buffer_state->ring_buffer, data_ptr + first_seg, (size_t)remaining );
   }
   buffer_state->data_size += data_size;
@@ -1233,7 +1237,8 @@ bool vol_geom_update_single_buffer_frames( vol_geom_info_t* info_ptr, uint8_t* b
   }
   
   // Simple linear frame parsing over the appended region (logical positions from head)
-  vol_geom_size_t parse_pos = info_ptr->sequence_offset;
+  vol_geom_size_t parse_pos = buffer_state->parse_pos;
+  if ( parse_pos < info_ptr->sequence_offset ) { parse_pos = info_ptr->sequence_offset; }
   uint32_t new_frames_found = 0;
   const vol_geom_size_t min_header_bytes = sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint8_t);
   
@@ -1285,7 +1290,19 @@ bool vol_geom_update_single_buffer_frames( vol_geom_info_t* info_ptr, uint8_t* b
     }
     
     // Calculate total frame size
-    vol_geom_size_t total_frame_size = header_size + frame_header.mesh_data_sz + sizeof(uint32_t);
+    vol_geom_size_t corrected_payload_sz = frame_header.mesh_data_sz;
+    if ( info_ptr->hdr.version < 12 ) {
+      if ( 1 == frame_header.keyframe ) {
+        corrected_payload_sz += 8; // indices and UVs size
+      }
+      if ( 11 == info_ptr->hdr.version ) {
+        corrected_payload_sz += 4;   // normals sz
+        if ( info_ptr->hdr.textured ) {
+          corrected_payload_sz += 4; // texture sz
+        }
+      }
+    }
+    vol_geom_size_t total_frame_size = header_size + corrected_payload_sz + sizeof( uint32_t );
     
     // Check if complete frame is available
     if ( parse_pos + total_frame_size > buffer_data_size ) {
@@ -1303,10 +1320,18 @@ bool vol_geom_update_single_buffer_frames( vol_geom_info_t* info_ptr, uint8_t* b
     memcpy( &trailing_sz, tail_buf, sizeof(uint32_t) );
     if ( trailing_sz != frame_header.mesh_data_sz ) {
       // Treat as incomplete/corrupted slice; wait for more bytes rather than erroring
+      vol_geom_size_t logical_tail_pos = parse_pos + header_size + frame_header.mesh_data_sz;
+      vol_geom_size_t physical_tail_pos = ( buffer_state->head_offset + logical_tail_pos ) % buffer_state->ring_capacity;
       _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG,
-        "TAIL_MISMATCH at frame=%u: mesh_sz=%u tail=%u at off=%" PRId64 " hdr=%" PRId64 " parse_pos=%" PRId64 "\n",
-        frame_header.frame_number, frame_header.mesh_data_sz, trailing_sz,
-        parse_pos + header_size + frame_header.mesh_data_sz, header_size, parse_pos );
+        "TAIL_MISMATCH at frame=%u:\n"
+        "  Header: mesh_sz=%u, keyframe=%u, keyframe_num=%u\n"
+        "  Buffer State: head_offset=%" PRId64 ", data_size=%" PRId64 ", capacity=%" PRId64 "\n"
+        "  Parse State: parse_pos (logical)=%" PRId64 ", physical=%" PRId64 "\n"
+        "  Tail Read: value=%u, logical_pos=%" PRId64 ", physical_pos=%" PRId64 "\n",
+        frame_header.frame_number, frame_header.mesh_data_sz, frame_header.keyframe, frame_header.keyframe_number,
+        buffer_state->head_offset, buffer_state->data_size, buffer_state->ring_capacity,
+        parse_pos, ( buffer_state->head_offset + parse_pos ) % buffer_state->ring_capacity,
+        trailing_sz, logical_tail_pos, physical_tail_pos );
       break;
     }
     
@@ -1314,7 +1339,7 @@ bool vol_geom_update_single_buffer_frames( vol_geom_info_t* info_ptr, uint8_t* b
     uint32_t fnum = frame_header.frame_number;
     if ( fnum < info_ptr->hdr.frame_count && info_ptr->frames_directory_ptr && info_ptr->frame_headers_ptr ) {
       info_ptr->frames_directory_ptr[fnum].hdr_sz = header_size;
-      info_ptr->frames_directory_ptr[fnum].corrected_payload_sz = frame_header.mesh_data_sz;
+      info_ptr->frames_directory_ptr[fnum].corrected_payload_sz = corrected_payload_sz;
       info_ptr->frames_directory_ptr[fnum].total_sz = total_frame_size;
       info_ptr->frames_directory_ptr[fnum].offset_sz = parse_pos; // ring offset in streaming mode
 
@@ -1478,29 +1503,24 @@ bool vol_geom_swap_buffers( vol_geom_info_t* info_ptr ) {
   }
 
   // Calculate logical boundary end and evicted bytes
-  vol_geom_size_t boundary_end = info_ptr->frames_directory_ptr[boundary_frame].offset_sz + 
-                                  info_ptr->frames_directory_ptr[boundary_frame].total_sz;
+  vol_geom_size_t boundary_offset = info_ptr->frames_directory_ptr[boundary_frame].offset_sz + 
+                                   info_ptr->frames_directory_ptr[boundary_frame].total_sz;
+  vol_geom_size_t evicted_bytes = boundary_offset;
   
-  _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "COMPACT_DEBUG: boundary_frame=%d, boundary_end=%" PRId64 ", head_offset=%" PRId64 "\n", 
-    boundary_frame, boundary_end, buffer_state->head_offset );
+  _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "COMPACT_DEBUG: boundary_frame=%d, boundary_offset=%" PRId64 ", head_offset=%" PRId64 "\n", 
+    boundary_frame, boundary_offset, buffer_state->head_offset );
 
-  if ( boundary_end <= 0 || boundary_end > buffer_state->data_size ) {
-    _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Boundary end out of range: %" PRId64 "\n", boundary_end );
+  if ( boundary_offset <= 0 || boundary_offset > buffer_state->data_size ) {
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Boundary end out of range: %" PRId64 "\n", boundary_offset );
     return false;
   }
 
   // Perform logical eviction: advance head, reduce data_size, update file position
-  buffer_state->head_offset = (buffer_state->head_offset + boundary_end) % buffer_state->ring_capacity;
-  buffer_state->head_file_pos += boundary_end;
-  buffer_state->data_size -= boundary_end;
+  buffer_state->head_offset = (buffer_state->head_offset + evicted_bytes) % buffer_state->ring_capacity;
+  buffer_state->head_file_pos += evicted_bytes;
+  buffer_state->data_size -= evicted_bytes;
+  buffer_state->parse_pos -= evicted_bytes;
   
-  // Adjust parse cursor if it fell into the evicted region
-  if ( buffer_state->parse_pos >= boundary_end ) {
-    buffer_state->parse_pos -= boundary_end;
-  } else {
-    buffer_state->parse_pos = 0;
-  }
-
   // Invalidate all frames before keep_from_frame in unified directory
   uint32_t kept_frames = 0;
   for ( uint32_t i = 0; i < keep_from_frame && i < info_ptr->hdr.frame_count; i++ ) {
@@ -1508,16 +1528,16 @@ bool vol_geom_swap_buffers( vol_geom_info_t* info_ptr ) {
     info_ptr->frame_headers_ptr[i].mesh_data_sz = 0;
   }
   
-  // Rebase remaining frame offsets by subtracting evicted bytes
+  // Rebase remaining frame offsets and find the new logical start for the parser
   for ( uint32_t i = keep_from_frame; i < info_ptr->hdr.frame_count; i++ ) {
     if ( info_ptr->frames_directory_ptr[i].total_sz > 0 ) {
-      info_ptr->frames_directory_ptr[i].offset_sz -= boundary_end;
+      info_ptr->frames_directory_ptr[i].offset_sz -= evicted_bytes;
       kept_frames++;
     }
   }
 
-  _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "COMPACT_DEBUG: evicted=%" PRId64 " bytes, kept=%u frames from frame %u, head_off=%" PRId64 ", used=%" PRId64 "\n",
-    boundary_end, kept_frames, keep_from_frame, buffer_state->head_offset, buffer_state->data_size );
+  _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "COMPACT_DEBUG: evicted=%" PRId64 " bytes, kept=%u frames from frame %u, head_off=%" PRId64 ", used=%" PRId64 ", new_parse_pos=%" PRId64 "\n",
+    evicted_bytes, kept_frames, keep_from_frame, buffer_state->head_offset, buffer_state->data_size, buffer_state->parse_pos );
 
   return true;
 }

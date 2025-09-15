@@ -300,6 +300,10 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 					const SAFETY_HEADROOM = 64 * 1024;
 					if (Module.fileFetched) { return reader.read().then(pump); }
 					if (downloadPaused || freeSpace < (value.length + SAFETY_HEADROOM)) {
+						console.log('Download paused due to buffer full.');
+						console.log('Free space:', freeSpace);
+						console.log('Value length:', value.length);
+						console.log('Safety headroom:', SAFETY_HEADROOM);
 						downloadPaused = true;
 						if (Module.should_resume_download) { Module.should_resume_download(currentFrame, 30.0); }
 						if (Module.swap_buffers && Module.swap_buffers()) {
@@ -307,10 +311,14 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 							const free2 = maxSize > 0 ? (maxSize - used2) : Number.MAX_SAFE_INTEGER;
 							if (free2 >= (value.length + SAFETY_HEADROOM)) {
 								downloadPaused = false;
+								console.log('Download resumed due to buffer space.');
+								console.log('Used space:', used2);
+								console.log('Free space:', free2);
 							}
 						}
 						if (downloadPaused) {
-							return _waitForResume().then(() => reader.read().then(pump));
+							console.log('Pausing download, will re-process chunk after space is freed.');
+							return _waitForResume().then(() => pump({ done: false, value: value }));
 						}
 					}
 					
