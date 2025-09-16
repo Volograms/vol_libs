@@ -409,6 +409,10 @@ int create_streaming_file_info( void ) {
   return vol_geom_create_streaming_file_info( &_info ) ? 1 : 0;
 }
 
+EMSCRIPTEN_KEEPALIVE
+int get_header_frame_body_start( void ) {
+  return vol_geom_get_header_frame_body_start( &_info );
+}
 
 
 #ifdef __cplusplus

@@ -849,6 +849,15 @@ bool vol_geom_read_frame( const char* seq_filename,  vol_geom_info_t* info_ptr, 
   return true;
 }
 
+VOL_GEOM_EXPORT int vol_geom_get_header_frame_body_start( const vol_geom_info_t* info_ptr ) {
+  if ( !info_ptr ) {
+    return 0;
+  }
+  // TODO: not correct, needs to be calculated for every version of the header
+  int hdr_sz = sizeof(vol_geom_file_hdr_t); 
+  return info_ptr->hdr.frame_body_start ? info_ptr->hdr.frame_body_start : hdr_sz;
+}
+
 //
 // ===== STREAMING BUFFER IMPLEMENTATION =====
 // Implementation of the streaming buffer API for large file support.

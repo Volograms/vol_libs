@@ -314,6 +314,8 @@ VOL_GEOM_EXPORT int vol_geom_find_previous_keyframe( const vol_geom_info_t* info
  */
 VOL_GEOM_EXPORT bool vol_geom_read_frame( const char* seq_filename, vol_geom_info_t* info_ptr, uint32_t frame_idx, vol_geom_frame_data_t* frame_data_ptr );
 
+VOL_GEOM_EXPORT int vol_geom_get_header_frame_body_start( const vol_geom_info_t* info_ptr );
+
 //
 // ===== STREAMING BUFFER API =====
 // These functions provide enhanced streaming capabilities with circular buffer support.

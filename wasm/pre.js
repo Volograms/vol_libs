@@ -146,7 +146,7 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 		resolveHeaderLoaded = resolve;
 	});
 
-	let streamingMode = false;
+	let bufferMode = false;
 	let fileSize = 0;
 	let downloadPaused = false;
 	let currentFrame = 0;
@@ -164,7 +164,7 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 	};
 
 	// Optional Range mode (8MB default)
-	const useRangeRequests = !!(config && (config.useRangeRequests || config.rangeChunkBytes));
+	const useRangeRequests = true; //!!(config && (config.useRangeRequests || config.rangeChunkBytes));
 	const rangeChunkBytes = (config && config.rangeChunkBytes) ? config.rangeChunkBytes : (8 * 1024 * 1024);
 
 	const downloadFinishedPromise = fetch(fileUrl, fetchOptions)
@@ -184,18 +184,16 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 			if (config.forceStreamingMode !== undefined) Module.set_force_streaming_mode(config.forceStreamingMode);
 			
 			// Now make the streaming mode decision with the correct config applied
-			streamingMode = Module.should_use_streaming_mode(fileSize);
-			const a = Module.should_use_streaming_mode(fileSize);
-			console.log('Streaming mode:', streamingMode);
-			console.log('Streaming mode:', a);
+			bufferMode = Module.should_use_streaming_mode(fileSize);
+			console.log('Buffer mode:', bufferMode);
 			
-			console.log(`File size: ${fileSize ? (fileSize/1024/1024).toFixed(1) + 'MB' : 'unknown'}, using ${streamingMode ? 'streaming' : 'full download'} mode`);
+			console.log(`File size: ${fileSize ? (fileSize/1024/1024).toFixed(1) + 'MB' : 'unknown'}, using ${bufferMode ? 'streaming' : 'full download'} mode`);
 
 			let seekLocation = 0;
 			let headerResolved = false;
 
 			// For streaming mode, create the circular buffer
-			if (streamingMode) {
+			if (bufferMode) {
 
 				if (!Module.create_streaming_buffer()) {
 					throw new Error("Failed to create streaming buffer");
@@ -215,7 +213,10 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 							const usedSize = Module.get_playback_buffer_size ? Module.get_playback_buffer_size() : 0;
 							const freeSpace = maxSize > 0 ? (maxSize - usedSize) : Number.MAX_SAFE_INTEGER;
 							const SAFETY_HEADROOM = 64 * 1024;
-							if (Module.fileFetched) break; // stop requesting if finished
+							if (Module.fileFetched) {
+								console.log('runRangeLoop: File fetched, breaking.');
+								break; // stop requesting if finished
+							}
 							if (downloadPaused || freeSpace < (rangeChunkBytes + SAFETY_HEADROOM)) {
 								downloadPaused = true;
 								if (Module.should_resume_download) { Module.should_resume_download(currentFrame, 30.0); }
@@ -229,7 +230,12 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 								if (downloadPaused) { await _waitForResume(); continue; }
 							}
 
-							if (fileSize > 0 && seekLocation >= fileSize) break; // EOF
+							if (fileSize > 0 && seekLocation >= fileSize) {
+								seekLocation = Module.get_header_frame_body_start(); // to loop around, skip header
+								console.log('runRangeLoop: Seek location reset, continuing.');
+								continue;
+								// break; // EOF
+							}
 
 							const end = fileSize > 0 ? Math.min(seekLocation + rangeChunkBytes, fileSize) - 1 : (seekLocation + rangeChunkBytes - 1);
 							const headers = { Range: `bytes=${seekLocation}-${end}` };
@@ -239,23 +245,32 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 							}
 							const buf = await res.arrayBuffer();
 							const len = buf.byteLength;
-							if (len === 0) break;
+							if (len === 0) {
+								console.log('runRangeLoop: Buffer length is 0, breaking.');
+								break;
+							}
 
 							const dataPtr = Module._malloc(len);
 							Module.HEAP8.set(new Uint8Array(buf), dataPtr);
 							const ok = Module.add_data_to_buffer(dataPtr, len);
 							Module._free(dataPtr);
 							if (!ok) {
+								console.log('runRangeLoop: Add data to buffer failed, pausing download.');
 								downloadPaused = true;
 								await _waitForResume();
 								continue;
 							}
 
-							if (Module.update_buffer_frame_directory) Module.update_buffer_frame_directory();
+							if (Module.update_buffer_frame_directory) {
+								console.log('runRangeLoop: Update buffer frame directory.');
+								Module.update_buffer_frame_directory();
+							}
 
 							seekLocation += len;
+							console.log('runRangeLoop: Seek location incremented, continuing.');
 
 							if (!headerResolved && seekLocation > (config.headerThreshold || 5*1024*1024)) {
+								console.log('runRangeLoop: Header resolved, resolving header loaded promise.');
 								Module.headerFetched = true;
 								headerResolved = true;
 								resolveHeaderLoaded();
@@ -263,6 +278,7 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 
 							// Fullness handled pre-request; no-op here
 						}
+						console.log('runRangeLoop: Download finished.');
 						Module.fileFetched = true;
 					};
 
@@ -284,60 +300,14 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 
 				if (done) {
 					Module.fileFetched = true;
-					console.log('Download finished.');
+					console.log('pump: Download finished.');
 					if (!headerResolved) {
 						resolveHeaderLoaded();
 					}
 					return;
 				}
 
-				// Add data to appropriate destination
-				if (streamingMode) {
-					// Ensure there is space for this chunk; attempt compaction if needed
-					const maxSize = Module.get_max_buffer_size ? Module.get_max_buffer_size() : 0;
-					const usedSize = Module.get_playback_buffer_size ? Module.get_playback_buffer_size() : 0;
-					const freeSpace = maxSize > 0 ? (maxSize - usedSize) : Number.MAX_SAFE_INTEGER;
-					const SAFETY_HEADROOM = 64 * 1024;
-					if (Module.fileFetched) { return reader.read().then(pump); }
-					if (downloadPaused || freeSpace < (value.length + SAFETY_HEADROOM)) {
-						console.log('Download paused due to buffer full.');
-						console.log('Free space:', freeSpace);
-						console.log('Value length:', value.length);
-						console.log('Safety headroom:', SAFETY_HEADROOM);
-						downloadPaused = true;
-						if (Module.should_resume_download) { Module.should_resume_download(currentFrame, 30.0); }
-						if (Module.swap_buffers && Module.swap_buffers()) {
-							const used2 = Module.get_playback_buffer_size ? Module.get_playback_buffer_size() : 0;
-							const free2 = maxSize > 0 ? (maxSize - used2) : Number.MAX_SAFE_INTEGER;
-							if (free2 >= (value.length + SAFETY_HEADROOM)) {
-								downloadPaused = false;
-								console.log('Download resumed due to buffer space.');
-								console.log('Used space:', used2);
-								console.log('Free space:', free2);
-							}
-						}
-						if (downloadPaused) {
-							console.log('Pausing download, will re-process chunk after space is freed.');
-							return _waitForResume().then(() => pump({ done: false, value: value }));
-						}
-					}
-					
-					// Add chunk to buffer
-					const dataPtr = Module._malloc(value.length);
-					Module.HEAP8.set(value, dataPtr);
-					if (!Module.add_data_to_buffer(dataPtr, value.length)) {
-						Module._free(dataPtr);
-						downloadPaused = true;
-						return _waitForResume().then(() => reader.read().then(pump));
-					}
-					Module._free(dataPtr);
-
-					// Update frame directory
-					Module.update_buffer_frame_directory();
-
-					// Fullness handled before reads
-
-				} else {
+				if(!bufferMode) {
 					// Traditional file write for small files
 					Module.FS.write(fileStream, value, 0, value.length, seekLocation);
 				}
@@ -356,26 +326,28 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 		})
 		.finally(() => {
 			// Clean up file stream for non-streaming mode
-			if (!streamingMode && typeof fileStream !== 'undefined' && fileStream) {
+			if (!bufferMode && typeof fileStream !== 'undefined' && fileStream) {
 				Module.FS.close(fileStream);
 			}
-			console.log('Download finished.');
+			console.log('finally: Download finished.');
+			console.log('finally: file fetched:', Module.fileFetched);
+
 		})
 		.catch((err) => {
 			if (err.name === "AbortError") {
-				console.log("Download aborted.");
+				console.log("catch: Download aborted.");
 			} else {
-				console.error("Download error:", err);
+				console.error("catch: Download error:", err);
 			}
 			throw err;
 		});
 
-	console.log(`Enhanced streaming manager created (${streamingMode ? 'buffer' : 'file'} mode)`);
+	console.log(`Enhanced streaming manager created (${bufferMode ? 'buffer' : 'file'} mode)`);
 	
 	return {
 		headerLoaded: headerLoadedPromise,
 		downloadFinished: downloadFinishedPromise,
-		isStreamingMode: () => streamingMode,
+		isStreamingMode: () => bufferMode,
 		pauseDownload: () => { downloadPaused = true; },
 		resumeDownload: () => { _resumeNow(); },
 		isPaused: () => downloadPaused,
@@ -384,7 +356,7 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 			// Debug: trace playback advancement
 			try { if (console && console.debug) console.debug(`[stream] setCurrentFrame=${currentFrame}`); } catch (e) {}
 			// If download is paused due to capacity, try to compact and resume when playback advances
-			if (downloadPaused && streamingMode) {
+			if (downloadPaused && bufferMode) {
 				try {
 					if (Module.should_resume_download) { Module.should_resume_download(currentFrame, 30.0); }
 					const maxSize = Module.get_max_buffer_size ? Module.get_max_buffer_size() : 0;
@@ -679,6 +651,9 @@ Module.initVologramFunctions = (containerObject) => {
 		return !!Module.ccall("is_frame_available_in_buffer", "number", ["number"], [frameIdx]);
 	};
 
+	// Frame body start offset from the start of the file stored in the header
+	insertObject["get_header_frame_body_start"] = Module.cwrap("get_header_frame_body_start", "number");
+
 	// Buffer health monitoring
 	insertObject["get_buffer_health_bytes"] = Module.cwrap("get_buffer_health_bytes", "number");
 	insertObject["get_buffer_health_seconds"] = Module.cwrap("get_buffer_health_seconds", "number", ["number"]);
@@ -710,6 +685,7 @@ Module.initVologramFunctions = (containerObject) => {
 	Module.create_streaming_buffer = insertObject.create_streaming_buffer;
 	Module.add_data_to_buffer = insertObject.add_data_to_buffer;
 	Module.update_buffer_frame_directory = insertObject.update_buffer_frame_directory;
+	Module.get_header_frame_body_start = insertObject.get_header_frame_body_start;
 	
 	// Dual buffer API functions
 	insertObject["is_download_buffer_full"] = function() {
