@@ -231,10 +231,11 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 							}
 
 							if (fileSize > 0 && seekLocation >= fileSize) {
-								seekLocation = Module.get_header_frame_body_start(); // to loop around, skip header
-								console.log('runRangeLoop: Seek location reset, continuing.');
-								continue;
-								// break; // EOF
+								// TODO: Uncomment this to loop around, skip header
+								// seekLocation = Module.get_header_frame_body_start(); // to loop around, skip header
+								// console.log('runRangeLoop: Seek location reset, continuing.');
+								// continue;
+								break; // EOF
 							}
 
 							const end = fileSize > 0 ? Math.min(seekLocation + rangeChunkBytes, fileSize) - 1 : (seekLocation + rangeChunkBytes - 1);

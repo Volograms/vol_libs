@@ -658,21 +658,21 @@ bool vol_geom_is_keyframe( const vol_geom_info_t* info_ptr, uint32_t frame_idx )
 int vol_geom_find_previous_keyframe( const vol_geom_info_t* info_ptr, uint32_t frame_idx ) {
   assert( info_ptr );
   if ( !info_ptr ) { return -1; }
-  _vol_loggerf( VOL_GEOM_LOG_TYPE_INFO, "INFO: find_previous_keyframe: info_ptr is not NULL.\n" );
-  _vol_loggerf( VOL_GEOM_LOG_TYPE_INFO, "INFO: find_previous_keyframe: frame_idx is %i.\n", frame_idx );
-  _vol_loggerf( VOL_GEOM_LOG_TYPE_INFO, "INFO: find_previous_keyframe: hdr.frame_count is %i.\n", info_ptr->hdr.frame_count );
-  _vol_loggerf( VOL_GEOM_LOG_TYPE_INFO, "INFO: find_previous_keyframe: frame_headers_ptr is %p.\n", info_ptr->frame_headers_ptr );
-  _vol_loggerf( VOL_GEOM_LOG_TYPE_INFO, "INFO: find_previous_keyframe: frame_headers_ptr[frame_idx].keyframe is %i.\n", info_ptr->frame_headers_ptr[frame_idx].keyframe );
-  _vol_loggerf( VOL_GEOM_LOG_TYPE_INFO, "INFO: find_previous_keyframe: frame_headers_ptr[frame_idx].mesh_data_sz is %i.\n", info_ptr->frame_headers_ptr[frame_idx].mesh_data_sz );
-  _vol_loggerf( VOL_GEOM_LOG_TYPE_INFO, "INFO: find_previous_keyframe: frame_headers_ptr[frame_idx].keyframe_number is %i.\n", info_ptr->frame_headers_ptr[frame_idx].keyframe_number );
+  _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "DEBUG: find_previous_keyframe: info_ptr is not NULL.\n" );
+  _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "DEBUG: find_previous_keyframe: frame_idx is %i.\n", frame_idx );
+  _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "DEBUG: find_previous_keyframe: hdr.frame_count is %i.\n", info_ptr->hdr.frame_count );
+  _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "DEBUG: find_previous_keyframe: frame_headers_ptr is %p.\n", info_ptr->frame_headers_ptr );
+  _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "DEBUG: find_previous_keyframe: frame_headers_ptr[frame_idx].keyframe is %i.\n", info_ptr->frame_headers_ptr[frame_idx].keyframe );
+  _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "DEBUG: find_previous_keyframe: frame_headers_ptr[frame_idx].mesh_data_sz is %i.\n", info_ptr->frame_headers_ptr[frame_idx].mesh_data_sz );
+  _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "DEBUG: find_previous_keyframe: frame_headers_ptr[frame_idx].keyframe_number is %i.\n", info_ptr->frame_headers_ptr[frame_idx].keyframe_number );
 
   if ( frame_idx >= info_ptr->hdr.frame_count ) { 
-    _vol_loggerf( VOL_GEOM_LOG_TYPE_INFO, "INFO: find_previous_keyframe: frame_idx is out of bounds.\n" );
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "DEBUG: find_previous_keyframe: frame_idx is out of bounds.\n" );
     return -1; 
   }
-  _vol_loggerf( VOL_GEOM_LOG_TYPE_INFO, "INFO: find_previous_keyframe from mesh_data_sz is %i .\n", info_ptr->frame_headers_ptr[frame_idx].mesh_data_sz );
+  _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "DEBUG: find_previous_keyframe from mesh_data_sz is %i .\n", info_ptr->frame_headers_ptr[frame_idx].mesh_data_sz );
   if ( info_ptr->frame_headers_ptr[frame_idx].mesh_data_sz > 0 ) { 
-    _vol_loggerf( VOL_GEOM_LOG_TYPE_INFO, "INFO: find_previous_keyframe from keyframe_number is %i .\n", info_ptr->frame_headers_ptr[frame_idx].keyframe_number );
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "DEBUG: find_previous_keyframe from keyframe_number is %i .\n", info_ptr->frame_headers_ptr[frame_idx].keyframe_number );
     
     return info_ptr->frame_headers_ptr[frame_idx].keyframe_number;
   }
