@@ -242,8 +242,8 @@ VOL_GEOM_EXPORT typedef struct vol_geom_frame_data_t {
 
 /** In your application these enum values can be used to filter out or categorise messages given by vol_geom_log_callback. */
 typedef enum vol_geom_log_type_t {
-  VOL_GEOM_LOG_TYPE_INFO = 0, //
-  VOL_GEOM_LOG_TYPE_DEBUG,
+  VOL_GEOM_LOG_TYPE_DEBUG = 0, //
+  VOL_GEOM_LOG_TYPE_INFO,
   VOL_GEOM_LOG_TYPE_WARNING,
   VOL_GEOM_LOG_TYPE_ERROR,
   VOL_GEOM_LOG_STR_MAX_LEN // Not an error type, just used to count the error types.

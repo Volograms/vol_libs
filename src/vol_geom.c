@@ -46,6 +46,8 @@ typedef struct vol_geom_file_record_t {
   vol_geom_size_t sz; // Size of file in bytes.
 } vol_geom_file_record_t;
 
+static vol_geom_log_type_t _log_level = VOL_GEOM_LOG_TYPE_INFO;
+
 static void _default_logger( vol_geom_log_type_t log_type, const char* message_str ) {
   FILE* stream_ptr = ( VOL_GEOM_LOG_TYPE_ERROR == log_type || VOL_GEOM_LOG_TYPE_WARNING == log_type ) ? stderr : stdout;
   fprintf( stream_ptr, "%s", message_str );
@@ -56,6 +58,9 @@ static void ( *_logger_ptr )( vol_geom_log_type_t log_type, const char* message_
 // This function is used in this file as a printf-style logger. It converts that format to a simple string and passes it to _logger_ptr.
 static void _vol_loggerf( vol_geom_log_type_t log_type, const char* message_str, ... ) {
   if ( !_logger_ptr ) { return; }
+  if(log_type < _log_level) {
+    return;
+  }
   char log_str[VOL_GEOM_LOG_STR_MAX_LEN];
   log_str[0] = '\0';
   va_list arg_ptr; // using va_args lets us make sure any printf-style formatting values are properly written into the string.
@@ -1233,6 +1238,27 @@ bool vol_geom_update_single_buffer_frames( vol_geom_info_t* info_ptr, uint8_t* b
           free( info_ptr->frame_headers_ptr );
           info_ptr->frame_headers_ptr = NULL;
           return false;
+        }
+      }
+      if ( info_ptr->hdr.audio ) {
+        if(info_ptr->hdr.version < 13 ) {
+          _vol_loggerf( VOL_GEOM_LOG_TYPE_WARNING, "Audio is not supported in this version of the vols format. Disabling audio.\n", info_ptr->hdr.version );
+          info_ptr->hdr.audio = 0;
+        } else {
+          // Read the size of the audio data
+          uint32_t audio_data_sz = 0;
+          memcpy( &audio_data_sz, buffer_to_parse + info_ptr->hdr.audio_start, sizeof( uint32_t ) );
+          info_ptr->audio_data_sz = audio_data_sz;
+          _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Setting audio data size to %u\n", info_ptr->audio_data_sz );
+          // Read the audio data
+          info_ptr->audio_data_ptr = malloc( info_ptr->audio_data_sz );
+          if ( !info_ptr->audio_data_ptr ) {
+            _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: OOM allocating audio data. Disabling audio.\n");
+            info_ptr->hdr.audio = 0;
+            return false;
+          }
+          memcpy( info_ptr->audio_data_ptr, buffer_to_parse + info_ptr->hdr.audio_start + sizeof( uint32_t ), info_ptr->audio_data_sz );
+          _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Copied audio from buffer.\n" );
         }
       }
     } else {
