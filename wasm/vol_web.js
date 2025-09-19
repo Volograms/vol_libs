@@ -149,6 +149,7 @@ Module.fetch_stream_buffer = ((dest, fileUrl, config, onProgress, abortSignal = 
    }
    console.log(`Created circular buffer: ${(Module.get_max_buffer_size() / 1024 / 1024).toFixed(1)}MB capacity`);
    if (useRangeRequests) {
+    response.body.cancel();
     const runRangeLoop = async () => {
      while (true) {
       if (onProgress && fileSize > 0) {

@@ -202,6 +202,8 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 
 				// If using Range requests, run segmented download loop and return
 				if (useRangeRequests) {
+					// We only needed the headers from the initial request, so we can cancel the body download.
+					response.body.cancel();
 					const runRangeLoop = async () => {
 						while (true) {
 							if (onProgress && fileSize > 0) {
