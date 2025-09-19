@@ -96,7 +96,7 @@ const VologramPlayer = (extensions) => {
 			if (enableLogging) {
 				const bufferHealthSeconds = vologram.get_buffer_health_seconds(fps);
 				if (bufferHealthSeconds < 1.0) {
-					console.log(`Low buffer: ${bufferHealthSeconds.toFixed(1)}s remaining`);
+					console.debug(`Low buffer: ${bufferHealthSeconds.toFixed(1)}s remaining`);
 				}
 			}
 		}
@@ -120,7 +120,7 @@ const VologramPlayer = (extensions) => {
 			if (_isBuffering) {
 				const bufferHealthSeconds = vologram.get_buffer_health_seconds(vologram.header.fps);
 				if(bufferHealthSeconds < RESUME_BUFFER_SECONDS) {
-					console.log("Low buffer: ", bufferHealthSeconds.toFixed(1), "s remaining, waiting for buffer to fill.");
+					// console.debug("Low buffer: ", bufferHealthSeconds.toFixed(1), "s remaining, waiting for buffer to fill.");
 					return false;
 				}
 			}
