@@ -45,9 +45,6 @@ const VologramPlayer = (extensions) => {
 				console.log(`Frame ${frameIdx} not available in buffer yet`);
 				return false;
 			}
-			
-			// Note: Dual buffer system automatically manages frame positions
-			
 			// Use streaming frame reader
 			ret = vologram.read_frame_streaming(frameIdx);
 		} else {
@@ -86,7 +83,6 @@ const VologramPlayer = (extensions) => {
 
 	// Unified buffer health monitoring and download control
 	const _updateBufferHealth = (currentFrame, enableLogging = false) => {
-		console.log("Updating buffer health", currentFrame, enableLogging);
 		if (!vologram.isStreamingMode || !vologram._downloadManager) {
 			return; // Not in streaming mode or no download manager
 		}
@@ -122,9 +118,20 @@ const VologramPlayer = (extensions) => {
 			desiredFrameIndex + Math.floor(RESUME_BUFFER_SECONDS * vologram.header.fps)
 		);
 
-		// Always try to update the directory to our buffer goal if buffering, otherwise just for the current frame.
-		const frameReady = vologram.update_frames_directory(_isBuffering ? bufferGoalFrame : desiredFrameIndex);
-		if (!frameReady) return false;
+		if (vologram.isStreamingMode) {
+			// vologram.update_buffer_frame_directory(); // done in pre.js
+			if (_isBuffering) {
+				const bufferHealthSeconds = vologram.get_buffer_health_seconds(vologram.header.fps);
+				if(bufferHealthSeconds < RESUME_BUFFER_SECONDS) {
+					console.log("Low buffer: ", bufferHealthSeconds.toFixed(1), "s remaining, waiting for buffer to fill.");
+					return false;
+				}
+			}
+		} else {
+			// Always try to update the directory to our buffer goal if buffering, otherwise just for the current frame.
+			const frameReady = vologram.update_frames_directory(_isBuffering ? bufferGoalFrame : desiredFrameIndex);
+			if (!frameReady) return false;
+		}
 
 		// Check if the frame we absolutely need right now is available.
 		let keyframeRequired = vologram.find_previous_keyframe(desiredFrameIndex);
@@ -164,6 +171,12 @@ const VologramPlayer = (extensions) => {
 		}
 		// Load actual current frame.
 		const ret = _loadMesh(desiredFrameIndex);
+		if (!ret) return false;
+
+		// Update current frame position for download manager
+		if (vologram.isStreamingMode) {
+			_updateBufferHealth(desiredFrameIndex);
+		}
 		return true;
 	};
 
@@ -308,7 +321,6 @@ const VologramPlayer = (extensions) => {
 				if (initSuccess) {
 					// Log which mode we're using
 					console.log(`Vologram initialized in ${isStreaming ? 'streaming buffer' : 'full download'} mode`);
-					
 					return true;
 				} else {
 					throw new Error("_initVologram failed to open vologram");
@@ -404,14 +416,11 @@ const VologramPlayer = (extensions) => {
 		_timer = 0;
 	};
 
-	const _updateFrameFromVideo = (now, metadata) => {
-		
+	const _updateFrameFromVideo = (now, metadata) => {		
 		if (vologram.header && vologram.header.ready && vologram.attachedVideo) {
 			_getFrameFromSeconds(metadata.mediaTime);
-			console.log("Updating frame from video", _frameFromTime);
 			
 			// Unified buffer health monitoring
-			_updateBufferHealth(_frameFromTime);
 			
 			_updateMeshFrameAllowingSkip(_frameFromTime);
 			vologram.lastUpdateTime = metadata.mediaTime;
@@ -419,13 +428,10 @@ const VologramPlayer = (extensions) => {
 		_frameRequestId = vologram.attachedVideo.requestVideoFrameCallback(_updateFrameFromVideo); // Re-register the callback to be notified about the next frame.
 	};
 
-	const _updateFrameFromTimer = (now) => {
-		
+	const _updateFrameFromTimer = (now) => {		
 		_timeTick(now);
 		if ((!_timerPaused || _isBuffering) && vologram.header && vologram.header.ready) {
 			// Unified buffer health monitoring (with debug logging enabled for timer mode)
-			console.log("Updating frame from timer", _frameFromTime);
-			_updateBufferHealth(_frameFromTime, true);
 			
 			_updateMeshFrameAllowingSkip(_frameFromTime);
 			vologram.lastUpdateTime = _timer / 1000;
@@ -434,13 +440,9 @@ const VologramPlayer = (extensions) => {
 	};
 
 	const _updateFrameFromAudio = () => {
-		
 		if (vologram.header && vologram.header.ready && vologram.attachedAudio) {
 			_getFrameFromSeconds(vologram.attachedAudio.currentTime);
-			console.log("Updating frame from audio", _frameFromTime);
-			// Unified buffer health monitoring (audio uses frame - 1)
 			const targetFrame = Math.max(0, _frameFromTime - 1);
-			_updateBufferHealth(targetFrame);
 			
 			_updateMeshFrameAllowingSkip(targetFrame);
 			vologram.lastUpdateTime = vologram.attachedAudio.currentTime;

@@ -41,10 +41,7 @@ const VologramPlayer = (extensions) => {
 				// Frame not available in buffer yet
 				console.log(`Frame ${frameIdx} not available in buffer yet`);
 				return false;
-			}
-			
-			// Note: Dual buffer system automatically manages frame positions
-			
+			}			
 			// Use streaming frame reader
 			ret = vologram.read_frame_streaming(frameIdx);
 		} else {
@@ -118,9 +115,20 @@ const VologramPlayer = (extensions) => {
 			desiredFrameIndex + Math.floor(RESUME_BUFFER_SECONDS * vologram.header.fps)
 		);
 
-		// Always try to update the directory to our buffer goal if buffering, otherwise just for the current frame.
-		const frameReady = vologram.update_frames_directory(_isBuffering ? bufferGoalFrame : desiredFrameIndex);
-		if (!frameReady) return false;
+		if (vologram.isStreamingMode) {
+			// vologram.update_buffer_frame_directory(); // done in pre.js
+			if (_isBuffering) {
+				const bufferHealthSeconds = vologram.get_buffer_health_seconds(vologram.header.fps);
+				if(bufferHealthSeconds < RESUME_BUFFER_SECONDS) {
+					console.log("Low buffer: ", bufferHealthSeconds.toFixed(1), "s remaining, waiting for buffer to fill.");
+					return false;
+				}
+			}
+		} else {
+			// Always try to update the directory to our buffer goal if buffering, otherwise just for the current frame.
+			const frameReady = vologram.update_frames_directory(_isBuffering ? bufferGoalFrame : desiredFrameIndex);
+			if (!frameReady) return false;
+		}
 
 		// Check if the frame we absolutely need right now is available.
 		let keyframeRequired = vologram.find_previous_keyframe(desiredFrameIndex);
@@ -160,6 +168,12 @@ const VologramPlayer = (extensions) => {
 		}
 		// Load actual current frame.
 		const ret = _loadMesh(desiredFrameIndex);
+		if (!ret) return false;
+
+		// Update current frame position for download manager
+		if (vologram.isStreamingMode) {
+			_updateBufferHealth(desiredFrameIndex);
+		}
 		return true;
 	};
 
@@ -168,10 +182,13 @@ const VologramPlayer = (extensions) => {
 
 		if (vologram.isStreamingMode) {
 			// NEW: Direct streaming initialization from buffer data
+			console.log("Creating streaming file info from buffer data");
 			ret = vologram.create_streaming_file_info();
 		} else if (vologram.header.singleFile) {
+			console.log("Creating single file info from file");
 			ret = vologram.create_single_file_info("vologram.vols");
 		} else {
+			console.log("Creating file info from header and sequence files");
 			ret = vologram.create_file_info("header.vols", "sequence.vols");
 		}
 
@@ -295,6 +312,7 @@ const VologramPlayer = (extensions) => {
 				// Store streaming mode flag
 				const isStreaming = downloadManager.isStreamingMode();
 				vologram.isStreamingMode = isStreaming;
+				console.log(`Vologram initialized in ${isStreaming ? 'streaming buffer' : 'full download'} mode`);
 
 				const initSuccess = _initVologram();
 				if (initSuccess) {
@@ -400,7 +418,6 @@ const VologramPlayer = (extensions) => {
 			_getFrameFromSeconds(metadata.mediaTime);
 			
 			// Unified buffer health monitoring
-			_updateBufferHealth(_frameFromTime);
 			
 			_updateMeshFrameAllowingSkip(_frameFromTime);
 			vologram.lastUpdateTime = metadata.mediaTime;
@@ -412,7 +429,6 @@ const VologramPlayer = (extensions) => {
 		_timeTick(now);
 		if ((!_timerPaused || _isBuffering) && vologram.header && vologram.header.ready) {
 			// Unified buffer health monitoring (with debug logging enabled for timer mode)
-			_updateBufferHealth(_frameFromTime, true);
 			
 			_updateMeshFrameAllowingSkip(_frameFromTime);
 			vologram.lastUpdateTime = _timer / 1000;
@@ -423,10 +439,7 @@ const VologramPlayer = (extensions) => {
 	const _updateFrameFromAudio = () => {
 		if (vologram.header && vologram.header.ready && vologram.attachedAudio) {
 			_getFrameFromSeconds(vologram.attachedAudio.currentTime);
-			
-			// Unified buffer health monitoring (audio uses frame - 1)
 			const targetFrame = Math.max(0, _frameFromTime - 1);
-			_updateBufferHealth(targetFrame);
 			
 			_updateMeshFrameAllowingSkip(targetFrame);
 			vologram.lastUpdateTime = vologram.attachedAudio.currentTime;

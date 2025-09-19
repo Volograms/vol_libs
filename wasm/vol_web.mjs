@@ -211,11 +211,9 @@ Module.fetch_stream_buffer = ((dest, fileUrl, config, onProgress, abortSignal = 
        continue;
       }
       if (Module.update_buffer_frame_directory) {
-       console.log("runRangeLoop: Update buffer frame directory.");
        Module.update_buffer_frame_directory();
       }
       seekLocation += len;
-      console.log("runRangeLoop: Seek location incremented, continuing.");
       if (!headerResolved && seekLocation > (config.headerThreshold || 5 * 1024 * 1024)) {
        console.log("runRangeLoop: Header resolved, resolving header loaded promise.");
        Module.headerFetched = true;
@@ -258,6 +256,7 @@ Module.fetch_stream_buffer = ((dest, fileUrl, config, onProgress, abortSignal = 
  }).finally(() => {
   if (!bufferMode && typeof fileStream !== "undefined" && fileStream) {
    Module.FS.close(fileStream);
+   fileStream = null;
   }
   console.log("finally: Download finished.");
   console.log("finally: file fetched:", Module.fileFetched);
@@ -283,9 +282,6 @@ Module.fetch_stream_buffer = ((dest, fileUrl, config, onProgress, abortSignal = 
   isPaused: () => downloadPaused,
   setCurrentFrame: frame => {
    currentFrame = frame;
-   try {
-    if (console && console.debug) console.debug(`[stream] setCurrentFrame=${currentFrame}`);
-   } catch (e) {}
    if (downloadPaused && bufferMode) {
     try {
      if (Module.should_resume_download) {

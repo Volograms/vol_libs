@@ -265,12 +265,12 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 							}
 
 							if (Module.update_buffer_frame_directory) {
-								console.log('runRangeLoop: Update buffer frame directory.');
+								// console.log('runRangeLoop: Update buffer frame directory.');
 								Module.update_buffer_frame_directory();
 							}
 
 							seekLocation += len;
-							console.log('runRangeLoop: Seek location incremented, continuing.');
+							// console.log('runRangeLoop: Seek location incremented, continuing.');
 
 							if (!headerResolved && seekLocation > (config.headerThreshold || 5*1024*1024)) {
 								console.log('runRangeLoop: Header resolved, resolving header loaded promise.');
@@ -331,6 +331,7 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 			// Clean up file stream for non-streaming mode
 			if (!bufferMode && typeof fileStream !== 'undefined' && fileStream) {
 				Module.FS.close(fileStream);
+				fileStream = null;
 			}
 			console.log('finally: Download finished.');
 			console.log('finally: file fetched:', Module.fileFetched);
@@ -357,7 +358,7 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 		setCurrentFrame: (frame) => {
 			currentFrame = frame;
 			// Debug: trace playback advancement
-			try { if (console && console.debug) console.debug(`[stream] setCurrentFrame=${currentFrame}`); } catch (e) {}
+			// try { if (console && console.debug) console.debug(`[stream] setCurrentFrame=${currentFrame}`); } catch (e) {}
 			// If download is paused due to capacity, try to compact and resume when playback advances
 			if (downloadPaused && bufferMode) {
 				try {
