@@ -94,11 +94,16 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 				_glFmt,
 				three.UnsignedByteType
 			);
-			objs.texture.matrixAutoUpdate = false;
-			let m = new three.Matrix3();
-			m.makeScale(1, -1);
-			m.translate(0, 1);
-			objs.texture.matrix = m;
+					objs.texture.matrixAutoUpdate = false;
+		// Create a matrix to flip Y coordinate and translate
+		// Matrix3 doesn't have makeScale, so we set the elements directly
+		let m = new three.Matrix3();
+		m.set(
+			1, 0, 0,    // scale X = 1, no shear
+			0, -1, 1,   // scale Y = -1 (flip), translate Y = 1
+			0, 0, 1     // homogeneous coordinate
+		);
+		objs.texture.matrix = m;
 			objs.texture.colorSpace = three.SRGBColorSpace;
 			objs.texture.minFilter = three.LinearFilter;
 			objs.texture.needsUpdate = true;
