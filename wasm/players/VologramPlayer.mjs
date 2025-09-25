@@ -18,6 +18,8 @@ const VologramPlayer = (extensions) => {
 	let vologram = {};
 	let _isBuffering = false;
 	let _wasPlayingBeforeBuffering = false;
+	let _xrSession = null;
+	let _rafSource = "window";
 
 	// AbortController for canceling fetch requests
 	let _downloadController = null;
@@ -32,6 +34,60 @@ const VologramPlayer = (extensions) => {
 		onclose: [],
 		onended: [],
 		onbuffering: [],
+	};
+
+	// Prefer XRSession rAF when available (e.g., Oculus/Quest in immersive VR)
+	const _requestAnimationFrameAny = (callback) => {
+		if (_xrSession && typeof _xrSession.requestAnimationFrame === "function") {
+			_rafSource = "xr";
+			return _xrSession.requestAnimationFrame(callback);
+		}
+		_rafSource = "window";
+		return requestAnimationFrame(callback);
+	};
+
+	const _cancelAnimationFrameAny = (id) => {
+		if (!id) return;
+		try {
+			if (_rafSource === "xr" && _xrSession && typeof _xrSession.cancelAnimationFrame === "function") {
+				_xrSession.cancelAnimationFrame(id);
+			} else {
+				cancelAnimationFrame(id);
+			}
+		} catch (e) {
+			// no-op; best-effort cancel
+		}
+	};
+
+	const _rescheduleFrameLoop = () => {
+		if (_frameRequestId && !vologram.attachedVideo) {
+			_cancelAnimationFrameAny(_frameRequestId);
+			_frameRequestId = null;
+		}
+		switch (_playbackMode) {
+			case PB_TIMER:
+				_frameRequestId = _requestAnimationFrameAny(_updateFrameFromTimer);
+				break;
+			case PB_AUDIO:
+				_frameRequestId = _requestAnimationFrameAny(_updateFrameFromAudio);
+				break;
+			default:
+				break;
+		}
+	};
+
+	const _setXRSession = (session) => {
+		_xrSession = session || null;
+		_rescheduleFrameLoop();
+		if (_xrSession && typeof _xrSession.addEventListener === "function") {
+			const onEnd = () => {
+				if (!_xrSession) return;
+				_xrSession.removeEventListener("end", onEnd);
+				_xrSession = null;
+				_rescheduleFrameLoop();
+			};
+			_xrSession.addEventListener("end", onEnd);
+		}
 	};
 
 	const _loadMesh = (frameIdx) => {
@@ -252,7 +308,7 @@ const VologramPlayer = (extensions) => {
 			_playbackMode = PB_AUDIO;
 		} else {
 			_playbackMode = PB_TIMER;
-			_frameRequestId = requestAnimationFrame(_updateFrameFromTimer);
+			_frameRequestId = _requestAnimationFrameAny(_updateFrameFromTimer);
 		}
 	};
 
@@ -436,7 +492,7 @@ const VologramPlayer = (extensions) => {
 			_updateMeshFrameAllowingSkip(_frameFromTime);
 			vologram.lastUpdateTime = _timer / 1000;
 		}
-		_frameRequestId = requestAnimationFrame(_updateFrameFromTimer);
+		_frameRequestId = _requestAnimationFrameAny(_updateFrameFromTimer);
 	};
 
 	const _updateFrameFromAudio = () => {
@@ -447,7 +503,7 @@ const VologramPlayer = (extensions) => {
 			_updateMeshFrameAllowingSkip(targetFrame);
 			vologram.lastUpdateTime = vologram.attachedAudio.currentTime;
 		}
-		if (vologram.attachedAudio) _frameRequestId = requestAnimationFrame(_updateFrameFromAudio);
+		if (vologram.attachedAudio) _frameRequestId = _requestAnimationFrameAny(_updateFrameFromAudio);
 	};
 
 	const _attachVideo = (videoElement) => {
@@ -472,7 +528,7 @@ const VologramPlayer = (extensions) => {
 			_events.onended.forEach((fn) => fn());
 		});
 		vologram.attachedAudio = audioElement;
-		_frameRequestId = requestAnimationFrame(_updateFrameFromAudio);
+		_frameRequestId = _requestAnimationFrameAny(_updateFrameFromAudio);
 	};
 
 	const _createAudio = () => {
@@ -567,7 +623,7 @@ const VologramPlayer = (extensions) => {
 			_downloadController = null;
 		}
 
-		if (_frameRequestId && !vologram.attachedVideo) cancelAnimationFrame(_frameRequestId);
+		if (_frameRequestId && !vologram.attachedVideo) _cancelAnimationFrameAny(_frameRequestId);
 
 		_timerPaused = true;
 		_timerLooping = false;
@@ -735,6 +791,9 @@ const VologramPlayer = (extensions) => {
 		},
 		get unregisterCallback() {
 			return _unregisterCallback;
+		},
+		get setXRSession() {
+			return _setXRSession;
 		},
 		get extensions() {
 			return _extensionExports;
