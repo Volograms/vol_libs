@@ -146,10 +146,11 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 		resolveHeaderLoaded = resolve;
 	});
 
-	let bufferMode = false;
+    let bufferMode = false;
 	let fileSize = 0;
 	let downloadPaused = false;
 	let currentFrame = 0;
+    let loopStreaming = false; // when true, on EOF continue from frame body start
 
 	// Backpressure gate: when paused, do not call reader.read(); wait here instead
 	let _resumeResolver = null;
@@ -167,7 +168,7 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 	const useRangeRequests = true; //!!(config && (config.useRangeRequests || config.rangeChunkBytes));
 	const rangeChunkBytes = (config && config.rangeChunkBytes) ? config.rangeChunkBytes : (8 * 1024 * 1024);
 
-	const downloadFinishedPromise = fetch(fileUrl, fetchOptions)
+            const downloadFinishedPromise = fetch(fileUrl, fetchOptions)
 		.then(async (response) => {
 			if (!response.ok) {
 				throw new Error(`HTTP error! Status: ${response.status}`);
@@ -204,7 +205,7 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 				if (useRangeRequests) {
 					// We only needed the headers from the initial request, so we can cancel the body download.
 					response.body.cancel();
-					const runRangeLoop = async () => {
+                    const runRangeLoop = async () => {
 						while (true) {
 							if (onProgress && fileSize > 0) {
 								onProgress(seekLocation / fileSize);
@@ -232,13 +233,25 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 								if (downloadPaused) { await _waitForResume(); continue; }
 							}
 
-							if (fileSize > 0 && seekLocation >= fileSize) {
-								// TODO: Uncomment this to loop around, skip header
-								// seekLocation = Module.get_header_frame_body_start(); // to loop around, skip header
-								// console.log('runRangeLoop: Seek location reset, continuing.');
-								// continue;
-								break; // EOF
-							}
+                            if (fileSize > 0 && seekLocation >= fileSize) {
+                                const maxSize = Module.get_max_buffer_size ? Module.get_max_buffer_size() : 0;
+                                const headerStart = Module.get_header_frame_body_start ? Module.get_header_frame_body_start() : 0;
+                                if (loopStreaming) {
+                                    // If the entire file fits in the buffer, no need to re-download; just finish.
+                                    if (maxSize > 0 && fileSize > 0 && maxSize >= fileSize) {
+                                        console.log('runRangeLoop: EOF and file fits buffer. Finishing without re-request.');
+                                        Module.fileFetched = true;
+                                        break;
+                                    }
+                                    // Otherwise, loop by continuing from frame body start (skip header)
+                                    seekLocation = headerStart;
+                                    console.log('runRangeLoop: EOF reached. Looping download from frame body start at', headerStart);
+                                    continue;
+                                } else {
+                                    // No looping: finish normally
+                                    break; // EOF
+                                }
+                            }
 
 							const end = fileSize > 0 ? Math.min(seekLocation + rangeChunkBytes, fileSize) - 1 : (seekLocation + rangeChunkBytes - 1);
 							const headers = { Range: `bytes=${seekLocation}-${end}` };
@@ -253,9 +266,15 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 								break;
 							}
 
-							const dataPtr = Module._malloc(len);
-							Module.HEAP8.set(new Uint8Array(buf), dataPtr);
-							const ok = Module.add_data_to_buffer(dataPtr, len);
+                            const dataPtr = Module._malloc(len);
+                            Module.HEAP8.set(new Uint8Array(buf), dataPtr);
+                            // Debug: log where we intend to write in logical file and ring
+                            try {
+                                const maxSize = Module.get_max_buffer_size ? Module.get_max_buffer_size() : 0;
+                                const usedSize = Module.get_playback_buffer_size ? Module.get_playback_buffer_size() : 0;
+                                if (console && console.debug) console.debug(`[DL_DEBUG] range [${seekLocation}..${seekLocation+len}) -> ring used=${usedSize}/${maxSize}`);
+                            } catch(e) {}
+                            const ok = Module.add_data_to_buffer(dataPtr, len);
 							Module._free(dataPtr);
 							if (!ok) {
 								console.log('runRangeLoop: Add data to buffer failed, pausing download.');
@@ -281,8 +300,8 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 
 							// Fullness handled pre-request; no-op here
 						}
-						console.log('runRangeLoop: Download finished.');
-						Module.fileFetched = true;
+                        console.log('runRangeLoop: Download finished.');
+                        // Module.fileFetched is set on EOF when not looping, or when file fits buffer.
 					};
 
 					return runRangeLoop();
@@ -383,7 +402,8 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 					// noop
 				}
 			}
-		}
+        },
+        setLoopStreaming: (enabled) => { loopStreaming = !!enabled; if (!downloadPaused) return; if (loopStreaming) { _resumeNow(); } }
 	};
 };
 
@@ -689,6 +709,9 @@ Module.initVologramFunctions = (containerObject) => {
 	Module.add_data_to_buffer = insertObject.add_data_to_buffer;
 	Module.update_buffer_frame_directory = insertObject.update_buffer_frame_directory;
 	Module.get_header_frame_body_start = insertObject.get_header_frame_body_start;
+	// Reset directory on discontinuities (loop/seek)
+	insertObject["reset_frame_directory"] = Module.cwrap("reset_frame_directory", null);
+	Module.reset_frame_directory = insertObject.reset_frame_directory;
 	
 	// Dual buffer API functions
 	insertObject["is_download_buffer_full"] = function() {

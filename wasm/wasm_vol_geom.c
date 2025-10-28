@@ -432,6 +432,11 @@ int get_header_frame_body_start( void ) {
   return vol_geom_get_sequence_offset( &_info );
 }
 
+EMSCRIPTEN_KEEPALIVE
+void reset_frame_directory( void ) {
+  vol_geom_reset_frame_directory( &_info );
+}
+
 
 #ifdef __cplusplus
 }

@@ -738,6 +738,12 @@ const VologramPlayer = (extensions) => {
 		if (vologram.attachedVideo) vologram.attachedVideo.loop = newValue;
 		if (vologram.attachedAudio) vologram.attachedAudio.loop = newValue;
 		_timerLooping = newValue;
+		// Propagate loop to streaming downloader so it can wrap at EOF
+		try {
+			if (vologram._downloadManager && typeof vologram._downloadManager.setLoopStreaming === "function") {
+				vologram._downloadManager.setLoopStreaming(!!newValue);
+			}
+		} catch (e) { /* no-op */ }
 	};
 
 	const _getLoop = () => {

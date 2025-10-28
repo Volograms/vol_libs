@@ -316,6 +316,9 @@ VOL_GEOM_EXPORT bool vol_geom_read_frame( const char* seq_filename, vol_geom_inf
 
 VOL_GEOM_EXPORT int vol_geom_get_sequence_offset( const vol_geom_info_t* info_ptr );
 
+// Reset unified frame directory (invalidate all entries). Useful on loop/seek discontinuities.
+VOL_GEOM_EXPORT void vol_geom_reset_frame_directory( vol_geom_info_t* info_ptr );
+
 //
 // ===== STREAMING BUFFER API =====
 // These functions provide enhanced streaming capabilities with circular buffer support.

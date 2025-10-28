@@ -516,6 +516,8 @@ bool vol_geom_read_hdr_from_mem( const uint8_t* data_ptr, uint32_t data_sz, vol_
 
 vol_geom_rhfmem_success:
   *hdr_sz_ptr = offset;
+
+  _vol_loggerf( VOL_GEOM_LOG_TYPE_WARNING, "vol_geom_read_hdr_from_mem: frame start %d\n", hdr_ptr->frame_body_start );
   return true;
 }
 
@@ -866,7 +868,7 @@ VOL_GEOM_EXPORT int vol_geom_get_sequence_offset( const vol_geom_info_t* info_pt
     return 0;
   }
   // should be the same as info_ptr->hdr.frame_body_start
-  return info_ptr->sequence_offset;
+  return (int)info_ptr->sequence_offset;
 }
 
 //
@@ -1072,6 +1074,7 @@ bool vol_geom_add_data_to_buffer( vol_geom_info_t* info_ptr, const uint8_t* data
   }
 
   // Compute tail offset and perform up to two segment writes
+  vol_geom_size_t file_pos_before = buffer_state->file_pos;
   vol_geom_size_t tail_offset = ( buffer_state->head_offset + buffer_state->data_size ) % buffer_state->ring_capacity;
   vol_geom_size_t first_seg   = data_size;
   vol_geom_size_t tail_room   = buffer_state->ring_capacity - tail_offset;
@@ -1087,6 +1090,10 @@ bool vol_geom_add_data_to_buffer( vol_geom_info_t* info_ptr, const uint8_t* data
   }
   buffer_state->data_size += data_size;
   buffer_state->file_pos += data_size;
+
+  _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG,
+    "FILE_WRITE_DEBUG: file[%" PRId64 "..%" PRId64 ") -> ring tail=%" PRId64 ", head=%" PRId64 ", used=%" PRId64 ", cap=%" PRId64 ", wrote=%" PRId64 "+%" PRId64 "\n",
+    file_pos_before, buffer_state->file_pos, tail_offset, buffer_state->head_offset, buffer_state->data_size, buffer_state->ring_capacity, first_seg, remaining );
 
   _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Added %" PRId64 " bytes to ring. Now %" PRId64 "/%" PRId64 ". file_pos=%" PRId64 "\n",
     data_size, buffer_state->data_size, buffer_state->ring_capacity, buffer_state->file_pos );
@@ -1304,6 +1311,15 @@ bool vol_geom_update_single_buffer_frames( vol_geom_info_t* info_ptr, uint8_t* b
     memcpy( &frame_header.mesh_data_sz, header_buf + sizeof(uint32_t), sizeof(uint32_t) );
     frame_header.keyframe = header_buf[sizeof(uint32_t) + sizeof(uint32_t)];
     frame_header.keyframe_number = 0;
+
+    if ( frame_header.frame_number == 0 ) {
+      vol_geom_size_t physical_parse = ( buffer_state->head_offset + parse_pos ) % buffer_state->ring_capacity;
+      _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG,
+        "LOOP_PARSE_DEBUG: f=0 parse_pos=%" PRId64 " phys=%" PRId64 ", head=%" PRId64 ", used=%" PRId64 ", cap=%" PRId64 ", hdr_bytes=[%u %u %u %u %u %u %u %u %u]\n",
+        parse_pos, physical_parse, buffer_state->head_offset, buffer_state->data_size, buffer_state->ring_capacity,
+        (unsigned)header_buf[0], (unsigned)header_buf[1], (unsigned)header_buf[2], (unsigned)header_buf[3],
+        (unsigned)header_buf[4], (unsigned)header_buf[5], (unsigned)header_buf[6], (unsigned)header_buf[7], (unsigned)header_buf[8] );
+    }
     if ( frame_header.mesh_data_sz == 0 || frame_header.keyframe > 2 || frame_header.mesh_data_sz > 100 * 1024 * 1024 ) {
       _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: Parsed frame %u has invalid header: mesh=%u key=%u\n",
         frame_header.frame_number, frame_header.mesh_data_sz, frame_header.keyframe );
@@ -1533,57 +1549,52 @@ bool vol_geom_swap_buffers( vol_geom_info_t* info_ptr ) {
   }
 
   // Find the last valid frame strictly before the keyframe we need to keep
-  int32_t boundary_frame = -1;
-  for ( uint32_t f = keep_from_frame - 1; f < info_ptr->hdr.frame_count; --f ) { // underflow protection
-    if ( info_ptr->frames_directory_ptr[f].total_sz > 0 ) {
-      boundary_frame = (int32_t)f;
-      break;
+  // Anchor-based boundary: keep current playback frame and everything after it.
+  vol_geom_size_t boundary_offset = -1;
+  uint32_t lpf = buffer_state->last_playback_frame;
+  if ( lpf < info_ptr->hdr.frame_count && info_ptr->frames_directory_ptr[lpf].total_sz > 0 ) {
+    boundary_offset = info_ptr->frames_directory_ptr[lpf].offset_sz;
+  } else {
+    // Fallback: pick the smallest offset among frames at or after lpf; if none, skip compaction.
+    for ( uint32_t i = lpf; i < info_ptr->hdr.frame_count; ++i ) {
+      if ( info_ptr->frames_directory_ptr[i].total_sz > 0 ) {
+        vol_geom_size_t off = info_ptr->frames_directory_ptr[i].offset_sz;
+        if ( boundary_offset < 0 || off < boundary_offset ) { boundary_offset = off; }
+      }
     }
-    if ( f == 0 ) break; // prevent underflow
-  }
-  
-  if ( boundary_frame < 0 ) {
-    _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "No boundary frame found for keep_from_frame=%u, last_playback_frame=%u, keyframe_number=%i\n", keep_from_frame, buffer_state->last_playback_frame, info_ptr->frame_headers_ptr[buffer_state->last_playback_frame].keyframe_number );
-    return false; // nothing safe to evict yet
+    if ( boundary_offset < 0 ) {
+      _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "COMPACT_DEBUG: no anchor available (lpf=%u); skipping compaction.\n", lpf );
+      return false;
+    }
   }
 
-  // Calculate logical boundary end and evicted bytes
-  vol_geom_size_t boundary_offset = info_ptr->frames_directory_ptr[boundary_frame].offset_sz + 
-                                   info_ptr->frames_directory_ptr[boundary_frame].total_sz;
-  
-  _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "COMPACT_DEBUG: boundary_frame=%d, boundary_offset=%" PRId64 ", head_offset=%" PRId64 "\n", 
-    boundary_frame, boundary_offset, buffer_state->head_offset );
-
-  if ( boundary_offset <= 0 || boundary_offset > buffer_state->data_size ) {
-    _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Boundary end out of range: %" PRId64 "\n", boundary_offset );
-    return false;
-  }
-  
-  vol_geom_size_t evicted_bytes = boundary_offset;
+  _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "COMPACT_DEBUG: anchor_frame=%u, boundary_offset=%" PRId64 ", head_offset=%" PRId64 "\n", 
+    lpf, boundary_offset, buffer_state->head_offset );
 
   // Perform logical eviction: advance head, reduce data_size, update file position
-  buffer_state->head_offset = (buffer_state->head_offset + evicted_bytes) % buffer_state->ring_capacity;
-  buffer_state->head_file_pos += evicted_bytes;
-  buffer_state->data_size -= evicted_bytes;
-  buffer_state->parse_pos = (buffer_state->parse_pos - evicted_bytes >= 0) ?  buffer_state->parse_pos - evicted_bytes : 0;
+  buffer_state->head_offset = (buffer_state->head_offset + boundary_offset) % buffer_state->ring_capacity;
+  buffer_state->head_file_pos += boundary_offset;
+  buffer_state->data_size -= boundary_offset;
+  buffer_state->parse_pos = (buffer_state->parse_pos - boundary_offset >= 0) ?  buffer_state->parse_pos - boundary_offset : 0;
   
-  // Invalidate all frames before keep_from_frame in unified directory
+  
+  // Rebase all frame offsets and invalidate those now <0 (were in evicted region)
   uint32_t kept_frames = 0;
-  for ( uint32_t i = 0; i < keep_from_frame && i < info_ptr->hdr.frame_count; i++ ) {
-    info_ptr->frames_directory_ptr[i].total_sz = 0;
-    info_ptr->frame_headers_ptr[i].mesh_data_sz = 0;
-  }
-  
-  // Rebase remaining frame offsets and find the new logical start for the parser
-  for ( uint32_t i = keep_from_frame; i < info_ptr->hdr.frame_count; i++ ) {
+  for ( uint32_t i = 0; i < info_ptr->hdr.frame_count; i++ ) {
     if ( info_ptr->frames_directory_ptr[i].total_sz > 0 ) {
-      info_ptr->frames_directory_ptr[i].offset_sz -= evicted_bytes;
-      kept_frames++;
+      info_ptr->frames_directory_ptr[i].offset_sz -= boundary_offset;
+      if ( info_ptr->frames_directory_ptr[i].offset_sz < 0 ) {
+        // Was fully in evicted region - invalidate
+        info_ptr->frames_directory_ptr[i].total_sz = 0;
+        info_ptr->frame_headers_ptr[i].mesh_data_sz = 0;
+      } else {
+        kept_frames++;
+      }
     }
   }
 
-  _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "COMPACT_DEBUG: evicted=%" PRId64 " bytes, kept=%u frames from frame %u, head_off=%" PRId64 ", used=%" PRId64 ", new_parse_pos=%" PRId64 "\n",
-    evicted_bytes, kept_frames, keep_from_frame, buffer_state->head_offset, buffer_state->data_size, buffer_state->parse_pos );
+  _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "COMPACT_DEBUG: evicted=%" PRId64 " bytes, kept=%u frames (offset-based), head_off=%" PRId64 ", used=%" PRId64 ", new_parse_pos=%" PRId64 "\n",
+    boundary_offset, kept_frames, buffer_state->head_offset, buffer_state->data_size, buffer_state->parse_pos );
 
   return true;
 }
@@ -1666,6 +1677,15 @@ bool vol_geom_create_streaming_file_info( vol_geom_info_t* info_ptr ) {
     frames_available, info_ptr->hdr.frame_count );
   
   return frames_available > 0; // Success if we have at least some frames
+}
+
+void vol_geom_reset_frame_directory( vol_geom_info_t* info_ptr ) {
+  if ( !info_ptr || !info_ptr->frames_directory_ptr || !info_ptr->frame_headers_ptr ) { return; }
+  for ( uint32_t i = 0; i < info_ptr->hdr.frame_count; ++i ) {
+    info_ptr->frames_directory_ptr[i].total_sz = 0;
+    info_ptr->frame_headers_ptr[i].mesh_data_sz = 0;
+  }
+  _vol_loggerf( VOL_GEOM_LOG_TYPE_WARNING, "Frame directory reset for new loop\n" );
 }
 
 
