@@ -67,14 +67,9 @@ bool create_single_file_info( const char* vol_filename ) {
   return vol_geom_create_file_info_from_file( vol_filename, &_info );
 }
 
-EMSCRIPTEN_KEEPALIVE
-bool free_file_info( void ) { return vol_geom_free_file_info( &_info ); }
 
 EMSCRIPTEN_KEEPALIVE
 int32_t frame_count( void ) { return (int32_t)_info.hdr.frame_count; }
-
-EMSCRIPTEN_KEEPALIVE
-int32_t loaded_frame_number( void ) { return _info.frame_headers_ptr->frame_number; }
 
 EMSCRIPTEN_KEEPALIVE
 bool read_frame( int frame_idx ) {
@@ -145,16 +140,39 @@ EMSCRIPTEN_KEEPALIVE
 uint32_t frame_vp_offset( void ) { return _frame_data.vertices_offset; }
 
 static float* vp_ptr;
-static size_t prev_vp_ptr_sz;
+static size_t prev_vp_ptr_sz = 0;
 
 static float* vt_ptr;
-static size_t prev_vt_ptr_sz;
+static size_t prev_vt_ptr_sz = 0;
 
 static float* vn_ptr;
-static size_t prev_vn_ptr_sz;
+static size_t prev_vn_ptr_sz = 0;
 
 static uint16_t* indices_ptr;
-static size_t prev_indices_ptr_sz;
+static size_t prev_indices_ptr_sz = 0;
+
+EMSCRIPTEN_KEEPALIVE
+bool free_file_info( void ) { 
+  if(prev_vp_ptr_sz > 0) {
+    prev_vp_ptr_sz = 0;
+    free(vp_ptr);
+  }
+  if(prev_vt_ptr_sz > 0) {
+    prev_vt_ptr_sz = 0;
+    free(vt_ptr);
+  }
+  if(prev_vn_ptr_sz > 0) {
+    prev_vn_ptr_sz = 0;
+    free(vn_ptr);
+  }
+  if(prev_indices_ptr_sz > 0) {
+    prev_indices_ptr_sz = 0;
+    free(indices_ptr);
+  }
+  return vol_geom_free_file_info( &_info ); 
+}
+
+
 
 EMSCRIPTEN_KEEPALIVE
 float* frame_vp_copied( void ) {
@@ -328,10 +346,10 @@ int is_frame_available_in_buffer( int frame_idx ) {
   return vol_geom_is_frame_available_in_buffer( &_info, frame_idx ) ? 1 : 0;
 }
 
-EMSCRIPTEN_KEEPALIVE
-int get_buffer_health_bytes( void ) {
-  return (int)vol_geom_get_buffer_health_bytes( &_info );
-}
+// EMSCRIPTEN_KEEPALIVE
+// int get_buffer_health_bytes( void ) {
+//   return (int)vol_geom_get_buffer_health_bytes( &_info );
+// }
 
 EMSCRIPTEN_KEEPALIVE
 float get_buffer_health_seconds( float fps ) {
@@ -411,7 +429,7 @@ int create_streaming_file_info( void ) {
 
 EMSCRIPTEN_KEEPALIVE
 int get_header_frame_body_start( void ) {
-  return vol_geom_get_header_frame_body_start( &_info );
+  return vol_geom_get_sequence_offset( &_info );
 }
 
 

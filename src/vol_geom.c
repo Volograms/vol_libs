@@ -268,7 +268,8 @@ static bool _build_frame_directory_from_file( FILE* f_ptr, vol_geom_info_t* info
   } else {
     // find keyframe. We are building directory sequentially so we can go back, those records should exist.
     // int ret = vol_geom_find_previous_keyframe(info_ptr, frame_idx);
-    int ret = info_ptr->frame_headers_ptr[frame_idx-1].keyframe_number;
+    uint32_t pre_frame_idx = (frame_idx > 0)? frame_idx-1: frame_idx;
+    int ret = info_ptr->frame_headers_ptr[pre_frame_idx].keyframe_number;
     if (ret >= 0 ) {
       frame_hdr.keyframe_number = ret;
     } else {
@@ -463,7 +464,11 @@ bool vol_geom_read_hdr_from_mem( const uint8_t* data_ptr, uint32_t data_sz, vol_
   memcpy( &hdr_ptr->frame_count, &data_ptr[offset], sizeof( uint32_t ) );
   offset += (vol_geom_size_t)sizeof( uint32_t );
   // Parse v1.1 part of header.
-  if ( hdr_ptr->version < 11 ) { goto vol_geom_rhfmem_success; }
+  if ( hdr_ptr->version < 11 ) { 
+    // Set frame_body_start to the end of the header
+    hdr_ptr->frame_body_start = offset;
+    goto vol_geom_rhfmem_success; 
+  }
   const vol_geom_size_t v11_section_sz = (vol_geom_size_t)( 3 * sizeof( uint16_t ) + 2 * sizeof( uint8_t ) );
   if ( offset + v11_section_sz > data_sz ) { return false; } // OOB
   hdr_ptr->normals  = (bool)data_ptr[offset++];
@@ -506,6 +511,8 @@ bool vol_geom_read_hdr_from_mem( const uint8_t* data_ptr, uint32_t data_sz, vol_
   offset += 4 * sizeof( float );
   memcpy( &hdr_ptr->scale, &data_ptr[offset], sizeof( float ) );
   offset += sizeof( float );
+  // Set frame_body_start to the end of the header
+  hdr_ptr->frame_body_start = offset;
 
 vol_geom_rhfmem_success:
   *hdr_sz_ptr = offset;
@@ -663,6 +670,11 @@ bool vol_geom_is_keyframe( const vol_geom_info_t* info_ptr, uint32_t frame_idx )
 int vol_geom_find_previous_keyframe( const vol_geom_info_t* info_ptr, uint32_t frame_idx ) {
   assert( info_ptr );
   if ( !info_ptr ) { return -1; }
+  if ( !(info_ptr->frame_headers_ptr) ) { return -1; }
+  if ( frame_idx < 0 || frame_idx >= info_ptr->hdr.frame_count ) { 
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "DEBUG: find_previous_keyframe: frame_idx is out of bounds.\n" );
+    return -1; 
+  }
   _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "DEBUG: find_previous_keyframe: info_ptr is not NULL.\n" );
   _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "DEBUG: find_previous_keyframe: frame_idx is %i.\n", frame_idx );
   _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "DEBUG: find_previous_keyframe: hdr.frame_count is %i.\n", info_ptr->hdr.frame_count );
@@ -670,15 +682,9 @@ int vol_geom_find_previous_keyframe( const vol_geom_info_t* info_ptr, uint32_t f
   _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "DEBUG: find_previous_keyframe: frame_headers_ptr[frame_idx].keyframe is %i.\n", info_ptr->frame_headers_ptr[frame_idx].keyframe );
   _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "DEBUG: find_previous_keyframe: frame_headers_ptr[frame_idx].mesh_data_sz is %i.\n", info_ptr->frame_headers_ptr[frame_idx].mesh_data_sz );
   _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "DEBUG: find_previous_keyframe: frame_headers_ptr[frame_idx].keyframe_number is %i.\n", info_ptr->frame_headers_ptr[frame_idx].keyframe_number );
-
-  if ( frame_idx >= info_ptr->hdr.frame_count ) { 
-    _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "DEBUG: find_previous_keyframe: frame_idx is out of bounds.\n" );
-    return -1; 
-  }
   _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "DEBUG: find_previous_keyframe from mesh_data_sz is %i .\n", info_ptr->frame_headers_ptr[frame_idx].mesh_data_sz );
   if ( info_ptr->frame_headers_ptr[frame_idx].mesh_data_sz > 0 ) { 
     _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "DEBUG: find_previous_keyframe from keyframe_number is %i .\n", info_ptr->frame_headers_ptr[frame_idx].keyframe_number );
-    
     return info_ptr->frame_headers_ptr[frame_idx].keyframe_number;
   }
   return -1;
@@ -686,7 +692,8 @@ int vol_geom_find_previous_keyframe( const vol_geom_info_t* info_ptr, uint32_t f
 
 bool vol_geom_update_frames_directory( const char* seq_filename, vol_geom_info_t* info_ptr, uint32_t frame_idx) {
   
-  if(frame_idx < 0) return false;
+  if ( !info_ptr || !(info_ptr->frame_headers_ptr) ) { return false; }
+  if(frame_idx >= info_ptr->hdr.frame_count) return false;
 
   // early exit if we have a directory record
   if(info_ptr->frame_headers_ptr[frame_idx].mesh_data_sz != 0) return true;
@@ -707,7 +714,7 @@ bool vol_geom_update_frames_directory( const char* seq_filename, vol_geom_info_t
   vol_geom_size_t biggest_frame_blob_sz = info_ptr->biggest_frame_blob_sz;
 
   // Find the last frame that has a good directory item and start filling it until we reach curent frame
-  uint32_t last_idx = frame_idx - 1;
+  int32_t last_idx = (frame_idx == 0)? frame_idx: frame_idx - 1;
   for(; last_idx >= 0; --last_idx ) {
     if(info_ptr->frame_headers_ptr[last_idx].mesh_data_sz != 0) {
       break;
@@ -715,7 +722,7 @@ bool vol_geom_update_frames_directory( const char* seq_filename, vol_geom_info_t
   }
 
   // move to the end of a known directory record
-  vol_geom_size_t last_offset_end = ((int)last_idx < 0)? info_ptr->sequence_offset : \
+  vol_geom_size_t last_offset_end = (last_idx < 0)? info_ptr->sequence_offset : \
                               info_ptr->frames_directory_ptr[last_idx].offset_sz + info_ptr->frames_directory_ptr[last_idx].total_sz;
 
   if ( 0 != vol_geom_fseeko( f_ptr, last_offset_end, SEEK_SET ) ) {
@@ -854,13 +861,12 @@ bool vol_geom_read_frame( const char* seq_filename,  vol_geom_info_t* info_ptr, 
   return true;
 }
 
-VOL_GEOM_EXPORT int vol_geom_get_header_frame_body_start( const vol_geom_info_t* info_ptr ) {
-  if ( !info_ptr ) {
+VOL_GEOM_EXPORT int vol_geom_get_sequence_offset( const vol_geom_info_t* info_ptr ) {
+  if ( !info_ptr || info_ptr->sequence_offset == 0 ) {
     return 0;
   }
-  // TODO: not correct, needs to be calculated for every version of the header
-  int hdr_sz = sizeof(vol_geom_file_hdr_t); 
-  return info_ptr->hdr.frame_body_start ? info_ptr->hdr.frame_body_start : hdr_sz;
+  // should be the same as info_ptr->hdr.frame_body_start
+  return info_ptr->sequence_offset;
 }
 
 //
@@ -1100,14 +1106,14 @@ bool vol_geom_is_frame_available_in_buffer( const vol_geom_info_t* info_ptr, uin
   return info_ptr->frames_directory_ptr[frame_idx].total_sz > 0;
 }
 
-vol_geom_size_t vol_geom_get_buffer_health_bytes( const vol_geom_info_t* info_ptr ) {
-  if ( !info_ptr || !info_ptr->streaming_buffer_ptr ) {
-    return 0; // Not in streaming mode or buffer not initialized
-  }
+// vol_geom_size_t vol_geom_get_buffer_health_bytes( const vol_geom_info_t* info_ptr ) {
+//   if ( !info_ptr || !info_ptr->streaming_buffer_ptr ) {
+//     return 0; // Not in streaming mode or buffer not initialized
+//   }
 
-  const vol_geom_buffer_state_t* buffer_state = info_ptr->streaming_buffer_ptr;
-  return buffer_state->data_size - (info_ptr->sequence_offset ? info_ptr->sequence_offset : 0);
-}
+//   const vol_geom_buffer_state_t* buffer_state = info_ptr->streaming_buffer_ptr;
+//   return buffer_state->data_size - (info_ptr->sequence_offset ? info_ptr->sequence_offset : 0);
+// }
 
 float vol_geom_get_buffer_health_seconds( const vol_geom_info_t* info_ptr, float fps ) {
   if ( !info_ptr || !info_ptr->streaming_buffer_ptr || fps <= 0.0f ) {
@@ -1220,7 +1226,7 @@ bool vol_geom_update_single_buffer_frames( vol_geom_info_t* info_ptr, uint8_t* b
     
     if ( vol_geom_read_hdr_from_mem( buffer_to_parse, (uint32_t)buffer_data_size, &temp_hdr, &hdr_sz ) ) {
       info_ptr->hdr = temp_hdr;
-      info_ptr->sequence_offset = temp_hdr.frame_body_start ? temp_hdr.frame_body_start : hdr_sz;
+      info_ptr->sequence_offset = temp_hdr.frame_body_start ? temp_hdr.frame_body_start : hdr_sz; // audio can be after header and before frames
       _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Parsed main header from buffer %s. Sequence starts at offset: %" PRId64 "\n", buffer_name, info_ptr->sequence_offset );
       
       // Allocate unified directory arrays now that we know frame_count
@@ -1257,8 +1263,12 @@ bool vol_geom_update_single_buffer_frames( vol_geom_info_t* info_ptr, uint8_t* b
             info_ptr->hdr.audio = 0;
             return false;
           }
-          memcpy( info_ptr->audio_data_ptr, buffer_to_parse + info_ptr->hdr.audio_start + sizeof( uint32_t ), info_ptr->audio_data_sz );
-          _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Copied audio from buffer.\n" );
+          // Check the loaded buffer size before reading the audio data
+          // TODO: this is not ideal, if the audio is larger we should check later again to read it after we have buffered it fully.
+          if (info_ptr->hdr.audio_start + sizeof(uint32_t) + info_ptr->audio_data_sz <= buffer_data_size) {
+            memcpy( info_ptr->audio_data_ptr, buffer_to_parse + info_ptr->hdr.audio_start + sizeof( uint32_t ), info_ptr->audio_data_sz );
+            _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Copied audio from buffer.\n" );
+          }
         }
       }
     } else {
@@ -1540,7 +1550,6 @@ bool vol_geom_swap_buffers( vol_geom_info_t* info_ptr ) {
   // Calculate logical boundary end and evicted bytes
   vol_geom_size_t boundary_offset = info_ptr->frames_directory_ptr[boundary_frame].offset_sz + 
                                    info_ptr->frames_directory_ptr[boundary_frame].total_sz;
-  vol_geom_size_t evicted_bytes = boundary_offset;
   
   _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "COMPACT_DEBUG: boundary_frame=%d, boundary_offset=%" PRId64 ", head_offset=%" PRId64 "\n", 
     boundary_frame, boundary_offset, buffer_state->head_offset );
@@ -1549,12 +1558,14 @@ bool vol_geom_swap_buffers( vol_geom_info_t* info_ptr ) {
     _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Boundary end out of range: %" PRId64 "\n", boundary_offset );
     return false;
   }
+  
+  vol_geom_size_t evicted_bytes = boundary_offset;
 
   // Perform logical eviction: advance head, reduce data_size, update file position
   buffer_state->head_offset = (buffer_state->head_offset + evicted_bytes) % buffer_state->ring_capacity;
   buffer_state->head_file_pos += evicted_bytes;
   buffer_state->data_size -= evicted_bytes;
-  buffer_state->parse_pos -= evicted_bytes;
+  buffer_state->parse_pos = (buffer_state->parse_pos - evicted_bytes >= 0) ?  buffer_state->parse_pos - evicted_bytes : 0;
   
   // Invalidate all frames before keep_from_frame in unified directory
   uint32_t kept_frames = 0;

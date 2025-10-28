@@ -457,7 +457,6 @@ Module.initVologramFunctions = (containerObject) => {
 	insertObject["create_single_file_info"] = Module.cwrap("create_single_file_info", "boolean", ["string"]);
 	insertObject["free_file_info"] = Module.cwrap("free_file_info", "boolean");
 	insertObject["frame_count"] = Module.cwrap("frame_count", "number");
-	insertObject["loaded_frame_number"] = Module.cwrap("loaded_frame_number", "number");
 	insertObject["read_frame"] = Module.cwrap("read_frame", "boolean", ["number"]);
 	insertObject["update_frames_directory"] = Module.cwrap("update_frames_directory", "boolean", ["number"]);
 	insertObject["max_blob_sz"] = Module.cwrap("max_blob_sz", "number");
@@ -659,7 +658,7 @@ Module.initVologramFunctions = (containerObject) => {
 	insertObject["get_header_frame_body_start"] = Module.cwrap("get_header_frame_body_start", "number");
 
 	// Buffer health monitoring
-	insertObject["get_buffer_health_bytes"] = Module.cwrap("get_buffer_health_bytes", "number");
+	// insertObject["get_buffer_health_bytes"] = Module.cwrap("get_buffer_health_bytes", "number");
 	insertObject["get_buffer_health_seconds"] = Module.cwrap("get_buffer_health_seconds", "number", ["number"]);
 	insertObject["should_resume_download"] = function(currentFrame, fps) {
 		// If full file already fetched, never request resume

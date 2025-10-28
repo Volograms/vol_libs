@@ -314,7 +314,7 @@ VOL_GEOM_EXPORT int vol_geom_find_previous_keyframe( const vol_geom_info_t* info
  */
 VOL_GEOM_EXPORT bool vol_geom_read_frame( const char* seq_filename, vol_geom_info_t* info_ptr, uint32_t frame_idx, vol_geom_frame_data_t* frame_data_ptr );
 
-VOL_GEOM_EXPORT int vol_geom_get_header_frame_body_start( const vol_geom_info_t* info_ptr );
+VOL_GEOM_EXPORT int vol_geom_get_sequence_offset( const vol_geom_info_t* info_ptr );
 
 //
 // ===== STREAMING BUFFER API =====
@@ -394,12 +394,12 @@ VOL_GEOM_EXPORT bool vol_geom_read_frame_streaming( vol_geom_info_t* info_ptr, u
  */
 VOL_GEOM_EXPORT bool vol_geom_is_frame_available_in_buffer( const vol_geom_info_t* info_ptr, uint32_t frame_idx );
 
-/** Get the current buffer health in bytes.
- * This function returns how many bytes of valid data are currently in the buffer.
- * @param info_ptr Pointer to vol_geom_info_t with streaming buffer. Must not be NULL.
- * @returns        Number of bytes of valid data in buffer, or 0 on error.
- */
-VOL_GEOM_EXPORT vol_geom_size_t vol_geom_get_buffer_health_bytes( const vol_geom_info_t* info_ptr );
+// /** Get the current buffer health in bytes.
+//  * This function returns how many bytes of valid data are currently in the buffer.
+//  * @param info_ptr Pointer to vol_geom_info_t with streaming buffer. Must not be NULL.
+//  * @returns        Number of bytes of valid data in buffer, or 0 on error.
+//  */
+// VOL_GEOM_EXPORT vol_geom_size_t vol_geom_get_buffer_health_bytes( const vol_geom_info_t* info_ptr );
 
 /** Get the current buffer health in seconds of content.
  * This function estimates how many seconds of playback content are available in the buffer.
