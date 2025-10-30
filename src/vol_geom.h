@@ -6,7 +6,8 @@
  * Version   | 0.13
  * Authors   | Anton Gerdelan     <anton@volograms.com>
  *           | Patrick Geoghegan  <patrick@volograms.com>
- * Copyright | 2021, Volograms (http://volograms.com/)
+ *           | Jan Ondrej         <jan@volograms.com>
+ * Copyright | 2021 - 2025, Volograms (http://volograms.com/)
  * Language  | C99
  * Files     | 2
  * Licence   | The MIT License. See LICENSE.md for details.
@@ -21,9 +22,9 @@
  * 
  * History
  * -------
- * - 0.13.0 (2024/12/19) - Enhanced streaming with circular buffer, configurable buffer size, and automatic mode selection.
+ * - 0.13.0 (2025/10/30) - Enhanced streaming with circular buffer, configurable buffer size, and automatic mode selection.
  * - 0.12.0 (2024/11/02) - Support for streaming, incomplete files, and frame skipping.
- * - 0.11.0 (2022/04/)   - Support for reading single-file volograms.
+ * - 0.11.0 (2022/04/01)   - Support for reading single-file volograms.
  * - 0.10.0 (2022/03/22) - Support added for reading >2GB volograms.
  * - 0.9.0  (2022/03/22) - Version bump for parity with vol_av.
  * - 0.7.1  (2021/01/24) - New option streaming_mode paramter to vol_geom_create_file_info().
