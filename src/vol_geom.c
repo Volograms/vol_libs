@@ -1060,16 +1060,16 @@ bool vol_geom_add_data_to_buffer( vol_geom_info_t* info_ptr, const uint8_t* data
 
   vol_geom_buffer_state_t* buffer_state = info_ptr->streaming_buffer_ptr;
   
-  // Check space in ring (wrap-aware). No compaction here; call swap_buffers first from JS if needed.
+  // Check space in ring (wrap-aware). No compaction here; call update_buffer_state first from JS if needed.
   vol_geom_size_t free_space = buffer_state->ring_capacity - buffer_state->data_size;
   vol_geom_size_t reserved = buffer_state->config.reserved_space_size > 0 ? buffer_state->config.reserved_space_size : (10 * 1024 * 1024);
   if ( data_size > free_space ) {
     _vol_loggerf( VOL_GEOM_LOG_TYPE_WARNING, "Not enough space: need %" PRId64 ", have %" PRId64 ". Attempting logical eviction...\n", data_size, free_space );
-    (void)vol_geom_swap_buffers( info_ptr );
+    (void)vol_geom_update_buffer_state( info_ptr );
     free_space = buffer_state->ring_capacity - buffer_state->data_size;
     if ( data_size > free_space ) {
       _vol_loggerf( VOL_GEOM_LOG_TYPE_WARNING, "Insufficient space after eviction: need %" PRId64 ", have %" PRId64 ".\n", data_size, free_space );
-      return false; // JS should pause or evict via swap_buffers
+      return false; // JS should pause or evict via update_buffer_state
     }
   }
 
@@ -1515,9 +1515,9 @@ bool vol_geom_is_download_buffer_full( const vol_geom_info_t* info_ptr ) {
 
 // Note: vol_geom_find_last_complete_frame_boundary removed - no longer needed with unified directory
 
-bool vol_geom_swap_buffers( vol_geom_info_t* info_ptr ) {
+bool vol_geom_update_buffer_state( vol_geom_info_t* info_ptr ) {
   if ( !info_ptr || !info_ptr->streaming_buffer_ptr ) {
-    _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: vol_geom_swap_buffers() - invalid parameters.\n" );
+    _vol_loggerf( VOL_GEOM_LOG_TYPE_ERROR, "ERROR: vol_geom_update_buffer_state() - invalid parameters.\n" );
     return false;
   }
 

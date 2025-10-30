@@ -433,7 +433,7 @@ VOL_GEOM_EXPORT bool vol_geom_is_download_buffer_full( const vol_geom_info_t* in
  * @param info_ptr Pointer to vol_geom_info_t with streaming buffer. Must not be NULL.
  * @returns        True on successful swap, false on error.
  */
-VOL_GEOM_EXPORT bool vol_geom_swap_buffers( vol_geom_info_t* info_ptr );
+VOL_GEOM_EXPORT bool vol_geom_update_buffer_state( vol_geom_info_t* info_ptr );
 
 /** Get the current playback buffer and its size.
  * This function returns a pointer to the buffer currently being used for playback.

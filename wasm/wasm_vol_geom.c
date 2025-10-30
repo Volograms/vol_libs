@@ -411,8 +411,8 @@ int is_download_buffer_full( void ) {
 }
 
 EMSCRIPTEN_KEEPALIVE
-int swap_buffers( void ) {
-  return vol_geom_swap_buffers( &_info ) ? 1 : 0;
+int update_buffer_state( void ) {
+  return vol_geom_update_buffer_state( &_info ) ? 1 : 0;
 }
 
 EMSCRIPTEN_KEEPALIVE

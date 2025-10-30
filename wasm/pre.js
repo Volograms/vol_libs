@@ -217,7 +217,7 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 								// Reset frame directory (set frame sizes in directory to 0)
 								if (Module.reset_frame_directory) Module.reset_frame_directory();
 								// Update playback buffer (clear it)
-								Module.swap_buffers()
+								Module.update_buffer_state()
 								seeking = false;
 							}
 
@@ -237,7 +237,7 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 							if (downloadPaused || freeSpace < (rangeChunkBytes + SAFETY_HEADROOM)) {
 								downloadPaused = true;
 								if (Module.should_resume_download) { Module.should_resume_download(currentFrame, 30.0); }
-								if (Module.swap_buffers && Module.swap_buffers()) {
+								if (Module.update_buffer_state && Module.update_buffer_state()) {
 									const used2 = Module.get_playback_buffer_size ? Module.get_playback_buffer_size() : 0;
 									const free2 = maxSize > 0 ? (maxSize - used2) : Number.MAX_SAFE_INTEGER;
 									if (free2 >= (rangeChunkBytes + SAFETY_HEADROOM)) {
@@ -405,7 +405,7 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 					let usedBefore = Module.get_playback_buffer_size ? Module.get_playback_buffer_size() : 0;
 					// Attempt compaction multiple times until space is available or no progress
 					for (let i = 0; i < 3 && downloadPaused; i++) {
-						if (!(Module.swap_buffers && Module.swap_buffers())) break;
+						if (!(Module.update_buffer_state && Module.update_buffer_state())) break;
 						const usedAfter = Module.get_playback_buffer_size ? Module.get_playback_buffer_size() : usedBefore;
 						if (usedAfter >= usedBefore) break; // no progress
 						usedBefore = usedAfter;
@@ -742,14 +742,14 @@ Module.initVologramFunctions = (containerObject) => {
 	insertObject["is_download_buffer_full"] = function() {
 		return !!Module.ccall("is_download_buffer_full", "number");
 	};
-	insertObject["swap_buffers"] = function() {
-		return !!Module.ccall("swap_buffers", "number");
+	insertObject["update_buffer_state"] = function() {
+		return !!Module.ccall("update_buffer_state", "number");
 	};
 	insertObject["get_playback_buffer_size"] = Module.cwrap("get_playback_buffer_size", "number");
 	
 	// Also expose dual buffer functions directly on Module
 	Module.is_download_buffer_full = insertObject.is_download_buffer_full;
-	Module.swap_buffers = insertObject.swap_buffers;
+	Module.update_buffer_state = insertObject.update_buffer_state;
 	Module.get_playback_buffer_size = insertObject.get_playback_buffer_size;
 	
 	// Streaming file info creation
