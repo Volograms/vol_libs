@@ -1278,6 +1278,7 @@ bool vol_geom_update_single_buffer_frames( vol_geom_info_t* info_ptr, uint8_t* b
           }
         }
       }
+      buffer_state->parse_pos = info_ptr->sequence_offset;
     } else {
       _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "Main header not yet complete in buffer %s.\n", buffer_name );
       return false;
@@ -1290,14 +1291,8 @@ bool vol_geom_update_single_buffer_frames( vol_geom_info_t* info_ptr, uint8_t* b
   
   // Simple linear frame parsing over the appended region (logical positions from head)
   vol_geom_size_t parse_pos = buffer_state->parse_pos;
-  if ( parse_pos < info_ptr->sequence_offset ) { parse_pos = info_ptr->sequence_offset; }
   uint32_t new_frames_found = 0;
   const vol_geom_size_t min_header_bytes = sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint8_t);
-  
-  // Continue parsing from persistent logical position instead of frame_directory
-  if ( buffer_state->parse_pos > 0 ) {
-    parse_pos = buffer_state->parse_pos;
-  }
   
   while ( parse_pos + min_header_bytes <= buffer_data_size ) {
     
@@ -1563,8 +1558,15 @@ bool vol_geom_swap_buffers( vol_geom_info_t* info_ptr ) {
       }
     }
     if ( boundary_offset < 0 ) {
-      _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "COMPACT_DEBUG: no anchor available (lpf=%u); skipping compaction.\n", lpf );
-      return false;
+      // Clear buffer when there are no frames available, used in restart 
+      _vol_loggerf( VOL_GEOM_LOG_TYPE_DEBUG, "COMPACT_DEBUG: no anchor available (lpf=%u); clearing buffer.\n", lpf );
+      buffer_state->head_offset = 0;
+      buffer_state->head_file_pos = 0;
+      buffer_state->file_pos = 0;
+      buffer_state->data_size = 0;
+      buffer_state->parse_pos = 0;
+      buffer_state->last_playback_frame = 0;
+      return true;
     }
   }
 
@@ -1684,6 +1686,7 @@ void vol_geom_reset_frame_directory( vol_geom_info_t* info_ptr ) {
   for ( uint32_t i = 0; i < info_ptr->hdr.frame_count; ++i ) {
     info_ptr->frames_directory_ptr[i].total_sz = 0;
     info_ptr->frame_headers_ptr[i].mesh_data_sz = 0;
+    info_ptr->frames_directory_ptr[i].offset_sz = 0;
   }
   _vol_loggerf( VOL_GEOM_LOG_TYPE_WARNING, "Frame directory reset for new loop\n" );
 }

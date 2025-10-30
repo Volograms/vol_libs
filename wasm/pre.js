@@ -152,6 +152,9 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 	let currentFrame = 0;
     let loopStreaming = false; // when true, on EOF continue from frame body start
 
+	let seeking = false;
+	let forceSeekLocation = 0;
+
 	// Backpressure gate: when paused, do not call reader.read(); wait here instead
 	let _resumeResolver = null;
 	const _waitForResume = () => {
@@ -207,6 +210,17 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 					response.body.cancel();
                     const runRangeLoop = async () => {
 						while (true) {
+							if (seeking) {
+								console.debug('runRangeLoop: Seeking location set, continuing.');
+								seekLocation = forceSeekLocation;
+								forceSeekLocation = 0;
+								// Reset frame directory (set frame sizes in directory to 0)
+								if (Module.reset_frame_directory) Module.reset_frame_directory();
+								// Update playback buffer (clear it)
+								Module.swap_buffers()
+								seeking = false;
+							}
+
 							if (onProgress && fileSize > 0) {
 								onProgress(seekLocation / fileSize);
 							}
@@ -249,7 +263,12 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
                                     continue;
                                 } else {
                                     // No looping: finish normally
-                                    break; // EOF
+                                    // break; // EOF
+									// Wait in case we toggled loopStreaming to true
+									await _waitForResume();
+									console.log('runRangeLoop: EOF reached. Resuming from frame body start at', headerStart);
+									seekLocation = headerStart;
+									continue;
                                 }
                             }
 
@@ -289,7 +308,6 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 							}
 
 							seekLocation += len;
-							// console.log('runRangeLoop: Seek location incremented, continuing.');
 
 							if (!headerResolved && seekLocation > (config.headerThreshold || 5*1024*1024)) {
 								console.log('runRangeLoop: Header resolved, resolving header loaded promise.');
@@ -403,7 +421,14 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 				}
 			}
         },
-        setLoopStreaming: (enabled) => { loopStreaming = !!enabled; if (!downloadPaused) return; if (loopStreaming) { _resumeNow(); } }
+        setLoopStreaming: (enabled) => { loopStreaming = !!enabled; if (!downloadPaused) return; if (loopStreaming) { _resumeNow(); } },
+        restartFromStart: () => {
+            if (!bufferMode) return;
+            const headerStart = Module.get_header_frame_body_start ? Module.get_header_frame_body_start() : 0;
+			seeking = true;
+			forceSeekLocation = headerStart;
+			_resumeNow();
+		}
 	};
 };
 
