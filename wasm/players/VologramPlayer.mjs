@@ -95,6 +95,14 @@ const VologramPlayer = (extensions) => {
 		
 		// Use appropriate frame reading method based on streaming mode
 		if (vologram.isStreamingMode) {
+			// If attempting to load frame 0 but it's not yet in the buffer, request a download restart from start
+			if (frameIdx === 0 && !vologram.is_frame_available_in_buffer(0)) {
+				try {
+					if (vologram._downloadManager && typeof vologram._downloadManager.restartFromStart === "function") {
+						vologram._downloadManager.restartFromStart();
+					}
+				} catch (e) { /* no-op */ }
+			}
 			// In streaming mode, check if frame is available first
 			if (!vologram.is_frame_available_in_buffer(frameIdx)) {
 				// Frame not available in buffer yet
@@ -470,6 +478,15 @@ const VologramPlayer = (extensions) => {
 		_timerPaused = false;
 		_frameFromTime = 0;
 		_timer = 0;
+
+		// If we're restarting to the beginning in streaming mode and frame 0 isn't present, restart the downloader from start
+		try {
+			if (vologram.isStreamingMode && vologram._downloadManager && !vologram.is_frame_available_in_buffer(0)) {
+				if (typeof vologram._downloadManager.restartFromStart === "function") {
+					vologram._downloadManager.restartFromStart();
+				}
+			}
+		} catch (e) { /* no-op */ }
 	};
 
 	const _updateFrameFromVideo = (now, metadata) => {		
