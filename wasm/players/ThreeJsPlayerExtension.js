@@ -19,8 +19,8 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 	let _basisFmt;
 	let _callbackId;
 	let vologram;
-	let _useWorker = false;
-	let _manager = null;
+	let _useWorker = false;	
+	let _transcoderManager = null;
 	let _isTranscoding = false;
 	let _cachedTexture = null;
 	let _cachedMesh = null;
@@ -31,7 +31,7 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 	const _init = (inVologram, { useWorker, manager } = {}) => {
 		vologram = inVologram;
 		_useWorker = useWorker;
-		_manager = manager;
+		_transcoderManager = manager;
 		const fmts = vologram.find_basis_fmt(glCtx);
 		_glFmt = fmts[0];
 		_basisFmt = fmts[1];
@@ -169,13 +169,13 @@ const ThreeJsPlayerExtension = (glCtx, options) => {
 		const {positions, normals, uvs, indices} = _updateMeshAttributeArrays();
 		const frameIndex = vologram.lastFrameLoaded;
 
-		if (_useWorker) {
+		if (_useWorker && _transcoderManager) {
 			const ptr = vologram.frame_texture_data_ptr();
 			const size = vologram.frame_texture_sz();
 			if (!ptr || !size) { return false; }
 			const basisData = new Uint8Array(vologram.HEAP8.buffer, ptr, size).slice();
 
-			_manager.transcode(basisData, _basisFmt, frameIndex)
+			_transcoderManager.transcode(basisData, _basisFmt, frameIndex)
 				.then(({ transcodedData, width, height, frameIndex: transcodeFrameIndex }) => {
 					// Store the result in the cache.
 					// if (cachedMesh && cachedMesh.frameIndex > frameIndex) return true;

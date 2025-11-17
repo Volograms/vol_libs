@@ -18,9 +18,30 @@
 // 6. If a 'transcodeError' message is received, it rejects the promise.
 // 7. Provides a `destroy` method to terminate the worker and clean up resources.
 
+// workerUrl = 'vol_worker.js'
 const TranscoderManager = () => {
-    // Path to the worker script.
-    const worker = new Worker('vol_worker.js');
+    
+    
+    // Compute base URL of this script once, so we can find sibling files like 'vol_worker.js'.
+	// Allows an explicit override via window.VOLOGRAM_PLAYERS_BASE_URL set in HTML before loading this file.
+	var VOLOGRAM_PLAYERS_BASE_URL = (function () {
+		try {
+			if (typeof window !== "undefined" && window.VOLOGRAM_PLAYERS_BASE_URL) {
+				return new URL(".", window.VOLOGRAM_PLAYERS_BASE_URL).href;
+			}
+		} catch (e) { /* no-op */ }
+		var scripts = document.getElementsByTagName("script");
+		for (var i = scripts.length - 1; i >= 0; i--) {
+			var src = scripts[i].src || "";
+			if (src.indexOf("/TranscoderManager.js") !== -1) {
+				try { return new URL(".", src).href; } catch (e) { /* no-op */ }
+			}
+		}
+		return document.baseURI || (typeof window !== "undefined" ? window.location.href : "");
+	})();
+
+    // In non-module environments, pass an absolute URL. Caller should resolve it.
+    const worker = new Worker(new URL('vol_worker.js', VOLOGRAM_PLAYERS_BASE_URL).href);
     let nextRequestId = 1;
     const pendingRequests = new Map();
 

@@ -67,14 +67,9 @@ bool create_single_file_info( const char* vol_filename ) {
   return vol_geom_create_file_info_from_file( vol_filename, &_info );
 }
 
-EMSCRIPTEN_KEEPALIVE
-bool free_file_info( void ) { return vol_geom_free_file_info( &_info ); }
 
 EMSCRIPTEN_KEEPALIVE
 int32_t frame_count( void ) { return (int32_t)_info.hdr.frame_count; }
-
-EMSCRIPTEN_KEEPALIVE
-int32_t loaded_frame_number( void ) { return _info.frame_headers_ptr->frame_number; }
 
 EMSCRIPTEN_KEEPALIVE
 bool read_frame( int frame_idx ) {
@@ -83,7 +78,18 @@ bool read_frame( int frame_idx ) {
 
 EMSCRIPTEN_KEEPALIVE
 bool update_frames_directory( int frame_idx ) {
-  return vol_geom_update_frames_directory( _seq_filename, &_info, frame_idx );
+  // Check if we're in streaming mode
+  if ( _info.streaming_buffer_ptr && _info.streaming_buffer_ptr->is_streaming_mode ) {
+    // In streaming mode: check if frame is available in streaming buffers
+    // First try to update the buffer frame directory to parse any new frames
+    vol_geom_update_buffer_frame_directory( &_info );
+    
+    // Then check if the specific frame is available
+    return vol_geom_is_frame_available_in_buffer( &_info, (uint32_t)frame_idx );
+  } else {
+    // In file mode: use original file-based directory update
+    return vol_geom_update_frames_directory( _seq_filename, &_info, frame_idx );
+  }
 }
 
 
@@ -134,21 +140,52 @@ EMSCRIPTEN_KEEPALIVE
 uint32_t frame_vp_offset( void ) { return _frame_data.vertices_offset; }
 
 static float* vp_ptr;
-static size_t prev_vp_ptr_sz;
+static size_t prev_vp_ptr_sz = 0;
 
 static float* vt_ptr;
-static size_t prev_vt_ptr_sz;
+static size_t prev_vt_ptr_sz = 0;
 
 static float* vn_ptr;
-static size_t prev_vn_ptr_sz;
+static size_t prev_vn_ptr_sz = 0;
 
 static uint16_t* indices_ptr;
-static size_t prev_indices_ptr_sz;
+static size_t prev_indices_ptr_sz = 0;
+
+EMSCRIPTEN_KEEPALIVE
+bool free_file_info( void ) { 
+  if(prev_vp_ptr_sz > 0) {
+    prev_vp_ptr_sz = 0;
+    free(vp_ptr);
+  }
+  if(prev_vt_ptr_sz > 0) {
+    prev_vt_ptr_sz = 0;
+    free(vt_ptr);
+  }
+  if(prev_vn_ptr_sz > 0) {
+    prev_vn_ptr_sz = 0;
+    free(vn_ptr);
+  }
+  if(prev_indices_ptr_sz > 0) {
+    prev_indices_ptr_sz = 0;
+    free(indices_ptr);
+  }
+  return vol_geom_free_file_info( &_info ); 
+}
+
+
 
 EMSCRIPTEN_KEEPALIVE
 float* frame_vp_copied( void ) {
   if ( _frame_data.vertices_sz > prev_vp_ptr_sz ) {
-    vp_ptr         = realloc( vp_ptr, _frame_data.vertices_sz );
+    float* new_vp_ptr = realloc( vp_ptr, _frame_data.vertices_sz );
+    if (!new_vp_ptr) {
+      printf("ERROR: Failed to realloc vertices pointer to %d bytes.\n", _frame_data.vertices_sz);
+      free(vp_ptr);
+      vp_ptr = NULL;
+      prev_vp_ptr_sz = 0;
+      return NULL;
+    }
+    vp_ptr = new_vp_ptr;
     prev_vp_ptr_sz = _frame_data.vertices_sz;
   }
   if ( !vp_ptr ) { return vp_ptr; }
@@ -160,7 +197,15 @@ float* frame_vp_copied( void ) {
 EMSCRIPTEN_KEEPALIVE
 float* frame_uvs_copied( void ) {
   if ( _frame_data.uvs_sz > prev_vt_ptr_sz ) {
-    vt_ptr         = realloc( vt_ptr, _frame_data.uvs_sz );
+    float* new_vt_ptr = realloc( vt_ptr, _frame_data.uvs_sz );
+    if (!new_vt_ptr) {
+      printf("ERROR: Failed to realloc uvs pointer to %d bytes.\n", _frame_data.uvs_sz);
+      free(vt_ptr);
+      vp_ptr = NULL;
+      prev_vt_ptr_sz = 0;
+      return NULL;
+    }
+    vt_ptr = new_vt_ptr;
     prev_vt_ptr_sz = _frame_data.uvs_sz;
   }
   if ( !vt_ptr ) { return vt_ptr; }
@@ -172,7 +217,15 @@ float* frame_uvs_copied( void ) {
 EMSCRIPTEN_KEEPALIVE
 float* frame_normals_copied( void ) {
   if ( _frame_data.normals_sz > prev_vn_ptr_sz ) {
-    vn_ptr         = realloc( vn_ptr, _frame_data.normals_sz );
+    float* new_vn_ptr = realloc( vn_ptr, _frame_data.normals_sz );
+    if (!new_vn_ptr) {
+      printf("ERROR: Failed to realloc normals pointer to %d bytes.\n", _frame_data.normals_sz);
+      free(vn_ptr);
+      vn_ptr = NULL;
+      prev_vn_ptr_sz = 0;
+      return NULL;
+    }
+    vn_ptr = new_vn_ptr;
     prev_vn_ptr_sz = _frame_data.normals_sz;
   }
   if ( !vn_ptr ) { return vn_ptr; }
@@ -184,7 +237,15 @@ float* frame_normals_copied( void ) {
 EMSCRIPTEN_KEEPALIVE
 uint16_t* frame_indices_copied( void ) {
   if ( _frame_data.indices_sz > prev_indices_ptr_sz ) {
-    indices_ptr         = realloc( indices_ptr, _frame_data.indices_sz );
+    uint16_t* new_indices_ptr = realloc( indices_ptr, _frame_data.indices_sz );
+    if (!new_indices_ptr) {
+      printf("ERROR: Failed to realloc indices pointer to %d bytes.\n", _frame_data.indices_sz);
+      free(indices_ptr);
+      indices_ptr = NULL;
+      prev_indices_ptr_sz = 0;
+      return NULL;
+    }
+    indices_ptr = new_indices_ptr;
     prev_indices_ptr_sz = _frame_data.indices_sz;
   }
   if ( !indices_ptr ) { return indices_ptr; }
@@ -264,6 +325,150 @@ uint8_t* audio_data_ptr( void ) { return _info.audio_data_ptr; }
 
 EMSCRIPTEN_KEEPALIVE
 uint32_t audio_data_sz( void ) { return _info.audio_data_sz; }
+
+//
+// ===== STREAMING BUFFER WASM EXPORTS =====
+// WASM wrapper functions for the new streaming buffer API
+//
+
+// Static streaming configuration for WASM use
+static vol_geom_streaming_config_t _streaming_config;
+
+EMSCRIPTEN_KEEPALIVE
+bool init_streaming_config( void ) {
+  return vol_geom_init_streaming_config( &_streaming_config );
+}
+
+EMSCRIPTEN_KEEPALIVE
+int should_use_streaming_mode( int file_size ) {
+  printf("File size: %d\n", file_size);
+  printf("Max buffer size: %lld\n", (long long)_streaming_config.max_buffer_size);
+  printf("Lookahead seconds: %f\n", _streaming_config.lookahead_seconds);
+  printf("Auto select mode: %d\n", _streaming_config.auto_select_mode);
+  printf("Force streaming mode: %d\n", _streaming_config.force_streaming_mode);
+  printf("Should use streaming mode: %d\n", vol_geom_should_use_streaming_mode( (vol_geom_size_t)file_size, &_streaming_config ));
+  return vol_geom_should_use_streaming_mode( (vol_geom_size_t)file_size, &_streaming_config ) ? 1 : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int create_streaming_buffer( void ) {
+  return vol_geom_create_streaming_buffer( &_info, &_streaming_config ) ? 1 : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int add_data_to_buffer( uint8_t* data_ptr, int data_size ) {
+  if ( !data_ptr || data_size <= 0 ) {
+    return 0;
+  }
+  return vol_geom_add_data_to_buffer( &_info, data_ptr, (vol_geom_size_t)data_size ) ? 1 : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int update_buffer_frame_directory( void ) {
+  return vol_geom_update_buffer_frame_directory( &_info ) ? 1 : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int read_frame_streaming( int frame_idx ) {
+  return vol_geom_read_frame_streaming( &_info, frame_idx, &_frame_data ) ? 1 : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int is_frame_available_in_buffer( int frame_idx ) {
+  return vol_geom_is_frame_available_in_buffer( &_info, frame_idx ) ? 1 : 0;
+}
+
+// EMSCRIPTEN_KEEPALIVE
+// int get_buffer_health_bytes( void ) {
+//   return (int)vol_geom_get_buffer_health_bytes( &_info );
+// }
+
+EMSCRIPTEN_KEEPALIVE
+float get_buffer_health_seconds( float fps ) {
+  return vol_geom_get_buffer_health_seconds( &_info, fps );
+}
+
+EMSCRIPTEN_KEEPALIVE
+int should_resume_download( int current_frame, float fps ) {
+  return vol_geom_should_resume_download( &_info, current_frame, fps ) ? 1 : 0;
+}
+
+// Configuration getters/setters for JavaScript access
+EMSCRIPTEN_KEEPALIVE
+int get_max_buffer_size( void ) {
+  return (int)_streaming_config.max_buffer_size;
+}
+
+EMSCRIPTEN_KEEPALIVE
+void set_max_buffer_size( int size ) {
+  _streaming_config.max_buffer_size = (vol_geom_size_t)size;
+}
+
+EMSCRIPTEN_KEEPALIVE
+float get_lookahead_seconds( void ) {
+  return _streaming_config.lookahead_seconds;
+}
+
+EMSCRIPTEN_KEEPALIVE
+void set_lookahead_seconds( float seconds ) {
+  _streaming_config.lookahead_seconds = seconds;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int get_auto_select_mode( void ) {
+  return _streaming_config.auto_select_mode ? 1 : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+void set_auto_select_mode( int enabled ) {
+  _streaming_config.auto_select_mode = enabled ? true : false;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int get_force_streaming_mode( void ) {
+  return _streaming_config.force_streaming_mode ? 1 : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+void set_force_streaming_mode( int enabled ) {
+  _streaming_config.force_streaming_mode = enabled ? true : false;
+}
+
+// ===== DUAL BUFFER MANAGEMENT EXPORTS =====
+// Additional functions for the dual buffer streaming system
+
+EMSCRIPTEN_KEEPALIVE
+int is_download_buffer_full( void ) {
+  return vol_geom_is_download_buffer_full( &_info ) ? 1 : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int update_buffer_state( void ) {
+  return vol_geom_update_buffer_state( &_info ) ? 1 : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int get_playback_buffer_size( void ) {
+  vol_geom_size_t buffer_size = 0;
+  const uint8_t* buffer = vol_geom_get_playback_buffer( &_info, &buffer_size );
+  return buffer ? (int)buffer_size : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int create_streaming_file_info( void ) {
+  return vol_geom_create_streaming_file_info( &_info ) ? 1 : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int get_header_frame_body_start( void ) {
+  return vol_geom_get_sequence_offset( &_info );
+}
+
+EMSCRIPTEN_KEEPALIVE
+void reset_frame_directory( void ) {
+  vol_geom_reset_frame_directory( &_info );
+}
+
 
 #ifdef __cplusplus
 }
