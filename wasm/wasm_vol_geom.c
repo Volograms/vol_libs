@@ -177,7 +177,15 @@ bool free_file_info( void ) {
 EMSCRIPTEN_KEEPALIVE
 float* frame_vp_copied( void ) {
   if ( _frame_data.vertices_sz > prev_vp_ptr_sz ) {
-    vp_ptr         = realloc( vp_ptr, _frame_data.vertices_sz );
+    float* new_vp_ptr = realloc( vp_ptr, _frame_data.vertices_sz );
+    if (!new_vp_ptr) {
+      printf("ERROR: Failed to realloc vertices pointer to %d bytes.\n", _frame_data.vertices_sz);
+      free(vp_ptr);
+      vp_ptr = NULL;
+      prev_vp_ptr_sz = 0;
+      return NULL;
+    }
+    vp_ptr = new_vp_ptr;
     prev_vp_ptr_sz = _frame_data.vertices_sz;
   }
   if ( !vp_ptr ) { return vp_ptr; }
@@ -189,7 +197,15 @@ float* frame_vp_copied( void ) {
 EMSCRIPTEN_KEEPALIVE
 float* frame_uvs_copied( void ) {
   if ( _frame_data.uvs_sz > prev_vt_ptr_sz ) {
-    vt_ptr         = realloc( vt_ptr, _frame_data.uvs_sz );
+    float* new_vt_ptr = realloc( vt_ptr, _frame_data.uvs_sz );
+    if (!new_vt_ptr) {
+      printf("ERROR: Failed to realloc uvs pointer to %d bytes.\n", _frame_data.uvs_sz);
+      free(vt_ptr);
+      vp_ptr = NULL;
+      prev_vt_ptr_sz = 0;
+      return NULL;
+    }
+    vt_ptr = new_vt_ptr;
     prev_vt_ptr_sz = _frame_data.uvs_sz;
   }
   if ( !vt_ptr ) { return vt_ptr; }
@@ -201,7 +217,15 @@ float* frame_uvs_copied( void ) {
 EMSCRIPTEN_KEEPALIVE
 float* frame_normals_copied( void ) {
   if ( _frame_data.normals_sz > prev_vn_ptr_sz ) {
-    vn_ptr         = realloc( vn_ptr, _frame_data.normals_sz );
+    float* new_vn_ptr = realloc( vn_ptr, _frame_data.normals_sz );
+    if (!new_vn_ptr) {
+      printf("ERROR: Failed to realloc normals pointer to %d bytes.\n", _frame_data.normals_sz);
+      free(vn_ptr);
+      vn_ptr = NULL;
+      prev_vn_ptr_sz = 0;
+      return NULL;
+    }
+    vn_ptr = new_vn_ptr;
     prev_vn_ptr_sz = _frame_data.normals_sz;
   }
   if ( !vn_ptr ) { return vn_ptr; }
@@ -213,7 +237,15 @@ float* frame_normals_copied( void ) {
 EMSCRIPTEN_KEEPALIVE
 uint16_t* frame_indices_copied( void ) {
   if ( _frame_data.indices_sz > prev_indices_ptr_sz ) {
-    indices_ptr         = realloc( indices_ptr, _frame_data.indices_sz );
+    uint16_t* new_indices_ptr = realloc( indices_ptr, _frame_data.indices_sz );
+    if (!new_indices_ptr) {
+      printf("ERROR: Failed to realloc indices pointer to %d bytes.\n", _frame_data.indices_sz);
+      free(indices_ptr);
+      indices_ptr = NULL;
+      prev_indices_ptr_sz = 0;
+      return NULL;
+    }
+    indices_ptr = new_indices_ptr;
     prev_indices_ptr_sz = _frame_data.indices_sz;
   }
   if ( !indices_ptr ) { return indices_ptr; }

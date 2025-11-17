@@ -171,7 +171,7 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 	const useRangeRequests = true; //!!(config && (config.useRangeRequests || config.rangeChunkBytes));
 	const rangeChunkBytes = (config && config.rangeChunkBytes) ? config.rangeChunkBytes : (8 * 1024 * 1024);
 
-            const downloadFinishedPromise = fetch(fileUrl, fetchOptions)
+		const downloadFinishedPromise = fetch(fileUrl, fetchOptions)
 		.then(async (response) => {
 			if (!response.ok) {
 				throw new Error(`HTTP error! Status: ${response.status}`);
@@ -248,7 +248,6 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 							}
 
                             if (fileSize > 0 && seekLocation >= fileSize) {
-                                const maxSize = Module.get_max_buffer_size ? Module.get_max_buffer_size() : 0;
                                 const headerStart = Module.get_header_frame_body_start ? Module.get_header_frame_body_start() : 0;
                                 if (loopStreaming) {
                                     // If the entire file fits in the buffer, no need to re-download; just finish.
@@ -260,7 +259,6 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
                                     // Otherwise, loop by continuing from frame body start (skip header)
                                     seekLocation = headerStart;
                                     console.log('runRangeLoop: EOF reached. Looping download from frame body start at', headerStart);
-                                    continue;
                                 } else {
                                     // No looping: finish normally
                                     // break; // EOF
@@ -268,8 +266,8 @@ Module.fetch_stream_buffer = (dest, fileUrl, config, onProgress, abortSignal = n
 									await _waitForResume();
 									console.log('runRangeLoop: EOF reached. Resuming from frame body start at', headerStart);
 									seekLocation = headerStart;
-									continue;
                                 }
+								continue;
                             }
 
 							const end = fileSize > 0 ? Math.min(seekLocation + rangeChunkBytes, fileSize) - 1 : (seekLocation + rangeChunkBytes - 1);
@@ -507,20 +505,20 @@ Module.initVologramFunctions = (containerObject) => {
 	insertObject["max_blob_sz"] = Module.cwrap("max_blob_sz", "number");
 	insertObject["is_keyframe"] = Module.cwrap("is_keyframe", "boolean", ["number"]);
 	insertObject["find_previous_keyframe"] = Module.cwrap("find_previous_keyframe", "number", ["number"]);
-	insertObject["frame_vertices"] = Module.cwrap("frame_vertices", "array");
+	insertObject["frame_vertices"] = Module.cwrap("frame_vertices", "number");
 	insertObject["frame_vertices_sz"] = Module.cwrap("frame_vertices_sz", "number");
 	insertObject["frame_uvs_sz"] = Module.cwrap("frame_uvs_sz", "number");
 	insertObject["frame_normals_sz"] = Module.cwrap("frame_normals_sz", "number");
 	insertObject["frame_texture_data_ptr"] = Module.cwrap("frame_texture_data_ptr", "number");
 	insertObject["frame_texture_sz"] = Module.cwrap("frame_texture_sz", "number");
-	insertObject["frame_indices"] = Module.cwrap("frame_i", "array");
+	insertObject["frame_indices"] = Module.cwrap("frame_i", "number");
 	insertObject["frame_i_sz"] = Module.cwrap("frame_i_sz", "number");
-	insertObject["frame_data_ptr"] = Module.cwrap("frame_data_ptr", "array");
+	insertObject["frame_data_ptr"] = Module.cwrap("frame_data_ptr", "number");
 	insertObject["frame_vp_offset"] = Module.cwrap("frame_vp_offset", "number");
-	insertObject["frame_vp_copied"] = Module.cwrap("frame_vp_copied", "array");
-	insertObject["frame_uvs_copied"] = Module.cwrap("frame_uvs_copied", "array");
-	insertObject["frame_normals_copied"] = Module.cwrap("frame_normals_copied", "array");
-	insertObject["frame_indices_copied"] = Module.cwrap("frame_indices_copied", "array");
+	insertObject["frame_vp_copied"] = Module.cwrap("frame_vp_copied", "number");
+	insertObject["frame_uvs_copied"] = Module.cwrap("frame_uvs_copied", "number");
+	insertObject["frame_normals_copied"] = Module.cwrap("frame_normals_copied", "number");
+	insertObject["frame_indices_copied"] = Module.cwrap("frame_indices_copied", "number");
 
 	insertObject["basis_transcode"] = Module.cwrap("basis_transcode", "boolean", ["number", "number", "number"]);
 	insertObject["basis_get_transcoded_ptr"] = Module.cwrap("basis_get_transcoded_ptr", "number");
@@ -531,30 +529,30 @@ Module.initVologramFunctions = (containerObject) => {
 
 	insertObject["run_basis_transcode"] = Module.cwrap("run_basis_transcode", "boolean", ["number"]);
 
-	insertObject["audio_data_ptr"] = Module.cwrap("audio_data_ptr", "array");
+	insertObject["audio_data_ptr"] = Module.cwrap("audio_data_ptr", "number");
 
 	insertObject["audio_data_sz"] = Module.cwrap("audio_data_sz", "number");
 
 	insertObject["frame_get_verts"] = () => {
-		const vp_copied = Module.ccall("frame_vp_copied", "array");
+		const vp_copied = Module.ccall("frame_vp_copied", "number");
 		const vp_sz = Module.ccall("frame_vertices_sz", "number");
-		return new Float32Array(Module.HEAP8.buffer, vp_copied, vp_sz / 4);
+		return new Float32Array(Module.HEAPF32.buffer, vp_copied, vp_sz / 4);
 	};
 
 	insertObject["frame_get_norms"] = () => {
-		const normals_copied = Module.ccall("frame_normals_copied", "array");
+		const normals_copied = Module.ccall("frame_normals_copied", "number");
 		const normals_sz = Module.ccall("frame_normals_sz", "number");
-		return new Float32Array(Module.HEAP8.buffer, normals_copied, normals_sz / 4);
+		return new Float32Array(Module.HEAPF32.buffer, normals_copied, normals_sz / 4);
 	};
 
 	insertObject["frame_get_uvs"] = () => {
-		const uvs_copied = Module.ccall("frame_uvs_copied", "array");
+		const uvs_copied = Module.ccall("frame_uvs_copied", "number");
 		const uvs_sz = Module.ccall("frame_uvs_sz", "number");
-		return new Float32Array(Module.HEAP8.buffer, uvs_copied, uvs_sz / 4);
+		return new Float32Array(Module.HEAPF32.buffer, uvs_copied, uvs_sz / 4);
 	};
 
 	insertObject["frame_get_ind"] = () => {
-		const indices_copied = Module.ccall("frame_indices_copied", "array");
+		const indices_copied = Module.ccall("frame_indices_copied", "number");
 		const indices_sz = Module.ccall("frame_i_sz", "number");
 		const n_indices = indices_sz / 2; // ushort
 		return new Uint16Array(Module.HEAP8.buffer, indices_copied, n_indices);
@@ -650,7 +648,7 @@ Module.initVologramFunctions = (containerObject) => {
 	};
 
 	insertObject["get_audio_data"] = () => {
-		let ptr = Module.ccall("audio_data_ptr", "array");
+		let ptr = Module.ccall("audio_data_ptr", "number");
 		let sz = Module.ccall("audio_data_sz", "number");
 		return new Uint8Array(Module.HEAP8.buffer, ptr, sz);
 	};
