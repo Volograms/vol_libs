@@ -336,7 +336,7 @@ const VologramPlayer = (extensions) => {
 				if (signal.aborted) return false;
 
 				_wasm = wasmInstance;
-				if (!_useWorker) {
+				if (!(_useWorker && _transcoderManager)) {
 					_wasm.ccall("basis_init", "boolean");
 				}
 				_wasm.initVologramFunctions(vologram);
@@ -409,7 +409,7 @@ const VologramPlayer = (extensions) => {
 				if (signal.aborted) return false;
 
 				_wasm = wasmInstance;
-				if (!_useWorker) {
+				if (!(_useWorker && _transcoderManager)) {
 					_wasm.ccall("basis_init", "boolean");
 				}
 				_wasm.initVologramFunctions(vologram);
@@ -603,7 +603,7 @@ const VologramPlayer = (extensions) => {
 			_transcoderManager.destroy();
 			_transcoderManager = null;
 		}
-		if (!_useWorker) {
+		if (!(_useWorker && _transcoderManager)) {
 			_wasm.ccall("basis_free", "boolean");
 		}
 		vologram.free_file_info();

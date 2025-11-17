@@ -6,7 +6,7 @@
 // the initial streaming and loading of a vologram.
 //
 // How it works:
-// 1. Imports the main WebAssembly module ('VolWeb.js').
+// 1. Import the main WebAssembly module ('vol_web.js') first.
 // 2. Initializes the Basis Universal transcoder within its own Wasm instance.
 // 3. Listens for 'transcode' messages from the main thread, which contain the raw
 //    .basis file data and the target texture format.
@@ -16,7 +16,18 @@
 //    and sent back to the main thread in a 'transcodeComplete' message.
 // 7. Includes error handling to notify the main thread if transcoding fails.
 
-import VolWeb from '../vol_web.js';
+// Load the Emscripten-generated glue that defines VolWeb() in this worker scope.
+// Relative paths here resolve against the worker script URL, which keeps things robust.
+try {
+    importScripts('../vol_web.js');
+} catch (e) {
+    // Surface a clear error early if the glue cannot be loaded.
+    self.postMessage({
+        id: 0,
+        type: 'transcodeError',
+        payload: { message: 'Failed to load vol_web.js inside worker: ' + (e && e.message ? e.message : String(e)) }
+    });
+}
 
 let wasmModule;
 

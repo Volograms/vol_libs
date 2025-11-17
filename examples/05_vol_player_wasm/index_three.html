@@ -55,6 +55,7 @@ To Run:
     `https://cdn.jsdelivr.net/gh/Volograms/vol_libs@<BRANCH_NAME>/wasm/<FILE_NAME>`
  	-->
 	<script src="../../wasm/vol_web.js"></script>
+	<script src="../../wasm/players/TranscoderManager.js"></script>
 	<script src="../../wasm/players/VologramPlayer.js"></script>
 	<script src="../../wasm/players/ThreeJsPlayerExtension.js"></script>
 	<script src="three.js"></script>
@@ -148,6 +149,7 @@ To Run:
 						{
 							sequenceUrl: single_file_url,
 							audioElement: audio_element,
+							useWorker: true,
 						},
 						console.log
 					)
