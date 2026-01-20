@@ -559,7 +559,9 @@ Module.initVologramFunctions = (containerObject => {
   return !!Module.ccall("should_resume_download", "number", [ "number", "number" ], [ currentFrame, fps ]);
  };
  if (usingExternalObject) {
-  insertObject.HEAP8 = Module.HEAP8;
+  Object.defineProperty(insertObject, "HEAP8", {
+   get: () => Module.HEAP8
+  });
   insertObject._malloc = Module._malloc;
   insertObject._free = Module._free;
  }
