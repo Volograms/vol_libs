@@ -185,6 +185,7 @@ const VologramPlayer = (extensions) => {
 				const bufferHealthSeconds = vologram.get_buffer_health_seconds(vologram.header.fps);
 				if(bufferHealthSeconds < RESUME_BUFFER_SECONDS) {
 					// console.debug("Low buffer: ", bufferHealthSeconds.toFixed(1), "s remaining, waiting for buffer to fill.");
+					_events.onbuffering.forEach((fn) => fn(true));
 					return false;
 				}
 			}
