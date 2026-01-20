@@ -1,4 +1,4 @@
-# vol_libs/wasm
+# vol_libs/wasm v1.5.1
 
 JavaScript modules useful for volograms playback on web, as well as the resources needed to build the modules
 
