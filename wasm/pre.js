@@ -710,7 +710,8 @@ Module.initVologramFunctions = (containerObject) => {
 	};
 
 	if (usingExternalObject) {
-		insertObject.HEAP8 = Module.HEAP8;
+		// insertObject.HEAP8 = Module.HEAP8;
+		Object.defineProperty(insertObject, "HEAP8", { get: () => Module.HEAP8 });
 		insertObject._malloc = Module._malloc;
 		insertObject._free = Module._free;
 	}
